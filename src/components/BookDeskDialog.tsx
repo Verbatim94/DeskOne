@@ -279,10 +279,13 @@ export default function BookDeskDialog({
                       type="button"
                       variant="outline"
                       size="icon"
+                      disabled={selectedDate <= new Date(new Date().setHours(0, 0, 0, 0))}
                       onClick={() => {
                         const prevDay = new Date(selectedDate);
                         prevDay.setDate(prevDay.getDate() - 1);
-                        setSelectedDate(prevDay);
+                        if (prevDay >= new Date(new Date().setHours(0, 0, 0, 0))) {
+                          setSelectedDate(prevDay);
+                        }
                       }}
                     >
                       <ChevronLeft className="h-4 w-4" />
