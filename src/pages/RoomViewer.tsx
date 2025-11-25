@@ -543,10 +543,16 @@ export default function RoomViewer() {
             <Button
               variant="outline"
               size="sm"
+              disabled={selectedDate <= new Date(new Date().setHours(0, 0, 0, 0))}
               onClick={() => {
                 const prevDay = new Date(selectedDate);
                 prevDay.setDate(prevDay.getDate() - 1);
-                setSelectedDate(prevDay);
+                // Only allow moving to previous day if it's not before today
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                if (prevDay >= today) {
+                  setSelectedDate(prevDay);
+                }
               }}
             >
               <ChevronLeft className="h-4 w-4" />
@@ -750,7 +756,7 @@ export default function RoomViewer() {
               })}
           </div>
         </div>
-      </Card>
+      </Card >
 
       {selectedCell && room && (
         <BookDeskDialog
@@ -777,163 +783,172 @@ export default function RoomViewer() {
             setBookingDialogOpen(false);
           }}
         />
-      )}
+      )
+      }
 
-      {selectedReservation && (
-        <ReservationDetailsDialog
-          open={reservationDetailsOpen}
-          onOpenChange={setReservationDetailsOpen}
-          reservation={selectedReservation}
-          isAdmin={isRoomAdmin}
-          onDelete={
-            // Show delete button if user is admin OR if it's their own reservation
-            isRoomAdmin || (user && selectedReservation.user_id === user.id)
-              ? async () => {
-                try {
-                  // Check if it's a fixed assignment or regular reservation
-                  if (selectedReservation.type === 'fixed_assignment') {
-                    await callReservationFunction('delete_fixed_assignment', {
-                      assignmentId: selectedReservation.id
-                    });
+      {
+        selectedReservation && (
+          <ReservationDetailsDialog
+            open={reservationDetailsOpen}
+            onOpenChange={setReservationDetailsOpen}
+            reservation={selectedReservation}
+            isAdmin={isRoomAdmin}
+            onDelete={
+              // Show delete button if user is admin OR if it's their own reservation
+              isRoomAdmin || (user && selectedReservation.user_id === user.id)
+                ? async () => {
+                  try {
+                    // Check if it's a fixed assignment or regular reservation
+                    if (selectedReservation.type === 'fixed_assignment') {
+                      await callReservationFunction('delete_fixed_assignment', {
+                        assignmentId: selectedReservation.id
+                      });
+                      toast({
+                        title: 'Assegnazione eliminata',
+                        description: 'L\'assegnazione fissa è stata eliminata con successo'
+                      });
+                    } else {
+                      await callReservationFunction('cancel', {
+                        reservationId: selectedReservation.id
+                      });
+                      toast({
+                        title: 'Prenotazione eliminata',
+                        description: 'La prenotazione è stata cancellata con successo'
+                      });
+                    }
+                    setReservationDetailsOpen(false);
+                    setSelectedReservation(null);
+                    loadReservations();
+                    loadFixedAssignments();
+                  } catch (error: any) {
                     toast({
-                      title: 'Assegnazione eliminata',
-                      description: 'L\'assegnazione fissa è stata eliminata con successo'
-                    });
-                  } else {
-                    await callReservationFunction('cancel', {
-                      reservationId: selectedReservation.id
-                    });
-                    toast({
-                      title: 'Prenotazione eliminata',
-                      description: 'La prenotazione è stata cancellata con successo'
+                      title: 'Errore',
+                      description: error.message,
+                      variant: 'destructive'
                     });
                   }
-                  setReservationDetailsOpen(false);
-                  setSelectedReservation(null);
-                  loadReservations();
-                  loadFixedAssignments();
-                } catch (error: any) {
-                  toast({
-                    title: 'Errore',
-                    description: error.message,
-                    variant: 'destructive'
-                  });
                 }
-              }
-              : undefined
-          }
-        />
-      )}
+                : undefined
+            }
+          />
+        )
+      }
 
       {/* Create Desk Menu */}
-      {createMenuOpen && createMenuPosition && (
-        <>
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => {
-              setCreateMenuOpen(false);
-              setPendingCell(null);
-              setCreateMenuPosition(null);
-            }}
-          />
-          <div
-            className="fixed z-50 bg-card border border-border rounded-lg shadow-lg p-2 space-y-1 min-w-[180px]"
-            style={{
-              left: `${createMenuPosition.x}px`,
-              top: `${createMenuPosition.y}px`
-            }}
-          >
-            <button
-              onClick={() => handleCreateCell('desk')}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded hover:bg-accent text-left transition-colors"
+      {
+        createMenuOpen && createMenuPosition && (
+          <>
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => {
+                setCreateMenuOpen(false);
+                setPendingCell(null);
+                setCreateMenuPosition(null);
+              }}
+            />
+            <div
+              className="fixed z-50 bg-card border border-border rounded-lg shadow-lg p-2 space-y-1 min-w-[180px]"
+              style={{
+                left: `${createMenuPosition.x}px`,
+                top: `${createMenuPosition.y}px`
+              }}
             >
-              <Armchair className="h-4 w-4 text-blue-600" />
-              <span className="text-sm font-medium">Standard Desk</span>
-            </button>
-            <button
-              onClick={() => handleCreateCell('premium_desk')}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded hover:bg-accent text-left transition-colors"
-            >
-              <Crown className="h-4 w-4 text-amber-600" />
-              <span className="text-sm font-medium">Premium Desk</span>
-            </button>
-            <button
-              onClick={() => handleCreateCell('entrance')}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded hover:bg-accent text-left transition-colors"
-            >
-              <DoorOpen className="h-4 w-4 text-green-600" />
-              <span className="text-sm font-medium">Entrance</span>
-            </button>
-          </div>
-        </>
-      )}
+              <button
+                onClick={() => handleCreateCell('desk')}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded hover:bg-accent text-left transition-colors"
+              >
+                <Armchair className="h-4 w-4 text-blue-600" />
+                <span className="text-sm font-medium">Standard Desk</span>
+              </button>
+              <button
+                onClick={() => handleCreateCell('premium_desk')}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded hover:bg-accent text-left transition-colors"
+              >
+                <Crown className="h-4 w-4 text-amber-600" />
+                <span className="text-sm font-medium">Premium Desk</span>
+              </button>
+              <button
+                onClick={() => handleCreateCell('entrance')}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded hover:bg-accent text-left transition-colors"
+              >
+                <DoorOpen className="h-4 w-4 text-green-600" />
+                <span className="text-sm font-medium">Entrance</span>
+              </button>
+            </div>
+          </>
+        )
+      }
 
       {/* Context Menu */}
-      {contextMenuOpen && contextMenuPosition && contextMenuCell && (
-        <>
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => {
-              setContextMenuOpen(false);
-              setContextMenuCell(null);
-              setContextMenuPosition(null);
-            }}
-          />
-          <div
-            className="fixed z-50 bg-card border border-border rounded-lg shadow-lg p-2 min-w-[160px]"
-            style={{
-              left: `${contextMenuPosition.x}px`,
-              top: `${contextMenuPosition.y}px`
-            }}
-          >
-            <button
-              onClick={handleRenameClick}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded hover:bg-accent text-left transition-colors"
+      {
+        contextMenuOpen && contextMenuPosition && contextMenuCell && (
+          <>
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => {
+                setContextMenuOpen(false);
+                setContextMenuCell(null);
+                setContextMenuPosition(null);
+              }}
+            />
+            <div
+              className="fixed z-50 bg-card border border-border rounded-lg shadow-lg p-2 min-w-[160px]"
+              style={{
+                left: `${contextMenuPosition.x}px`,
+                top: `${contextMenuPosition.y}px`
+              }}
             >
-              <Edit className="h-4 w-4" />
-              <span className="text-sm font-medium">Rename</span>
-            </button>
-            <button
-              onClick={handleDeleteFromContextMenu}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded hover:bg-destructive hover:text-destructive-foreground text-left transition-colors"
-            >
-              <Trash2 className="h-4 w-4" />
-              <span className="text-sm font-medium">Delete Desk</span>
-            </button>
-          </div>
-        </>
-      )}
+              <button
+                onClick={handleRenameClick}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded hover:bg-accent text-left transition-colors"
+              >
+                <Edit className="h-4 w-4" />
+                <span className="text-sm font-medium">Rename</span>
+              </button>
+              <button
+                onClick={handleDeleteFromContextMenu}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded hover:bg-destructive hover:text-destructive-foreground text-left transition-colors"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span className="text-sm font-medium">Delete Desk</span>
+              </button>
+            </div>
+          </>
+        )
+      }
 
       {/* Delete Confirmation Menu */}
-      {deleteMenuOpen && cellToDelete && (
-        <>
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => {
-              setDeleteMenuOpen(false);
-              setCellToDelete(null);
-            }}
-          />
-          <Dialog open={deleteMenuOpen} onOpenChange={setDeleteMenuOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Delete Desk</DialogTitle>
-                <DialogDescription>
-                  Are you sure you want to delete this desk? This action cannot be undone.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setDeleteMenuOpen(false)}>
-                  Cancel
-                </Button>
-                <Button variant="destructive" onClick={handleDeleteCell}>
-                  Delete
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </>
-      )}
+      {
+        deleteMenuOpen && cellToDelete && (
+          <>
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => {
+                setDeleteMenuOpen(false);
+                setCellToDelete(null);
+              }}
+            />
+            <Dialog open={deleteMenuOpen} onOpenChange={setDeleteMenuOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Delete Desk</DialogTitle>
+                  <DialogDescription>
+                    Are you sure you want to delete this desk? This action cannot be undone.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setDeleteMenuOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button variant="destructive" onClick={handleDeleteCell}>
+                    Delete
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </>
+        )
+      }
 
       {/* Rename Dialog */}
       <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>
@@ -982,6 +997,6 @@ export default function RoomViewer() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </div >
   );
 }
