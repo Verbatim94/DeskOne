@@ -1,0 +1,435 @@
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import { authService } from '@/lib/auth';
+import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { useToast } from '@/hooks/use-toast';
+import { ArrowLeft, Save, Trash2, Loader2, Armchair, Crown, DoorOpen, X, Edit } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+
+type DeskType = 'desk' | 'premium_desk' | 'entrance';
+
+interface Cell {
+  id: string;
+  x: number;
+  y: number;
+  type: DeskType;
+  label: string | null;
+}
+
+interface Room {
+  id: string;
+  name: string;
+  grid_width: number;
+  grid_height: number;
+}
+
+const CELL_SIZE = 70;
+
+const DESK_TYPES: { 
+  type: DeskType; 
+  label: string; 
+  color: string; 
+  bgColor: string;
+  icon: typeof Armchair;
+}[] = [
+  { 
+    type: 'desk', 
+    label: 'Standard Desk', 
+    color: 'text-blue-600', 
+    bgColor: 'bg-blue-100 hover:bg-blue-200 border-blue-300',
+    icon: Armchair
+  },
+  { 
+    type: 'premium_desk', 
+    label: 'Premium Desk', 
+    color: 'text-amber-600', 
+    bgColor: 'bg-amber-100 hover:bg-amber-200 border-amber-300',
+    icon: Crown
+  },
+  { 
+    type: 'entrance', 
+    label: 'Entrance', 
+    color: 'text-green-600', 
+    bgColor: 'bg-green-100 hover:bg-green-200 border-green-300',
+    icon: DoorOpen
+  }
+];
+
+export default function RoomEditor() {
+  const { roomId } = useParams();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const { user } = useAuth();
+  
+  const [room, setRoom] = useState<Room | null>(null);
+  const [cells, setCells] = useState<Cell[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [selectedType, setSelectedType] = useState<DeskType>('desk');
+  const [isRoomAdmin, setIsRoomAdmin] = useState(false);
+  const [renamingCell, setRenamingCell] = useState<Cell | null>(null);
+  const [customName, setCustomName] = useState('');
+  const [cellOperationInProgress, setCellOperationInProgress] = useState(false);
+  const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
+
+  useEffect(() => {
+    loadRoom();
+  }, [roomId]);
+
+  const callRoomFunction = async (operation: string, data?: any) => {
+    const session = authService.getSession();
+    if (!session) throw new Error('No session');
+
+    const response = await supabase.functions.invoke('manage-rooms', {
+      body: { operation, data },
+      headers: {
+        'x-session-token': session.token
+      }
+    });
+
+    if (response.error) throw response.error;
+    return response.data;
+  };
+
+  const loadRoom = async () => {
+    if (!roomId) return;
+
+    setLoading(true);
+    
+    try {
+      const result = await callRoomFunction('get', { roomId });
+      setRoom(result.room);
+      setCells(result.cells || []);
+      
+      // Check if user is room admin
+      const session = authService.getSession();
+      if (session?.user.role === 'admin') {
+        setIsRoomAdmin(true);
+      } else {
+        // Query room_access to check if user is admin
+        const { data: access } = await supabase
+          .from('room_access')
+          .select('role')
+          .eq('room_id', roomId)
+          .eq('user_id', session?.user.id)
+          .single();
+        
+        if (access?.role === 'admin') {
+          setIsRoomAdmin(true);
+        } else {
+          toast({
+            title: 'Access Denied',
+            description: 'Only room admins can edit the layout',
+            variant: 'destructive'
+          });
+          navigate('/rooms');
+        }
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error loading room',
+        description: error.message,
+        variant: 'destructive'
+      });
+      navigate('/rooms');
+    }
+
+    setLoading(false);
+  };
+
+  const getCellAt = (x: number, y: number): Cell | undefined => {
+    return cells.find(c => c.x === x && c.y === y);
+  };
+
+  const handleCellClick = async (x: number, y: number) => {
+    if (cellOperationInProgress) return; // Prevent double-clicks
+    
+    const existingCell = getCellAt(x, y);
+
+    try {
+      if (!existingCell) {
+        // Create new cell
+        setCellOperationInProgress(true);
+        const newCell = await callRoomFunction('create_cell', {
+          cell: {
+            room_id: roomId!,
+            x,
+            y,
+            type: selectedType
+          }
+        });
+        setCells([...cells, newCell]);
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error creating cell',
+        description: error.message,
+        variant: 'destructive'
+      });
+    } finally {
+      setCellOperationInProgress(false);
+    }
+  };
+
+  const handleRenameClick = (cell: Cell) => {
+    setRenamingCell(cell);
+    setCustomName(cell.label || '');
+    setIsRenameDialogOpen(true);
+  };
+
+  const handleSaveCustomName = async () => {
+    if (!renamingCell) return;
+
+    try {
+      const updatedCell = await callRoomFunction('update_cell', {
+        cellId: renamingCell.id,
+        updates: { label: customName || null }
+      });
+      setCells(cells.map(c => 
+        c.id === renamingCell.id ? updatedCell : c
+      ));
+      setIsRenameDialogOpen(false);
+      setRenamingCell(null);
+      setCustomName('');
+      toast({ title: 'Desk name updated successfully' });
+    } catch (error: any) {
+      toast({
+        title: 'Error updating desk name',
+        description: error.message,
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const handleDeleteCell = async (cell: Cell) => {
+    if (!confirm('Are you sure you want to delete this desk?')) return;
+
+    try {
+      await callRoomFunction('delete_cell', { cellId: cell.id });
+      setCells(cells.filter(c => c.id !== cell.id));
+      toast({ title: 'Desk deleted successfully' });
+    } catch (error: any) {
+      toast({
+        title: 'Error deleting desk',
+        description: error.message,
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    toast({ title: 'Layout saved successfully' });
+    setSaving(false);
+  };
+
+  const handleClearAll = async () => {
+    if (!confirm('Are you sure you want to clear all cells?')) return;
+
+    try {
+      await callRoomFunction('delete_all_cells', { roomId: roomId! });
+      setCells([]);
+      toast({ title: 'All cells cleared' });
+    } catch (error: any) {
+      toast({
+        title: 'Error clearing cells',
+        description: error.message,
+        variant: 'destructive'
+      });
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!room) return null;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="outline" onClick={() => navigate('/rooms')}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">{room.name}</h1>
+            <p className="text-muted-foreground">
+              Grid: {room.grid_width} × {room.grid_height}
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleClearAll}>
+            <Trash2 className="mr-2 h-4 w-4" />
+            Clear All
+          </Button>
+        </div>
+      </div>
+
+      <Card className="p-6">
+        <div className="mb-6">
+          <h3 className="text-sm font-medium mb-3">Select Type to Add New Desk</h3>
+          <div className="flex flex-wrap gap-3">
+            {DESK_TYPES.map(({ type, label, color, bgColor, icon: Icon }) => (
+              <button
+                key={type}
+                onClick={() => setSelectedType(type)}
+                className={`flex items-center gap-2 px-4 py-3 rounded-lg border-2 transition-all ${
+                  selectedType === type 
+                    ? `${bgColor} border-current shadow-md` 
+                    : 'bg-background border-border hover:border-muted-foreground'
+                }`}
+              >
+                <Icon className={`h-5 w-5 ${selectedType === type ? color : 'text-muted-foreground'}`} />
+                <span className={`font-medium ${selectedType === type ? color : 'text-muted-foreground'}`}>
+                  {label}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="border-2 border-border rounded-lg p-6 bg-muted/30 overflow-auto">
+          <div
+            className="inline-block"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: `repeat(${room.grid_width}, ${CELL_SIZE}px)`,
+              gap: '4px'
+            }}
+          >
+            {Array.from({ length: room.grid_height }, (_, y) =>
+              Array.from({ length: room.grid_width }, (_, x) => {
+                const cell = getCellAt(x, y);
+                const deskInfo = DESK_TYPES.find(d => d.type === cell?.type);
+                const Icon = deskInfo?.icon;
+                
+                const cellContent = (
+                  <div
+                    className={`
+                      border-2 cursor-pointer transition-all rounded-md
+                      flex items-center justify-center relative
+                      ${cell && deskInfo
+                        ? `${deskInfo.bgColor} ${deskInfo.color}` 
+                        : 'bg-background border-border hover:bg-muted'
+                      }
+                    `}
+                    style={{ width: CELL_SIZE, height: CELL_SIZE }}
+                    onClick={() => handleCellClick(x, y)}
+                    title={cell ? `${x}, ${y} - ${deskInfo?.label}` : `${x}, ${y} - Empty`}
+                  >
+                    {cell && Icon && (
+                      <Icon className="h-6 w-6" strokeWidth={2.5} />
+                    )}
+                    {cell?.label && (
+                      <div className="absolute bottom-1 right-1 text-xs font-mono bg-background/80 px-1 rounded">
+                        {cell.label}
+                      </div>
+                    )}
+                  </div>
+                );
+
+                return cell ? (
+                  <ContextMenu key={`${x}-${y}`}>
+                    <ContextMenuTrigger>
+                      {cellContent}
+                    </ContextMenuTrigger>
+                    <ContextMenuContent>
+                      <ContextMenuItem onClick={() => handleRenameClick(cell)}>
+                        <Edit className="mr-2 h-4 w-4" />
+                        Rename
+                      </ContextMenuItem>
+                      <ContextMenuItem 
+                        onClick={() => handleDeleteCell(cell)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
+                ) : (
+                  <div key={`${x}-${y}`}>{cellContent}</div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </Card>
+
+      {/* Rename Dialog */}
+      <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename Desk</DialogTitle>
+            <DialogDescription>
+              Give this desk a friendly, memorable name
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {renamingCell && (
+              <div className="space-y-2">
+                <Label className="text-sm text-muted-foreground">System ID</Label>
+                <div className="px-3 py-2 bg-muted rounded-md font-mono text-sm">
+                  {renamingCell.id.slice(0, 8)}... at ({renamingCell.x}, {renamingCell.y})
+                </div>
+              </div>
+            )}
+            
+            <div className="space-y-2">
+              <Label htmlFor="rename-input">Custom Name</Label>
+              <Input
+                id="rename-input"
+                value={customName}
+                onChange={(e) => setCustomName(e.target.value)}
+                placeholder="e.g., Alfonzina, Quiet Zone 1"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSaveCustomName();
+                  }
+                }}
+                autoFocus
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsRenameDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveCustomName}>
+              <Save className="mr-2 h-4 w-4" />
+              Save Name
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

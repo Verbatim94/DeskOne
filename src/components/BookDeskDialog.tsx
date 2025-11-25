@@ -1,0 +1,550 @@
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { authService } from '@/lib/auth';
+import { useAuth } from '@/contexts/AuthContext';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useToast } from '@/hooks/use-toast';
+import { CalendarIcon, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
+import { format, differenceInDays, addYears } from 'date-fns';
+import { cn } from '@/lib/utils';
+
+interface BookDeskDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  roomId: string;
+  roomName: string;
+  cellId: string;
+  cellLabel: string | null;
+  initialDate?: Date;
+  onBookingComplete?: (reservation?: any) => void;
+}
+
+interface User {
+  id: string;
+  username: string;
+  full_name: string;
+}
+
+export default function BookDeskDialog({
+  open,
+  onOpenChange,
+  roomId,
+  roomName,
+  cellId,
+  cellLabel,
+  initialDate,
+  onBookingComplete
+}: BookDeskDialogProps) {
+  const { toast } = useToast();
+  const { user: currentUser } = useAuth();
+  const isAdmin = currentUser?.role === 'admin';
+
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [startDate, setStartDate] = useState<Date>(new Date());
+  const [endDate, setEndDate] = useState<Date>(new Date());
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const [users, setUsers] = useState<User[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState<'booking' | 'assignment'>('booking');
+  const [showErrorDialog, setShowErrorDialog] = useState(false);
+  const [errorDialogMessage, setErrorDialogMessage] = useState('');
+
+  useEffect(() => {
+    if (open && initialDate) {
+      setSelectedDate(initialDate);
+      setStartDate(initialDate);
+      setEndDate(initialDate);
+    }
+    if (open && isAdmin) {
+      loadUsers();
+    }
+  }, [open, initialDate, isAdmin]);
+
+  const loadUsers = async () => {
+    try {
+      const session = authService.getSession();
+      if (!session) return;
+
+      const response = await supabase.functions.invoke('manage-users', {
+        body: { operation: 'list' },
+        headers: {
+          'x-session-token': session.token
+        }
+      });
+
+      if (response.data) {
+        setUsers(response.data);
+      }
+    } catch (error) {
+      console.error('Error loading users:', error);
+    }
+  };
+
+  const callReservationFunction = async (operation: string, data?: any) => {
+    const session = authService.getSession();
+    if (!session) throw new Error('No session');
+
+    const response = await supabase.functions.invoke('manage-reservations', {
+      body: { operation, data },
+      headers: {
+        'x-session-token': session.token
+      }
+    });
+
+    if (response.error) {
+      const errorData = response.error as any;
+      const errorMessage = errorData?.message || errorData?.error || JSON.stringify(errorData);
+
+      if (errorMessage.includes("That's two!") || errorMessage.includes('limit reservations to one')) {
+        throw new Error('ONE_PER_DAY:' + errorMessage);
+      }
+
+      throw response.error;
+    }
+    return response.data;
+  };
+
+  const handleBooking = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!selectedDate) {
+      toast({
+        title: 'Missing date',
+        description: 'Please select a date',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const newReservation = await callReservationFunction('create', {
+        room_id: roomId,
+        cell_id: cellId,
+        type: 'day',
+        date_start: format(selectedDate, 'yyyy-MM-dd'),
+        date_end: format(selectedDate, 'yyyy-MM-dd'),
+        time_segment: 'FULL'
+      });
+
+      toast({
+        title: 'Desk booked',
+        description: 'Your desk reservation is confirmed'
+      });
+
+      onOpenChange(false);
+      if (onBookingComplete) onBookingComplete(newReservation);
+
+      setSelectedDate(new Date());
+    } catch (error: any) {
+      const message = error?.message || 'Unknown error';
+
+      if (message.startsWith('ONE_PER_DAY:')) {
+        setErrorDialogMessage("You cannot book more than one desk per day.");
+        setShowErrorDialog(true);
+        onOpenChange(false);
+        return;
+      }
+
+      if (message.includes('already reserved') || message.includes('fixed assignment')) {
+        toast({
+          title: 'Desk unavailable',
+          description: message,
+          variant: 'destructive',
+        });
+        if (onBookingComplete) onBookingComplete();
+      } else {
+        toast({
+          title: 'Booking failed',
+          description: message,
+          variant: 'destructive',
+        });
+      }
+    }
+    setSubmitting(false);
+  };
+
+  const handleAssignment = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!startDate || !endDate) {
+      toast({
+        title: 'Missing dates',
+        description: 'Please select start and end dates',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    if (!selectedUserId) {
+      toast({
+        title: 'Missing user',
+        description: 'Please select a user to assign the desk to',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // Validate date range
+    const daysDiff = differenceInDays(endDate, startDate);
+    if (daysDiff < 0) {
+      toast({
+        title: 'Invalid date range',
+        description: 'End date must be after start date',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    if (daysDiff > 365) {
+      toast({
+        title: 'Period too long',
+        description: 'Assignment period cannot exceed 1 year',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await callReservationFunction('create_fixed_assignment', {
+        room_id: roomId,
+        cell_id: cellId,
+        assigned_to: selectedUserId,
+        date_start: format(startDate, 'yyyy-MM-dd'),
+        date_end: format(endDate, 'yyyy-MM-dd')
+      });
+
+      const assignedUser = users.find(u => u.id === selectedUserId);
+      toast({
+        title: 'Desk assigned',
+        description: `Desk successfully assigned to ${assignedUser?.full_name} from ${format(startDate, 'PP')} to ${format(endDate, 'PP')}`
+      });
+
+      onOpenChange(false);
+      if (onBookingComplete) onBookingComplete();
+
+      setStartDate(new Date());
+      setEndDate(new Date());
+      setSelectedUserId('');
+    } catch (error: any) {
+      toast({
+        title: 'Assignment failed',
+        description: error?.message || 'Unknown error',
+        variant: 'destructive',
+      });
+    }
+    setSubmitting(false);
+  };
+
+  const maxEndDate = addYears(startDate, 1);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle>{isAdmin ? 'Book or Assign Desk' : 'Book Desk'}</DialogTitle>
+          <DialogDescription>
+            {cellLabel || 'Desk'} in {roomName}
+          </DialogDescription>
+        </DialogHeader>
+
+        {isAdmin ? (
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'booking' | 'assignment')}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="booking">Book Desk</TabsTrigger>
+              <TabsTrigger value="assignment">Assign Desk</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="booking" className="space-y-4">
+              <form onSubmit={handleBooking} className="space-y-6">
+                <div className="flex flex-col items-center gap-4">
+                  <div className="flex items-center justify-center gap-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => {
+                        const prevDay = new Date(selectedDate);
+                        prevDay.setDate(prevDay.getDate() - 1);
+                        setSelectedDate(prevDay);
+                      }}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={cn(
+                            'min-w-[240px] justify-start text-left font-normal',
+                            !selectedDate && 'text-muted-foreground'
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {selectedDate ? format(selectedDate, 'PPP') : 'Pick a date'}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="center">
+                        <Calendar
+                          mode="single"
+                          selected={selectedDate}
+                          onSelect={(date) => date && setSelectedDate(date)}
+                          disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                          initialFocus
+                          className="pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => {
+                        const nextDay = new Date(selectedDate);
+                        nextDay.setDate(nextDay.getDate() + 1);
+                        setSelectedDate(nextDay);
+                      }}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  <p className="text-sm text-muted-foreground">
+                    Full day reservation for {format(selectedDate, 'EEEE, MMMM d, yyyy')}
+                  </p>
+                </div>
+
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={submitting}>
+                    {submitting ? 'Booking...' : 'Book Desk'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </TabsContent>
+
+            <TabsContent value="assignment" className="space-y-4">
+              <form onSubmit={handleAssignment} className="space-y-6">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Assign to User</Label>
+                    <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a user" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {users.map((user) => (
+                          <SelectItem key={user.id} value={user.id}>
+                            {user.full_name} (@{user.username})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Start Date</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={cn(
+                            'w-full justify-start text-left font-normal',
+                            !startDate && 'text-muted-foreground'
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {startDate ? format(startDate, 'PPP') : 'Pick start date'}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={startDate}
+                          onSelect={(date) => {
+                            if (date) {
+                              setStartDate(date);
+                              // If end date is before new start date, adjust it
+                              if (endDate < date) {
+                                setEndDate(date);
+                              }
+                            }
+                          }}
+                          disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                          initialFocus
+                          className="pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>End Date</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={cn(
+                            'w-full justify-start text-left font-normal',
+                            !endDate && 'text-muted-foreground'
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {endDate ? format(endDate, 'PPP') : 'Pick end date'}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={endDate}
+                          onSelect={(date) => date && setEndDate(date)}
+                          disabled={(date) =>
+                            date < startDate ||
+                            date > maxEndDate ||
+                            date < new Date(new Date().setHours(0, 0, 0, 0))
+                          }
+                          initialFocus
+                          className="pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  {startDate && endDate && (
+                    <p className="text-sm text-muted-foreground">
+                      Assignment period: {differenceInDays(endDate, startDate) + 1} days
+                    </p>
+                  )}
+                </div>
+
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={submitting}>
+                    {submitting ? 'Assigning...' : 'Assign Desk'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </TabsContent>
+          </Tabs>
+        ) : (
+          <form onSubmit={handleBooking} className="space-y-6">
+            <div className="flex flex-col items-center gap-4">
+              <div className="flex items-center justify-center gap-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => {
+                    const prevDay = new Date(selectedDate);
+                    prevDay.setDate(prevDay.getDate() - 1);
+                    setSelectedDate(prevDay);
+                  }}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={cn(
+                        'min-w-[240px] justify-start text-left font-normal',
+                        !selectedDate && 'text-muted-foreground'
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {selectedDate ? format(selectedDate, 'PPP') : 'Pick a date'}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="center">
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={(date) => date && setSelectedDate(date)}
+                      disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                      initialFocus
+                      className="pointer-events-auto"
+                    />
+                  </PopoverContent>
+                </Popover>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => {
+                    const nextDay = new Date(selectedDate);
+                    nextDay.setDate(nextDay.getDate() + 1);
+                    setSelectedDate(nextDay);
+                  }}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <p className="text-sm text-muted-foreground">
+                Full day reservation for {format(selectedDate, 'EEEE, MMMM d, yyyy')}
+              </p>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submitting}>
+                {submitting ? 'Booking...' : 'Book Desk'}
+              </Button>
+            </DialogFooter>
+          </form>
+        )}
+      </DialogContent>
+
+      <AlertDialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
+        <AlertDialogContent className="sm:max-w-[425px] text-center">
+          <div className="flex flex-col items-center gap-4 py-4">
+            <div className="p-3 rounded-full bg-red-100 text-red-600">
+              <AlertCircle className="h-8 w-8" />
+            </div>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-xl font-semibold text-center">Booking Limit Reached</AlertDialogTitle>
+              <AlertDialogDescription className="text-center text-base">
+                {errorDialogMessage}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+          </div>
+          <AlertDialogFooter className="sm:justify-center">
+            <AlertDialogAction className="w-full sm:w-auto min-w-[120px]">
+              Got it
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Dialog>
+  );
+}
