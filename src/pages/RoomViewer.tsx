@@ -785,38 +785,43 @@ export default function RoomViewer() {
           onOpenChange={setReservationDetailsOpen}
           reservation={selectedReservation}
           isAdmin={isRoomAdmin}
-          onDelete={async () => {
-            try {
-              // Check if it's a fixed assignment or regular reservation
-              if (selectedReservation.type === 'fixed_assignment') {
-                await callReservationFunction('delete_fixed_assignment', {
-                  assignmentId: selectedReservation.id
-                });
-                toast({
-                  title: 'Assegnazione eliminata',
-                  description: 'L\'assegnazione fissa è stata eliminata con successo'
-                });
-              } else {
-                await callReservationFunction('cancel', {
-                  reservationId: selectedReservation.id
-                });
-                toast({
-                  title: 'Prenotazione eliminata',
-                  description: 'La prenotazione è stata cancellata con successo'
-                });
+          onDelete={
+            // Show delete button if user is admin OR if it's their own reservation
+            isRoomAdmin || (user && selectedReservation.user_id === user.id)
+              ? async () => {
+                try {
+                  // Check if it's a fixed assignment or regular reservation
+                  if (selectedReservation.type === 'fixed_assignment') {
+                    await callReservationFunction('delete_fixed_assignment', {
+                      assignmentId: selectedReservation.id
+                    });
+                    toast({
+                      title: 'Assegnazione eliminata',
+                      description: 'L\'assegnazione fissa è stata eliminata con successo'
+                    });
+                  } else {
+                    await callReservationFunction('cancel', {
+                      reservationId: selectedReservation.id
+                    });
+                    toast({
+                      title: 'Prenotazione eliminata',
+                      description: 'La prenotazione è stata cancellata con successo'
+                    });
+                  }
+                  setReservationDetailsOpen(false);
+                  setSelectedReservation(null);
+                  loadReservations();
+                  loadFixedAssignments();
+                } catch (error: any) {
+                  toast({
+                    title: 'Errore',
+                    description: error.message,
+                    variant: 'destructive'
+                  });
+                }
               }
-              setReservationDetailsOpen(false);
-              setSelectedReservation(null);
-              loadReservations();
-              loadFixedAssignments();
-            } catch (error: any) {
-              toast({
-                title: 'Errore',
-                description: error.message,
-                variant: 'destructive'
-              });
-            }
-          }}
+              : undefined
+          }
         />
       )}
 
