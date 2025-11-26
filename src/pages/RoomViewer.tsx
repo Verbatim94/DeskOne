@@ -459,7 +459,16 @@ export default function RoomViewer() {
     if (!isRoomAdmin) return;
 
     const rect = (event.target as HTMLElement).getBoundingClientRect();
-    setCreateMenuPosition({ x: rect.left, y: rect.bottom + 5 });
+    const menuHeight = 120; // Approximate height of the menu
+    const spaceBelow = window.innerHeight - rect.bottom;
+
+    let topPosition = rect.bottom + 5;
+    if (spaceBelow < menuHeight) {
+      // Place above if not enough space below
+      topPosition = rect.top - menuHeight - 5;
+    }
+
+    setCreateMenuPosition({ x: rect.left, y: topPosition });
     setPendingCell({ x, y });
     setCreateMenuOpen(true);
   };
@@ -512,8 +521,8 @@ export default function RoomViewer() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
       </div>
     );
   }
@@ -521,174 +530,196 @@ export default function RoomViewer() {
   if (!room) return null;
 
   return (
-    <div className="space-y-4">
-      {/* Compact Header */}
-      <div className="flex items-center gap-3">
-        <Button variant="outline" size="sm" onClick={() => navigate('/rooms')}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{room.name}</h1>
-          <p className="text-sm text-muted-foreground">
-            {format(selectedDate, 'MMMM d, yyyy')}
-          </p>
-        </div>
-      </div>
-
-      <Card className="p-6">
-        {/* Compact Date Navigation */}
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={selectedDate <= new Date(new Date().setHours(0, 0, 0, 0))}
-              onClick={() => {
-                const prevDay = new Date(selectedDate);
-                prevDay.setDate(prevDay.getDate() - 1);
-                // Only allow moving to previous day if it's not before today
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                if (prevDay >= today) {
-                  setSelectedDate(prevDay);
-                }
-              }}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <div className="min-w-[180px] text-center">
-              <p className="text-sm font-medium">{format(selectedDate, 'EEEE, MMM d')}</p>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const nextDay = new Date(selectedDate);
-                nextDay.setDate(nextDay.getDate() + 1);
-                setSelectedDate(nextDay);
-              }}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+    <div className="min-h-screen bg-gray-50/50 p-6 space-y-6 font-sans">
+      {/* Google-style Header */}
+      <div className="flex items-center justify-between bg-white px-6 py-4 rounded-2xl shadow-sm border border-gray-100">
+        <div className="flex items-center gap-4">
           <Button
-            variant={selectedDate.toDateString() === new Date().toDateString() ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setSelectedDate(new Date())}
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate('/rooms')}
+            className="rounded-full hover:bg-gray-100"
           >
-            Today
+            <ArrowLeft className="h-5 w-5 text-gray-600" />
+          </Button>
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900">{room.name}</h1>
+            <p className="text-sm text-gray-500">
+              {format(selectedDate, 'MMMM d, yyyy')}
+            </p>
+          </div>
+        </div>
+
+        {/* Date Navigation Pills */}
+        <div className="flex items-center bg-gray-100/80 p-1 rounded-full">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-full hover:bg-white hover:shadow-sm transition-all"
+            disabled={selectedDate <= new Date(new Date().setHours(0, 0, 0, 0))}
+            onClick={() => {
+              const prevDay = new Date(selectedDate);
+              prevDay.setDate(prevDay.getDate() - 1);
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              if (prevDay >= today) setSelectedDate(prevDay);
+            }}
+          >
+            <ChevronLeft className="h-4 w-4 text-gray-600" />
+          </Button>
+          <span className="px-4 text-sm font-medium text-gray-700 min-w-[140px] text-center">
+            {format(selectedDate, 'EEE, MMM d')}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-full hover:bg-white hover:shadow-sm transition-all"
+            onClick={() => {
+              const nextDay = new Date(selectedDate);
+              nextDay.setDate(nextDay.getDate() + 1);
+              setSelectedDate(nextDay);
+            }}
+          >
+            <ChevronRight className="h-4 w-4 text-gray-600" />
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-8">
-          {/* Left Section: Legend + Room Grid */}
-          <div className="space-y-3">
-            {/* Minimalist Legend */}
-            <div className="flex items-center gap-4 text-xs">
-              <div className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-blue-500"></div>
-                <span className="text-muted-foreground">Available</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-red-500"></div>
-                <span className="text-muted-foreground">Reserved</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-purple-500"></div>
-                <span className="text-muted-foreground">Your Reservation</span>
-              </div>
+        <Button
+          variant={selectedDate.toDateString() === new Date().toDateString() ? 'default' : 'ghost'}
+          onClick={() => setSelectedDate(new Date())}
+          className={`rounded-full px-6 ${selectedDate.toDateString() === new Date().toDateString()
+              ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-200'
+              : 'text-gray-600 hover:bg-gray-100'
+            }`}
+        >
+          Today
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-6">
+        {/* Main Content: Grid */}
+        <div className="space-y-4">
+          {/* Floating Legend */}
+          <div className="bg-white px-4 py-2 rounded-full shadow-sm border border-gray-100 inline-flex items-center gap-6 text-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-blue-500 shadow-sm"></div>
+              <span className="text-gray-600 font-medium">Available</span>
             </div>
-
-            {/* Room Grid */}
-            <div className="border-2 border-border rounded-lg p-4 bg-muted/30 overflow-auto">
-              <div
-                className="inline-block"
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: `repeat(${room.grid_width}, ${CELL_SIZE}px)`,
-                  gap: '3px',
-                }}
-              >
-                {Array.from({ length: room.grid_height }, (_, y) =>
-                  Array.from({ length: room.grid_width }, (_, x) => {
-                    const cell = getCellAt(x, y);
-                    const deskInfo = DESK_TYPES.find((d) => d.type === cell?.type);
-                    const Icon = deskInfo?.icon;
-                    const isBookable = cell && cell.type !== 'entrance';
-                    const { status, reservation, assignedTo } = cell
-                      ? getDeskStatus(cell.id)
-                      : ({ status: 'available' as DeskStatus } as { status: DeskStatus; reservation?: Reservation; assignedTo?: string });
-
-                    if (cell) {
-                      const isHovered = hoveredCellId === cell.id;
-                      return (
-                        <div
-                          key={`${x}-${y}`}
-                          className={`
-                          border-2 transition-all rounded-md relative
-                          flex items-center justify-center
-                          ${cell && isBookable
-                              ? getDeskBackgroundColor(status, deskInfo?.bgColor || '')
-                              : cell && deskInfo
-                                ? `${deskInfo.bgColor} ${deskInfo.color}`
-                                : 'bg-background border-border'
-                            }
-                          ${isBookable && status !== 'reserved' ? 'cursor-pointer hover:scale-105 hover:brightness-110' : ''}
-                          ${isHovered ? 'ring-4 ring-primary scale-110' : ''}
-                        `}
-                          style={{ width: CELL_SIZE, height: CELL_SIZE }}
-                          onClick={() => cell && isBookable && handleCellClick(cell)}
-                          onContextMenu={(e) => isRoomAdmin && handleCellRightClick(cell, e)}
-                          title={
-                            cell
-                              ? `${deskInfo?.label || 'Desk'} - ${status === 'reserved'
-                                ? assignedTo
-                                  ? `Assigned to ${assignedTo}`
-                                  : `Reserved by ${reservation?.user.full_name}`
-                                : status === 'my-reservation'
-                                  ? assignedTo
-                                    ? 'Your assigned desk'
-                                    : 'Your reservation'
-                                  : 'Available (Click to book)'
-                              }${isRoomAdmin ? ' | Right-click for options' : ''}`
-                              : `${x}, ${y} - Empty`
-                          }
-                        >
-                          {cell && Icon && (
-                            <Icon className={`h-5 w-5 ${isBookable ? 'text-white' : ''}`} strokeWidth={2.5} />
-                          )}
-                        </div>
-                      );
-                    } else {
-                      // Empty cell - allow admin to create desk
-                      return (
-                        <div
-                          key={`${x}-${y}`}
-                          className={`border-2 border-border rounded-md relative flex items-center justify-center group ${isRoomAdmin
-                            ? 'bg-background/50 hover:bg-primary/10 cursor-pointer transition-colors'
-                            : 'bg-background/50'
-                            }`}
-                          style={{ width: CELL_SIZE, height: CELL_SIZE }}
-                          onClick={(e) => isRoomAdmin && handleEmptyCellClick(x, y, e)}
-                          title={isRoomAdmin ? 'Click to add desk' : ''}
-                        >
-                          {isRoomAdmin && (
-                            <Plus className="h-4 w-4 text-muted-foreground group-hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
-                          )}
-                        </div>
-                      );
-                    }
-                  }),
-                )}
-              </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-red-500 shadow-sm"></div>
+              <span className="text-gray-600 font-medium">Reserved</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-purple-500 shadow-sm"></div>
+              <span className="text-gray-600 font-medium">Your Spot</span>
             </div>
           </div>
 
-          {/* Desk List */}
-          <div className="space-y-3 overflow-y-auto max-h-[600px] bg-card p-4 rounded-lg border"
-          >
-            <h3 className="text-sm font-medium sticky top-0 bg-background pb-2">Available Desks</h3>
+          {/* Room Grid Container */}
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8 overflow-auto min-h-[600px] flex items-center justify-center">
+            <div
+              className="inline-block"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: `repeat(${room.grid_width}, ${CELL_SIZE}px)`,
+                gap: '8px', // Increased gap for airy feel
+              }}
+            >
+              {Array.from({ length: room.grid_height }, (_, y) =>
+                Array.from({ length: room.grid_width }, (_, x) => {
+                  const cell = getCellAt(x, y);
+                  const deskInfo = DESK_TYPES.find((d) => d.type === cell?.type);
+                  const Icon = deskInfo?.icon;
+                  const isBookable = cell && cell.type !== 'entrance';
+                  const { status, reservation, assignedTo } = cell
+                    ? getDeskStatus(cell.id)
+                    : ({ status: 'available' as DeskStatus } as { status: DeskStatus; reservation?: Reservation; assignedTo?: string });
+
+                  if (cell) {
+                    const isHovered = hoveredCellId === cell.id;
+                    // Custom Google-like styling
+                    let bgClass = 'bg-white border-2 border-gray-200';
+                    let iconColor = 'text-gray-400';
+
+                    if (status === 'available') {
+                      bgClass = 'bg-blue-50 border-2 border-blue-100 hover:border-blue-300 hover:shadow-md';
+                      iconColor = 'text-blue-500';
+                    } else if (status === 'reserved') {
+                      bgClass = 'bg-gray-100 border-2 border-transparent opacity-60';
+                      iconColor = 'text-gray-400';
+                    } else if (status === 'my-reservation') {
+                      bgClass = 'bg-purple-50 border-2 border-purple-200 shadow-sm';
+                      iconColor = 'text-purple-500';
+                    }
+
+                    if (cell.type === 'entrance') {
+                      bgClass = 'bg-green-50 border-2 border-green-100';
+                      iconColor = 'text-green-600';
+                    }
+
+                    return (
+                      <div
+                        key={`${x}-${y}`}
+                        className={`
+                          relative rounded-2xl transition-all duration-300 ease-out
+                          flex items-center justify-center
+                          ${bgClass}
+                          ${isBookable && status !== 'reserved' ? 'cursor-pointer hover:-translate-y-1' : ''}
+                          ${isHovered ? 'ring-2 ring-blue-400 ring-offset-2 scale-105 z-10' : ''}
+                        `}
+                        style={{ width: CELL_SIZE, height: CELL_SIZE }}
+                        onClick={() => cell && isBookable && handleCellClick(cell)}
+                        onContextMenu={(e) => isRoomAdmin && handleCellRightClick(cell, e)}
+                        title={cell.label || 'Desk'}
+                      >
+                        {cell && Icon && (
+                          <Icon className={`h-6 w-6 ${iconColor} transition-colors`} strokeWidth={2} />
+                        )}
+                        {/* Status Dot */}
+                        {isBookable && (
+                          <div className={`absolute top-2 right-2 w-2 h-2 rounded-full ${status === 'available' ? 'bg-blue-400' :
+                              status === 'my-reservation' ? 'bg-purple-400' : 'bg-red-300'
+                            }`} />
+                        )}
+                      </div>
+                    );
+                  } else {
+                    // Empty cell
+                    return (
+                      <div
+                        key={`${x}-${y}`}
+                        className={`
+                          rounded-xl relative flex items-center justify-center transition-all duration-200
+                          ${isRoomAdmin
+                            ? 'hover:bg-gray-50 cursor-pointer border-2 border-dashed border-transparent hover:border-gray-200'
+                            : ''
+                          }
+                        `}
+                        style={{ width: CELL_SIZE, height: CELL_SIZE }}
+                        onClick={(e) => isRoomAdmin && handleEmptyCellClick(x, y, e)}
+                      >
+                        {isRoomAdmin && (
+                          <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />
+                        )}
+                      </div>
+                    );
+                  }
+                }),
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Right Sidebar: Available Desks */}
+        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col h-[calc(100vh-140px)] sticky top-24">
+          <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
+            Available Desks
+            <Badge variant="secondary" className="rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100">
+              {cells.filter(c => getDeskStatus(c.id).status === 'available' && c.type !== 'entrance').length}
+            </Badge>
+          </h3>
+
+          <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar flex-1">
             {cells
               .filter((cell) => cell.type === 'desk' || cell.type === 'premium_desk')
               .sort((a, b) => {
@@ -703,16 +734,18 @@ export default function RoomViewer() {
                 const isAvailable = status === 'available';
                 const isMyReservation = status === 'my-reservation';
 
+                if (!isAvailable && !isMyReservation && !isRoomAdmin) return null; // Hide reserved desks for cleaner look
+
                 return (
                   <div
                     key={cell.id}
                     className={`
-                      rounded-lg p-4 border-2 transition-all cursor-pointer
+                      group rounded-2xl p-4 transition-all duration-200 cursor-pointer border
                       ${isAvailable
-                        ? 'bg-card hover:bg-accent border-border'
+                        ? 'bg-white border-gray-100 hover:border-blue-200 hover:shadow-md'
                         : isMyReservation
-                          ? 'bg-purple-50 border-purple-200'
-                          : 'bg-muted border-muted-foreground/20'
+                          ? 'bg-purple-50 border-purple-100'
+                          : 'bg-gray-50 border-transparent opacity-70'
                       }
                     `}
                     onMouseEnter={() => setHoveredCellId(cell.id)}
@@ -720,43 +753,52 @@ export default function RoomViewer() {
                     onClick={() => handleDeskListClick(cell)}
                   >
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        {Icon && (
-                          <div className={`p-2 rounded-md ${deskInfo?.bgColor}`}>
-                            <Icon className={`h-5 w-5 ${deskInfo?.color}`} />
-                          </div>
-                        )}
+                      <div className="flex items-center gap-4">
+                        <div className={`
+                          p-3 rounded-xl 
+                          ${isAvailable ? 'bg-blue-50 text-blue-600' : isMyReservation ? 'bg-purple-100 text-purple-600' : 'bg-gray-200 text-gray-500'}
+                        `}>
+                          {Icon && <Icon className="h-5 w-5" />}
+                        </div>
                         <div>
-                          <p className="font-semibold">
+                          <p className="font-semibold text-gray-900">
                             {cell.label || `Desk ${cell.x}-${cell.y}`}
                           </p>
-                          <div className="flex items-center gap-2 text-sm">
-                            <div className={`h-2 w-2 rounded-full ${isAvailable ? 'bg-blue-500' : isMyReservation ? 'bg-purple-500' : 'bg-red-500'
-                              }`} />
-                            <span className="text-muted-foreground">
-                              {isAvailable
-                                ? '7:00 - 18:00'
-                                : isMyReservation
-                                  ? 'Your reservation'
-                                  : assignedTo
-                                    ? `Assigned to ${assignedTo}`
-                                    : `Reserved by ${reservation?.user.full_name}`}
-                            </span>
-                          </div>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {isAvailable ? 'Available all day' : isMyReservation ? 'Reserved by you' : 'Reserved'}
+                          </p>
                         </div>
                       </div>
+
                       {(isAvailable || user?.role === 'admin') && (
-                        <Button size="sm" onClick={() => handleDeskListClick(cell)}>
-                          Book spot
+                        <Button
+                          size="sm"
+                          className={`
+                            rounded-full px-4 opacity-0 group-hover:opacity-100 transition-all
+                            ${isAvailable ? 'bg-blue-600 hover:bg-blue-700' : ''}
+                          `}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeskListClick(cell);
+                          }}
+                        >
+                          Book
                         </Button>
                       )}
                     </div>
                   </div>
                 );
               })}
+
+            {cells.filter(c => getDeskStatus(c.id).status === 'available').length === 0 && (
+              <div className="text-center py-10 text-gray-400">
+                <Armchair className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                <p>No desks available for this date.</p>
+              </div>
+            )}
           </div>
         </div>
-      </Card >
+      </div>
 
       {selectedCell && room && (
         <BookDeskDialog
@@ -783,176 +825,164 @@ export default function RoomViewer() {
             setBookingDialogOpen(false);
           }}
         />
-      )
-      }
+      )}
 
-      {
-        selectedReservation && (
-          <ReservationDetailsDialog
-            open={reservationDetailsOpen}
-            onOpenChange={setReservationDetailsOpen}
-            reservation={selectedReservation}
-            isAdmin={isRoomAdmin}
-            onDelete={
-              // Show delete button if user is admin OR if it's their own reservation
-              isRoomAdmin || (user && selectedReservation.user_id === user.id)
-                ? async () => {
-                  try {
-                    // Check if it's a fixed assignment or regular reservation
-                    if (selectedReservation.type === 'fixed_assignment') {
-                      await callReservationFunction('delete_fixed_assignment', {
-                        assignmentId: selectedReservation.id
-                      });
-                      toast({
-                        title: 'Assegnazione eliminata',
-                        description: 'L\'assegnazione fissa è stata eliminata con successo'
-                      });
-                    } else {
-                      await callReservationFunction('cancel', {
-                        reservationId: selectedReservation.id
-                      });
-                      toast({
-                        title: 'Prenotazione eliminata',
-                        description: 'La prenotazione è stata cancellata con successo'
-                      });
-                    }
-                    setReservationDetailsOpen(false);
-                    setSelectedReservation(null);
-                    loadReservations();
-                    loadFixedAssignments();
-                  } catch (error: any) {
+      {selectedReservation && (
+        <ReservationDetailsDialog
+          open={reservationDetailsOpen}
+          onOpenChange={setReservationDetailsOpen}
+          reservation={selectedReservation}
+          isAdmin={isRoomAdmin}
+          onDelete={
+            isRoomAdmin || (user && selectedReservation.user_id === user.id)
+              ? async () => {
+                try {
+                  if (selectedReservation.type === 'fixed_assignment') {
+                    await callReservationFunction('delete_fixed_assignment', {
+                      assignmentId: selectedReservation.id
+                    });
                     toast({
-                      title: 'Errore',
-                      description: error.message,
-                      variant: 'destructive'
+                      title: 'Assignment removed',
+                      description: 'Fixed assignment deleted successfully'
+                    });
+                  } else {
+                    await callReservationFunction('cancel', {
+                      reservationId: selectedReservation.id
+                    });
+                    toast({
+                      title: 'Reservation cancelled',
+                      description: 'Reservation cancelled successfully'
                     });
                   }
+                  setReservationDetailsOpen(false);
+                  setSelectedReservation(null);
+                  loadReservations();
+                  loadFixedAssignments();
+                } catch (error: any) {
+                  toast({
+                    title: 'Error',
+                    description: error.message,
+                    variant: 'destructive'
+                  });
                 }
-                : undefined
-            }
-          />
-        )
-      }
+              }
+              : undefined
+          }
+        />
+      )}
 
-      {/* Create Desk Menu */}
-      {
-        createMenuOpen && createMenuPosition && (
-          <>
-            <div
-              className="fixed inset-0 z-40"
-              onClick={() => {
-                setCreateMenuOpen(false);
-                setPendingCell(null);
-                setCreateMenuPosition(null);
-              }}
-            />
-            <div
-              className="fixed z-50 bg-card border border-border rounded-lg shadow-lg p-2 space-y-1 min-w-[180px]"
-              style={{
-                left: `${createMenuPosition.x}px`,
-                top: `${createMenuPosition.y}px`
-              }}
-            >
-              <button
-                onClick={() => handleCreateCell('desk')}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded hover:bg-accent text-left transition-colors"
-              >
-                <Armchair className="h-4 w-4 text-blue-600" />
-                <span className="text-sm font-medium">Standard Desk</span>
-              </button>
-              <button
-                onClick={() => handleCreateCell('premium_desk')}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded hover:bg-accent text-left transition-colors"
-              >
-                <Crown className="h-4 w-4 text-amber-600" />
-                <span className="text-sm font-medium">Premium Desk</span>
-              </button>
-              <button
-                onClick={() => handleCreateCell('entrance')}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded hover:bg-accent text-left transition-colors"
-              >
-                <DoorOpen className="h-4 w-4 text-green-600" />
-                <span className="text-sm font-medium">Entrance</span>
-              </button>
+      {/* Create Desk Menu - Fixed Positioning */}
+      {createMenuOpen && createMenuPosition && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => {
+              setCreateMenuOpen(false);
+              setPendingCell(null);
+              setCreateMenuPosition(null);
+            }}
+          />
+          <div
+            className="fixed z-50 bg-white border border-gray-100 rounded-xl shadow-xl p-2 space-y-1 min-w-[180px] animate-in fade-in zoom-in-95 duration-100"
+            style={{
+              left: `${createMenuPosition.x}px`,
+              top: `${createMenuPosition.y}px`
+            }}
+          >
+            <div className="px-2 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+              Add Item
             </div>
-          </>
-        )
-      }
+            <button
+              onClick={() => handleCreateCell('desk')}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-blue-50 text-left transition-colors group"
+            >
+              <div className="p-1.5 bg-blue-100 rounded-md group-hover:bg-blue-200 transition-colors">
+                <Armchair className="h-4 w-4 text-blue-600" />
+              </div>
+              <span className="text-sm font-medium text-gray-700 group-hover:text-blue-700">Standard Desk</span>
+            </button>
+            <button
+              onClick={() => handleCreateCell('premium_desk')}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-amber-50 text-left transition-colors group"
+            >
+              <div className="p-1.5 bg-amber-100 rounded-md group-hover:bg-amber-200 transition-colors">
+                <Crown className="h-4 w-4 text-amber-600" />
+              </div>
+              <span className="text-sm font-medium text-gray-700 group-hover:text-amber-700">Premium Desk</span>
+            </button>
+            <button
+              onClick={() => handleCreateCell('entrance')}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-green-50 text-left transition-colors group"
+            >
+              <div className="p-1.5 bg-green-100 rounded-md group-hover:bg-green-200 transition-colors">
+                <DoorOpen className="h-4 w-4 text-green-600" />
+              </div>
+              <span className="text-sm font-medium text-gray-700 group-hover:text-green-700">Entrance</span>
+            </button>
+          </div>
+        </>
+      )}
 
       {/* Context Menu */}
-      {
-        contextMenuOpen && contextMenuPosition && contextMenuCell && (
-          <>
-            <div
-              className="fixed inset-0 z-40"
-              onClick={() => {
-                setContextMenuOpen(false);
-                setContextMenuCell(null);
-                setContextMenuPosition(null);
-              }}
-            />
-            <div
-              className="fixed z-50 bg-card border border-border rounded-lg shadow-lg p-2 min-w-[160px]"
-              style={{
-                left: `${contextMenuPosition.x}px`,
-                top: `${contextMenuPosition.y}px`
-              }}
+      {contextMenuOpen && contextMenuPosition && contextMenuCell && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => {
+              setContextMenuOpen(false);
+              setContextMenuCell(null);
+              setContextMenuPosition(null);
+            }}
+          />
+          <div
+            className="fixed z-50 bg-white border border-gray-100 rounded-xl shadow-xl p-2 min-w-[160px] animate-in fade-in zoom-in-95 duration-100"
+            style={{
+              left: `${contextMenuPosition.x}px`,
+              top: `${contextMenuPosition.y}px`
+            }}
+          >
+            <button
+              onClick={handleRenameClick}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 text-left transition-colors"
             >
-              <button
-                onClick={handleRenameClick}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded hover:bg-accent text-left transition-colors"
-              >
-                <Edit className="h-4 w-4" />
-                <span className="text-sm font-medium">Rename</span>
-              </button>
-              <button
-                onClick={handleDeleteFromContextMenu}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded hover:bg-destructive hover:text-destructive-foreground text-left transition-colors"
-              >
-                <Trash2 className="h-4 w-4" />
-                <span className="text-sm font-medium">Delete Desk</span>
-              </button>
-            </div>
-          </>
-        )
-      }
+              <Edit className="h-4 w-4 text-gray-500" />
+              <span className="text-sm font-medium text-gray-700">Rename</span>
+            </button>
+            <div className="h-px bg-gray-100 my-1" />
+            <button
+              onClick={handleDeleteFromContextMenu}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-red-50 text-left transition-colors group"
+            >
+              <Trash2 className="h-4 w-4 text-red-400 group-hover:text-red-500" />
+              <span className="text-sm font-medium text-gray-700 group-hover:text-red-600">Delete Desk</span>
+            </button>
+          </div>
+        </>
+      )}
 
       {/* Delete Confirmation Menu */}
-      {
-        deleteMenuOpen && cellToDelete && (
-          <>
-            <div
-              className="fixed inset-0 z-40"
-              onClick={() => {
-                setDeleteMenuOpen(false);
-                setCellToDelete(null);
-              }}
-            />
-            <Dialog open={deleteMenuOpen} onOpenChange={setDeleteMenuOpen}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Delete Desk</DialogTitle>
-                  <DialogDescription>
-                    Are you sure you want to delete this desk? This action cannot be undone.
-                  </DialogDescription>
-                </DialogHeader>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setDeleteMenuOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button variant="destructive" onClick={handleDeleteCell}>
-                    Delete
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </>
-        )
-      }
+      <Dialog open={deleteMenuOpen} onOpenChange={setDeleteMenuOpen}>
+        <DialogContent className="sm:max-w-[400px] rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Delete Desk</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this desk? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setDeleteMenuOpen(false)} className="rounded-full">
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteCell} className="rounded-full bg-red-500 hover:bg-red-600">
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Rename Dialog */}
       <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[400px] rounded-2xl">
           <DialogHeader>
             <DialogTitle>Rename Desk</DialogTitle>
             <DialogDescription>
@@ -963,20 +993,21 @@ export default function RoomViewer() {
           <div className="space-y-4 py-4">
             {renamingCell && (
               <div className="space-y-2">
-                <Label className="text-sm text-muted-foreground">System ID</Label>
-                <div className="px-3 py-2 bg-muted rounded-md font-mono text-sm">
+                <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">System ID</Label>
+                <div className="px-3 py-2 bg-gray-50 rounded-lg font-mono text-xs text-gray-600 border border-gray-100">
                   {renamingCell.id.slice(0, 8)}... at ({renamingCell.x}, {renamingCell.y})
                 </div>
               </div>
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="rename-input">Custom Name</Label>
+              <Label htmlFor="rename-input" className="text-sm font-medium text-gray-700">Custom Name</Label>
               <Input
                 id="rename-input"
                 value={customName}
                 onChange={(e) => setCustomName(e.target.value)}
                 placeholder="e.g., Alfonzina, Quiet Zone 1"
+                className="rounded-xl border-gray-200 focus:ring-blue-500 focus:border-blue-500"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     handleSaveCustomName();
@@ -988,15 +1019,15 @@ export default function RoomViewer() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsRenameDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setIsRenameDialogOpen(false)} className="rounded-full">
               Cancel
             </Button>
-            <Button onClick={handleSaveCustomName}>
+            <Button onClick={handleSaveCustomName} className="rounded-full bg-blue-600 hover:bg-blue-700">
               Save Name
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div >
+    </div>
   );
 }
