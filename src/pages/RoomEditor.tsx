@@ -44,42 +44,42 @@ interface Room {
 
 const CELL_SIZE = 70;
 
-const DESK_TYPES: { 
-  type: DeskType; 
-  label: string; 
-  color: string; 
+const DESK_TYPES: {
+  type: DeskType;
+  label: string;
+  color: string;
   bgColor: string;
   icon: typeof Armchair;
 }[] = [
-  { 
-    type: 'desk', 
-    label: 'Standard Desk', 
-    color: 'text-blue-600', 
-    bgColor: 'bg-blue-100 hover:bg-blue-200 border-blue-300',
-    icon: Armchair
-  },
-  { 
-    type: 'premium_desk', 
-    label: 'Premium Desk', 
-    color: 'text-amber-600', 
-    bgColor: 'bg-amber-100 hover:bg-amber-200 border-amber-300',
-    icon: Crown
-  },
-  { 
-    type: 'entrance', 
-    label: 'Entrance', 
-    color: 'text-green-600', 
-    bgColor: 'bg-green-100 hover:bg-green-200 border-green-300',
-    icon: DoorOpen
-  }
-];
+    {
+      type: 'desk',
+      label: 'Standard Desk',
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-100 hover:bg-blue-200 border-blue-300',
+      icon: Armchair
+    },
+    {
+      type: 'premium_desk',
+      label: 'Premium Desk',
+      color: 'text-amber-600',
+      bgColor: 'bg-amber-100 hover:bg-amber-200 border-amber-300',
+      icon: Crown
+    },
+    {
+      type: 'entrance',
+      label: 'Entrance',
+      color: 'text-green-600',
+      bgColor: 'bg-green-100 hover:bg-green-200 border-green-300',
+      icon: DoorOpen
+    }
+  ];
 
 export default function RoomEditor() {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
-  
+
   const [room, setRoom] = useState<Room | null>(null);
   const [cells, setCells] = useState<Cell[]>([]);
   const [loading, setLoading] = useState(true);
@@ -114,25 +114,23 @@ export default function RoomEditor() {
     if (!roomId) return;
 
     setLoading(true);
-    
+
     try {
       const result = await callRoomFunction('get', { roomId });
       setRoom(result.room);
       setCells(result.cells || []);
-      
-      // Check if user is room admin
+
       const session = authService.getSession();
       if (session?.user.role === 'admin') {
         setIsRoomAdmin(true);
       } else {
-        // Query room_access to check if user is admin
         const { data: access } = await supabase
           .from('room_access')
           .select('role')
           .eq('room_id', roomId)
           .eq('user_id', session?.user.id)
           .single();
-        
+
         if (access?.role === 'admin') {
           setIsRoomAdmin(true);
         } else {
@@ -161,13 +159,12 @@ export default function RoomEditor() {
   };
 
   const handleCellClick = async (x: number, y: number) => {
-    if (cellOperationInProgress) return; // Prevent double-clicks
-    
+    if (cellOperationInProgress) return;
+
     const existingCell = getCellAt(x, y);
 
     try {
       if (!existingCell) {
-        // Create new cell
         setCellOperationInProgress(true);
         const newCell = await callRoomFunction('create_cell', {
           cell: {
@@ -190,6 +187,79 @@ export default function RoomEditor() {
     }
   };
 
+  // Drag and Drop Handlers
+  const handleDragStart = (e: React.DragEvent, type: DeskType, source: 'palette' | 'grid', cell?: Cell) => {
+    e.dataTransfer.setData('type', type);
+    e.dataTransfer.setData('source', source);
+    if (cell) {
+      e.dataTransfer.setData('cellId', cell.id);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault(); // Allow drop
+  };
+
+  const handleDrop = async (e: React.DragEvent, x: number, y: number) => {
+    e.preventDefault();
+    const type = e.dataTransfer.getData('type') as DeskType;
+    const source = e.dataTransfer.getData('source');
+    const cellId = e.dataTransfer.getData('cellId');
+
+    const existingCell = getCellAt(x, y);
+    if (existingCell) return; // Cannot drop on existing cell
+
+    if (source === 'palette') {
+      // Create new cell
+      try {
+        setCellOperationInProgress(true);
+        const newCell = await callRoomFunction('create_cell', {
+          cell: {
+            room_id: roomId!,
+            x,
+            y,
+            type
+          }
+        });
+        setCells([...cells, newCell]);
+      } catch (error: any) {
+        toast({
+          title: 'Error creating cell',
+          description: error.message,
+          variant: 'destructive'
+        });
+      } finally {
+        setCellOperationInProgress(false);
+      }
+    } else if (source === 'grid' && cellId) {
+      // Move existing cell
+      try {
+        setCellOperationInProgress(true);
+        // Optimistic update
+        const movedCell = cells.find(c => c.id === cellId);
+        if (movedCell) {
+          const updatedCells = cells.map(c => c.id === cellId ? { ...c, x, y } : c);
+          setCells(updatedCells);
+
+          await callRoomFunction('update_cell', {
+            cellId,
+            updates: { x, y }
+          });
+        }
+      } catch (error: any) {
+        // Revert on error
+        loadRoom();
+        toast({
+          title: 'Error moving cell',
+          description: error.message,
+          variant: 'destructive'
+        });
+      } finally {
+        setCellOperationInProgress(false);
+      }
+    }
+  };
+
   const handleRenameClick = (cell: Cell) => {
     setRenamingCell(cell);
     setCustomName(cell.label || '');
@@ -204,7 +274,7 @@ export default function RoomEditor() {
         cellId: renamingCell.id,
         updates: { label: customName || null }
       });
-      setCells(cells.map(c => 
+      setCells(cells.map(c =>
         c.id === renamingCell.id ? updatedCell : c
       ));
       setIsRenameDialogOpen(false);
@@ -234,12 +304,6 @@ export default function RoomEditor() {
         variant: 'destructive'
       });
     }
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    toast({ title: 'Layout saved successfully' });
-    setSaving(false);
   };
 
   const handleClearAll = async () => {
@@ -293,23 +357,24 @@ export default function RoomEditor() {
 
       <Card className="p-6">
         <div className="mb-6">
-          <h3 className="text-sm font-medium mb-3">Select Type to Add New Desk</h3>
+          <h3 className="text-sm font-medium mb-3">Drag items to the grid</h3>
           <div className="flex flex-wrap gap-3">
             {DESK_TYPES.map(({ type, label, color, bgColor, icon: Icon }) => (
-              <button
+              <div
                 key={type}
+                draggable
+                onDragStart={(e) => handleDragStart(e, type, 'palette')}
                 onClick={() => setSelectedType(type)}
-                className={`flex items-center gap-2 px-4 py-3 rounded-lg border-2 transition-all ${
-                  selectedType === type 
-                    ? `${bgColor} border-current shadow-md` 
+                className={`flex items-center gap-2 px-4 py-3 rounded-lg border-2 transition-all cursor-grab active:cursor-grabbing ${selectedType === type
+                    ? `${bgColor} border-current shadow-md`
                     : 'bg-background border-border hover:border-muted-foreground'
-                }`}
+                  }`}
               >
                 <Icon className={`h-5 w-5 ${selectedType === type ? color : 'text-muted-foreground'}`} />
                 <span className={`font-medium ${selectedType === type ? color : 'text-muted-foreground'}`}>
                   {label}
                 </span>
-              </button>
+              </div>
             ))}
           </div>
         </div>
@@ -328,19 +393,23 @@ export default function RoomEditor() {
                 const cell = getCellAt(x, y);
                 const deskInfo = DESK_TYPES.find(d => d.type === cell?.type);
                 const Icon = deskInfo?.icon;
-                
+
                 const cellContent = (
                   <div
                     className={`
-                      border-2 cursor-pointer transition-all rounded-md
+                      border-2 transition-all rounded-md
                       flex items-center justify-center relative
                       ${cell && deskInfo
-                        ? `${deskInfo.bgColor} ${deskInfo.color}` 
-                        : 'bg-background border-border hover:bg-muted'
+                        ? `${deskInfo.bgColor} ${deskInfo.color} cursor-grab active:cursor-grabbing`
+                        : 'bg-background border-border hover:bg-muted cursor-pointer'
                       }
                     `}
                     style={{ width: CELL_SIZE, height: CELL_SIZE }}
                     onClick={() => handleCellClick(x, y)}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, x, y)}
+                    draggable={!!cell}
+                    onDragStart={(e) => cell && handleDragStart(e, cell.type, 'grid', cell)}
                     title={cell ? `${x}, ${y} - ${deskInfo?.label}` : `${x}, ${y} - Empty`}
                   >
                     {cell && Icon && (
@@ -364,7 +433,7 @@ export default function RoomEditor() {
                         <Edit className="mr-2 h-4 w-4" />
                         Rename
                       </ContextMenuItem>
-                      <ContextMenuItem 
+                      <ContextMenuItem
                         onClick={() => handleDeleteCell(cell)}
                         className="text-destructive focus:text-destructive"
                       >
@@ -391,7 +460,7 @@ export default function RoomEditor() {
               Give this desk a friendly, memorable name
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
             {renamingCell && (
               <div className="space-y-2">
@@ -401,7 +470,7 @@ export default function RoomEditor() {
                 </div>
               </div>
             )}
-            
+
             <div className="space-y-2">
               <Label htmlFor="rename-input">Custom Name</Label>
               <Input

@@ -454,18 +454,17 @@ export default function RoomViewer() {
       setDeleteMenuPosition(null);
     }
   };
-
   const handleEmptyCellClick = (x: number, y: number, event: React.MouseEvent) => {
     if (!isRoomAdmin) return;
 
     const rect = (event.target as HTMLElement).getBoundingClientRect();
-    const menuHeight = 120; // Approximate height of the menu
+    const menuHeight = 250; // Increased safety margin for menu height
     const spaceBelow = window.innerHeight - rect.bottom;
 
     let topPosition = rect.bottom + 5;
     if (spaceBelow < menuHeight) {
       // Place above if not enough space below
-      topPosition = rect.top - menuHeight - 5;
+      topPosition = rect.top - menuHeight + 80; // Adjust to keep it close but above
     }
 
     setCreateMenuPosition({ x: rect.left, y: topPosition });
@@ -588,8 +587,8 @@ export default function RoomViewer() {
           variant={selectedDate.toDateString() === new Date().toDateString() ? 'default' : 'ghost'}
           onClick={() => setSelectedDate(new Date())}
           className={`rounded-full px-6 ${selectedDate.toDateString() === new Date().toDateString()
-              ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-200'
-              : 'text-gray-600 hover:bg-gray-100'
+            ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-200'
+            : 'text-gray-600 hover:bg-gray-100'
             }`}
         >
           Today
@@ -678,7 +677,7 @@ export default function RoomViewer() {
                         {/* Status Dot */}
                         {isBookable && (
                           <div className={`absolute top-2 right-2 w-2 h-2 rounded-full ${status === 'available' ? 'bg-blue-400' :
-                              status === 'my-reservation' ? 'bg-purple-400' : 'bg-red-300'
+                            status === 'my-reservation' ? 'bg-purple-400' : 'bg-red-300'
                             }`} />
                         )}
                       </div>
