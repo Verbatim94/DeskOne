@@ -2,7 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
-import { LogOut, LayoutGrid, Building2, BookCheck, Users, Settings } from 'lucide-react';
+import { LogOut, LayoutGrid, Building2, BookCheck, Users } from 'lucide-react';
 import deskOneLogo from '@/assets/deskone-logo.png';
 
 export function Sidebar() {
@@ -13,6 +13,7 @@ export function Sidebar() {
 
     const navigation = user.role === 'admin'
         ? [
+            { name: 'Dashboard', href: '/', icon: LayoutGrid, roles: ['admin'] },
             { name: 'Manage Rooms', href: '/rooms', icon: Building2, roles: ['admin'] },
             { name: 'Users', href: '/users', icon: Users, roles: ['admin'] },
         ]
