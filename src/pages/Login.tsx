@@ -5,17 +5,30 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import deskOneLogo from '@/assets/deskone-logo.png';
+import { StatusPopup } from '@/components/StatusPopup';
+
+interface PopupState {
+  isOpen: boolean;
+  status: 'success' | 'error';
+  title: string;
+  message: string;
+}
 
 export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { login, isAuthenticated } = useAuth();
-  const { toast } = useToast();
   const navigate = useNavigate();
+
+  const [popup, setPopup] = useState<PopupState>({
+    isOpen: false,
+    status: 'success',
+    title: '',
+    message: ''
+  });
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -23,14 +36,22 @@ export default function Login() {
     }
   }, [isAuthenticated, navigate]);
 
+  const closePopup = () => {
+    setPopup(prev => ({ ...prev, isOpen: false }));
+    if (popup.status === 'success') {
+      navigate('/');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!username || !password) {
-      toast({
-        title: 'Missing credentials',
-        description: 'Please enter both username and password',
-        variant: 'destructive'
+      setPopup({
+        isOpen: true,
+        status: 'error',
+        title: 'Oooops!',
+        message: 'Please enter both username and password'
       });
       return;
     }
@@ -40,28 +61,38 @@ export default function Login() {
     setLoading(false);
 
     if (success) {
-      toast({
-        title: 'Welcome back!',
-        description: 'You have successfully logged in'
+      setPopup({
+        isOpen: true,
+        status: 'success',
+        title: 'Success!',
+        message: 'You have successfully logged in'
       });
-      navigate('/');
     } else {
-      toast({
-        title: 'Login failed',
-        description: 'Invalid username or password',
-        variant: 'destructive'
+      setPopup({
+        isOpen: true,
+        status: 'error',
+        title: 'Oooops!',
+        message: 'Invalid username or password'
       });
     }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <StatusPopup
+        isOpen={popup.isOpen}
+        onClose={closePopup}
+        status={popup.status}
+        title={popup.title}
+        message={popup.message}
+      />
+
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
           <div className="flex justify-center mb-4">
-            <img 
-              src={deskOneLogo} 
-              alt="DeskOne" 
+            <img
+              src={deskOneLogo}
+              alt="DeskOne"
               className="h-32 w-auto object-contain"
             />
           </div>
