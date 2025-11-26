@@ -7,20 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Loader2, Armchair, Crown, DoorOpen, ChevronLeft, ChevronRight, Plus, Trash2, Edit } from 'lucide-react';
+import { ArrowLeft, Loader2, Armchair, Crown, DoorOpen, ChevronLeft, ChevronRight } from 'lucide-react';
 import BookDeskDialog from '@/components/BookDeskDialog';
 import ReservationDetailsDialog from '@/components/ReservationDetailsDialog';
 import { format, parseISO, isWithinInterval } from 'date-fns';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+
 
 type DeskType = 'desk' | 'premium_desk' | 'entrance';
 
@@ -101,19 +92,7 @@ export default function RoomViewer() {
   const [selectedReservation, setSelectedReservation] = useState<any | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [isRoomAdmin, setIsRoomAdmin] = useState(false);
-  const [createMenuOpen, setCreateMenuOpen] = useState(false);
-  const [createMenuPosition, setCreateMenuPosition] = useState<{ x: number; y: number } | null>(null);
-  const [pendingCell, setPendingCell] = useState<{ x: number; y: number } | null>(null);
-  const [deleteMenuOpen, setDeleteMenuOpen] = useState(false);
-  const [deleteMenuPosition, setDeleteMenuPosition] = useState<{ x: number; y: number } | null>(null);
-  const [cellToDelete, setCellToDelete] = useState<Cell | null>(null);
-  const [hoveredCellId, setHoveredCellId] = useState<string | null>(null);
-  const [renamingCell, setRenamingCell] = useState<Cell | null>(null);
-  const [customName, setCustomName] = useState('');
-  const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
-  const [contextMenuOpen, setContextMenuOpen] = useState(false);
-  const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
-  const [contextMenuCell, setContextMenuCell] = useState<Cell | null>(null);
+
 
   useEffect(() => {
     loadRoom();
@@ -353,9 +332,6 @@ export default function RoomViewer() {
   };
 
   const handleDeskListClick = (cell: Cell) => {
-    setHoveredCellId(cell.id);
-    setTimeout(() => setHoveredCellId(null), 2000);
-
     const { status } = getDeskStatus(cell.id);
     if (status === 'available' || user?.role === 'admin') {
       setSelectedCell(cell);
@@ -363,51 +339,7 @@ export default function RoomViewer() {
     }
   };
 
-  const handleCellRightClick = (cell: Cell, event: React.MouseEvent) => {
-    // Context menu disabled in viewer
-    event.preventDefault();
-  };
 
-  const handleRenameClick = () => {
-    if (!contextMenuCell) return;
-    setRenamingCell(contextMenuCell);
-    setCustomName(contextMenuCell.label || '');
-    setIsRenameDialogOpen(true);
-    setContextMenuOpen(false);
-    setContextMenuCell(null);
-    setContextMenuPosition(null);
-  };
-
-  const handleSaveCustomName = async () => {
-    if (!renamingCell) return;
-
-    try {
-      const updatedCell = await callRoomFunction('update_cell', {
-        cellId: renamingCell.id,
-        updates: { label: customName || null }
-      });
-      setCells(cells.map(c =>
-        c.id === renamingCell.id ? updatedCell : c
-      ));
-      setIsRenameDialogOpen(false);
-      setRenamingCell(null);
-      setCustomName('');
-      toast({ title: 'Desk name updated successfully' });
-    } catch (error: any) {
-      toast({
-        title: 'Error updating desk name',
-        description: error.message,
-        variant: 'destructive'
-      });
-    }
-  };
-
-
-
-  const handleEmptyCellClick = (x: number, y: number, event: React.MouseEvent) => {
-    // Admin editing disabled in viewer - use Room Editor instead
-    return;
-  };
 
   if (loading) {
     return (
@@ -526,7 +458,7 @@ export default function RoomViewer() {
                     : ({ status: 'available' as DeskStatus } as { status: DeskStatus; reservation?: Reservation; assignedTo?: string });
 
                   if (cell) {
-                    const isHovered = hoveredCellId === cell.id;
+
                     // Custom Google-like styling
                     let bgClass = 'bg-white border-2 border-gray-200';
                     let iconColor = 'text-gray-400';
@@ -555,11 +487,9 @@ export default function RoomViewer() {
                           flex items-center justify-center
                           ${bgClass}
                           ${isBookable && status !== 'reserved' ? 'cursor-pointer hover:-translate-y-1' : ''}
-                          ${isHovered ? 'ring-2 ring-blue-400 ring-offset-2 scale-105 z-10' : ''}
                         `}
                         style={{ width: CELL_SIZE, height: CELL_SIZE }}
                         onClick={() => cell && isBookable && handleCellClick(cell)}
-                        onContextMenu={(e) => isRoomAdmin && handleCellRightClick(cell, e)}
                         title={cell.label || 'Desk'}
                       >
                         {cell && Icon && (
@@ -578,19 +508,9 @@ export default function RoomViewer() {
                     return (
                       <div
                         key={`${x}-${y}`}
-                        className={`
-                          rounded-xl relative flex items-center justify-center transition-all duration-200
-                          ${isRoomAdmin
-                            ? 'hover:bg-gray-50 cursor-pointer border-2 border-dashed border-transparent hover:border-gray-200'
-                            : ''
-                          }
-                        `}
+                        className="rounded-xl relative flex items-center justify-center transition-all duration-200"
                         style={{ width: CELL_SIZE, height: CELL_SIZE }}
-                        onClick={(e) => isRoomAdmin && handleEmptyCellClick(x, y, e)}
                       >
-                        {isRoomAdmin && (
-                          <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />
-                        )}
                       </div>
                     );
                   }
@@ -638,8 +558,6 @@ export default function RoomViewer() {
                           : 'bg-gray-50 border-transparent opacity-70'
                       }
                     `}
-                    onMouseEnter={() => setHoveredCellId(cell.id)}
-                    onMouseLeave={() => setHoveredCellId(null)}
                     onClick={() => handleDeskListClick(cell)}
                   >
                     <div className="flex items-center justify-between">

@@ -1,17 +1,15 @@
 import { useAuth } from '@/contexts/AuthContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Users as UsersIcon, CalendarRange, Grid3x3 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { WeeklyOverview } from '@/components/WeeklyOverview';
-import { RoomWeeklyAvailability } from '@/components/RoomWeeklyAvailability';
-import { TodayOccupancy } from '@/components/TodayOccupancy';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { format, eachDayOfInterval } from 'date-fns';
-import { useState } from 'react';
+import { format, eachDayOfInterval, isAfter, startOfDay, subMonths, isSameMonth } from 'date-fns';
 import { authService } from '@/lib/auth';
+import { DashboardStats } from '@/components/DashboardStats';
+import { DashboardChart } from '@/components/DashboardChart';
+import { DashboardCalendar } from '@/components/DashboardCalendar';
+import { Grid3x3, ArrowRight } from 'lucide-react';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -24,18 +22,18 @@ export default function Dashboard() {
     queryFn: async () => {
       const session = authService.getSession();
       if (!session) throw new Error('No session');
-      
+
       const response = await supabase.functions.invoke('manage-rooms', {
         body: { operation: 'list' },
         headers: {
           'x-session-token': session.token,
         },
       });
-      
+
       if (response.error) {
         throw response.error;
       }
-      
+
       return response.data || [];
     },
   });
@@ -45,131 +43,124 @@ export default function Dashboard() {
     queryFn: async () => {
       // Admins don't need reservations
       if (user.role === 'admin') return [];
-      
+
       const session = authService.getSession();
       if (!session) return [];
-      
+
       const response = await supabase.functions.invoke('manage-reservations', {
-        body: { 
+        body: {
           operation: 'list_my_reservations'
         },
         headers: {
           'x-session-token': session.token,
         },
       });
-      
+
       if (response.error) {
         return [];
       }
-      
+
       const reservations = response.data || [];
-      return reservations.filter((r: any) => 
+      return reservations.filter((r: any) =>
         r.status === 'approved' || r.status === 'pending'
       );
     },
   });
 
-  // Expand reservations to include all dates in the range
+  // Calculate Stats
+  const totalBookings = allReservations.length;
+  const upcomingBookings = allReservations.filter((r: any) =>
+    isAfter(new Date(r.date_start), startOfDay(new Date()))
+  ).length;
+  const totalSpent = totalBookings * 25; // Dummy value: $25 per booking
+
+  // Prepare Chart Data (Last 6 months)
+  const chartData = Array.from({ length: 6 }).map((_, i) => {
+    const date = subMonths(new Date(), 5 - i);
+    const monthName = format(date, 'MMM');
+    const bookingsInMonth = allReservations.filter((r: any) =>
+      isSameMonth(new Date(r.date_start), date)
+    ).length;
+
+    return { date: monthName, bookings: bookingsInMonth };
+  });
+
+  // Expand reservations to include all dates in the range for Calendar
   const bookedDates = allReservations.flatMap((r: any) => {
     const startDate = new Date(r.date_start);
     const endDate = new Date(r.date_end);
-    
-    // Generate all dates between start and end (inclusive)
     const dates = eachDayOfInterval({ start: startDate, end: endDate });
-    return dates.map(date => format(date, 'yyyy-MM-dd'));
+    return dates;
   });
 
-  // Default user view
   return (
-    <div className="space-y-8">
-      {/* Top Strip: Welcome + Weekly Overview */}
-      <Card className="border-none shadow-sm">
-        <CardContent className="pt-6">
-          <div className="flex flex-col lg:flex-row gap-8 items-start lg:items-center justify-between">
-            {/* Left Section - Welcome */}
-            <div className="flex-1 space-y-2">
-              <h1 className="text-4xl font-bold tracking-tight">
-                Welcome, {user.full_name}!
-              </h1>
-              <p className="text-lg text-muted-foreground">
-                {user.role === 'admin' ? 'Manage your rooms and desk assignments' : 'Book desks in your available rooms'}
-              </p>
-            </div>
-            
-            {/* Right Section - Weekly Overview (only for regular users) */}
-            {user.role !== 'admin' && (
-              <div className="lg:w-[420px]">
-                <WeeklyOverview bookedDates={bookedDates} />
-              </div>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      {/* Left Column - Main Content */}
+      <div className="lg:col-span-2 space-y-8">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Hello {user.full_name}!
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Here's what's happening with your desk bookings.
+          </p>
+        </div>
+
+        <DashboardStats
+          totalBookings={totalBookings}
+          upcomingBookings={upcomingBookings}
+          totalSpent={totalSpent}
+        />
+
+        <DashboardChart data={chartData} />
+      </div>
+
+      {/* Right Column - Widgets */}
+      <div className="space-y-8">
+        <DashboardCalendar bookedDates={bookedDates} />
+
+        {/* Shared Rooms Widget */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Shared Rooms</h2>
+            {userRooms.length > 3 && (
+              <Link to="/rooms" className="text-sm text-primary hover:underline">
+                View All
+              </Link>
             )}
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Shared Rooms Section */}
-      <div className="space-y-4">
-        <h2 className="text-2xl font-semibold tracking-tight mb-4">
-          {user.role === 'admin' ? 'Your Rooms' : 'Shared Rooms'}
-        </h2>
-
-        {/* Room Cards */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
-          {userRooms.length > 0 ? (
-            userRooms.map((room: any) => {
-              return (
-                <Card key={room.id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-6 space-y-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 space-y-2">
-                        <h3 className="text-lg font-semibold mb-1">{room.name}</h3>
-                        {room.description && (
-                          <p className="text-sm text-muted-foreground mb-2">{room.description}</p>
-                        )}
-                        <p className="text-sm text-muted-foreground">
-                          {room.totalDesks} {room.totalDesks === 1 ? 'desk' : 'desks'} total
-                        </p>
-                        {/* Today's occupancy */}
-                        {room.totalDesks > 0 && (
-                          <TodayOccupancy roomId={room.id} totalDesks={room.totalDesks} />
-                        )}
-                      </div>
-                      
-                      <Link to={`/rooms/${room.id}/view`}>
-                        <Button size="lg" className="min-w-[120px]">
-                          Open Room
-                        </Button>
-                      </Link>
-                    </div>
-                    
-                    {/* Weekly Availability Calendar */}
-                    {room.totalDesks > 0 && (
-                      <div className="pt-3 border-t">
-                        <p className="text-xs text-muted-foreground mb-2">Weekly availability</p>
-                        <RoomWeeklyAvailability roomId={room.id} totalDesks={room.totalDesks} />
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })
-          ) : (
-            <Card>
-              <CardContent className="py-12">
-                <div className="text-center space-y-3">
-                  <Grid3x3 className="h-12 w-12 mx-auto text-muted-foreground/50" />
-                  <div>
-                    <p className="text-lg font-medium">No shared rooms available yet</p>
-                    <a 
-                      href="mailto:admin@deskone.com" 
-                      className="text-sm text-primary hover:underline"
-                    >
-                      Contact your administrator
-                    </a>
+          <div className="space-y-3">
+            {userRooms.slice(0, 3).map((room: any) => (
+              <Card key={room.id} className="overflow-hidden hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-medium truncate">{room.name}</h3>
+                    <span className="text-xs text-muted-foreground bg-secondary px-2 py-1 rounded-full">
+                      {room.totalDesks} desks
+                    </span>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                  <p className="text-xs text-muted-foreground line-clamp-2 mb-3">
+                    {room.description || 'No description available'}
+                  </p>
+                  <Link to={`/rooms/${room.id}/view`}>
+                    <Button variant="outline" size="sm" className="w-full h-8 text-xs">
+                      View Room <ArrowRight className="ml-2 h-3 w-3" />
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            ))}
+
+            {userRooms.length === 0 && (
+              <Card className="bg-muted/50 border-dashed">
+                <CardContent className="p-6 text-center text-muted-foreground">
+                  <Grid3x3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No rooms available</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </div>
       </div>
     </div>
