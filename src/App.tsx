@@ -21,113 +21,116 @@ import MyReservations from "./pages/MyReservations";
 import PendingApprovals from "./pages/PendingApprovals";
 import ReservationsCalendar from "./pages/ReservationsCalendar";
 
-const App = () => (
-  // Force rebuild for dashboard update
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Dashboard />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/calendar"
-              element={
-                <ProtectedRoute requiredRole="user">
-                  <Layout>
-                    <MyCalendar />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/rooms"
-              element={
-                <ProtectedRoute requiredRole="user">
-                  <Layout>
-                    <Rooms />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/rooms/:roomId/edit"
-              element={
-                <ProtectedRoute requiredRole="user">
-                  <Layout>
-                    <RoomEditor />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/rooms/:roomId/view"
-              element={
-                <ProtectedRoute requiredRole="user">
-                  <Layout>
-                    <RoomViewer />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/reservations"
-              element={
-                <ProtectedRoute requiredRole="user">
-                  <Layout>
-                    <MyReservations />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/calendar-view"
-              element={
-                <ProtectedRoute requiredRole="user">
-                  <Layout>
-                    <ReservationsCalendar />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/approvals"
-              element={
-                <ProtectedRoute requiredRole="admin">
-                  <Layout>
-                    <PendingApprovals />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/users"
-              element={
-                <ProtectedRoute requiredRole="admin">
-                  <Layout>
-                    <Users />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+const App = () => {
+  console.log("App Version: 1.1 - Deployment Check");
+  return (
+    // Force rebuild for dashboard update
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuthProvider>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Dashboard />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/calendar"
+                element={
+                  <ProtectedRoute requiredRole="user">
+                    <Layout>
+                      <MyCalendar />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/rooms"
+                element={
+                  <ProtectedRoute requiredRole="user">
+                    <Layout>
+                      <Rooms />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/rooms/:roomId/edit"
+                element={
+                  <ProtectedRoute requiredRole="user">
+                    <Layout>
+                      <RoomEditor />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/rooms/:roomId/view"
+                element={
+                  <ProtectedRoute requiredRole="user">
+                    <Layout>
+                      <RoomViewer />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/reservations"
+                element={
+                  <ProtectedRoute requiredRole="user">
+                    <Layout>
+                      <MyReservations />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/calendar-view"
+                element={
+                  <ProtectedRoute requiredRole="user">
+                    <Layout>
+                      <ReservationsCalendar />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/approvals"
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <Layout>
+                      <PendingApprovals />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/users"
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <Layout>
+                      <Users />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;
