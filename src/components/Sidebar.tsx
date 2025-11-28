@@ -28,14 +28,13 @@ export function Sidebar() {
 
     return (
         <div className="hidden border-r bg-card lg:block w-64 min-h-screen flex flex-col">
-            <div className="h-16 flex items-center px-6 border-b">
+            <div className="h-24 flex items-center px-6 border-b">
                 <Link to="/" className="flex items-center gap-2">
                     <img
                         src={deskOneLogo}
                         alt="DeskOne"
-                        className="h-8 w-auto object-contain"
+                        className="h-16 w-auto object-contain"
                     />
-                    <span className="font-bold text-xl">DeskOne</span>
                 </Link>
             </div>
 

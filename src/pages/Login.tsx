@@ -128,6 +128,31 @@ export default function Login() {
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Sign In
             </Button>
+
+            {/* DEV ONLY: Quick Login Button */}
+            {import.meta.env.DEV && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full mt-2 border-dashed"
+                onClick={() => {
+                  localStorage.setItem('desk_booking_session', JSON.stringify({
+                    token: 'fake-token',
+                    user: {
+                      id: 'fake-admin-id',
+                      username: 'admin',
+                      full_name: 'Dev Admin',
+                      role: 'admin',
+                      is_active: true
+                    },
+                    expiresAt: new Date(Date.now() + 86400000).toISOString()
+                  }));
+                  window.location.href = '/';
+                }}
+              >
+                ⚡ Dev Login (Bypass Auth)
+              </Button>
+            )}
           </form>
         </CardContent>
       </Card>

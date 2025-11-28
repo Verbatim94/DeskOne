@@ -22,6 +22,7 @@ import PendingApprovals from "./pages/PendingApprovals";
 import ReservationsCalendar from "./pages/ReservationsCalendar";
 
 const App = () => (
+  // Force rebuild for dashboard update
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />

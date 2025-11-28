@@ -32,12 +32,9 @@ export function Layout({ children }: LayoutProps) {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile Header */}
         <header className="lg:hidden h-16 border-b flex items-center px-4 gap-4 bg-card">
-          <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" onClick={() => setIsMobileOpen(true)}>
-              <Menu className="h-5 w-5" />
-            </Button>
-          </SheetTrigger>
-          <span className="font-semibold">DeskOne</span>
+          <Button variant="ghost" size="icon" onClick={() => setIsMobileOpen(true)}>
+            <Menu className="h-5 w-5" />
+          </Button>
         </header>
 
         <main className="flex-1 p-6 md:p-8 overflow-y-auto">
