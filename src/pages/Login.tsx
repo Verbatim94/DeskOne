@@ -157,7 +157,7 @@ export default function Login() {
         </CardContent>
       </Card>
       <div className="text-center text-xs text-muted-foreground mt-4">
-        v1.1 - Deployment Check
+
       </div>
     </div>
   );
