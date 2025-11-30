@@ -91,8 +91,23 @@ export default function RoomEditor() {
   const [cellOperationInProgress, setCellOperationInProgress] = useState(false);
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
 
+  const [walls, setWalls] = useState<Wall[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [activeTab, setActiveTab] = useState<'desks' | 'rooms'>('desks');
+
+  interface Wall {
+    id: string;
+    room_id: string;
+    start_row: number;
+    start_col: number;
+    end_row: number;
+    end_col: number;
+    orientation: 'horizontal' | 'vertical';
+  }
+
   useEffect(() => {
     loadRoom();
+    loadRooms();
   }, [roomId]);
 
   const callRoomFunction = async (operation: string, data?: any) => {
@@ -119,6 +134,7 @@ export default function RoomEditor() {
       const result = await callRoomFunction('get', { roomId });
       setRoom(result.room);
       setCells(result.cells || []);
+      setWalls(result.walls || []);
 
       const session = authService.getSession();
       if (session?.user.role === 'admin') {
@@ -154,6 +170,15 @@ export default function RoomEditor() {
     setLoading(false);
   };
 
+  const loadRooms = async () => {
+    try {
+      const result = await callRoomFunction('list');
+      setRooms(result || []);
+    } catch (error) {
+      console.error('Error loading rooms:', error);
+    }
+  };
+
   const getCellAt = (x: number, y: number): Cell | undefined => {
     return cells.find(c => c.x === x && c.y === y);
   };
@@ -162,6 +187,18 @@ export default function RoomEditor() {
     if (cellOperationInProgress) return;
 
     const existingCell = getCellAt(x, y);
+
+    if (existingCell) {
+      // If clicking an existing cell, select it for editing (e.g. walls)
+      // If we are in "rename" mode or similar, we might want to do something else
+      // For now, let's just set it as the "renamingCell" effectively selecting it
+      // But we want a "selectedCell" state that doesn't necessarily open the dialog immediately
+      // However, the current UI uses context menu for rename.
+      // Let's use `renamingCell` as the "selected" cell for the sidebar context.
+      // Or better, introduce `selectedCell` state.
+      setSelectedCell(existingCell);
+      return;
+    }
 
     try {
       if (!existingCell) {
@@ -175,6 +212,7 @@ export default function RoomEditor() {
           }
         });
         setCells([...cells, newCell]);
+        setSelectedCell(newCell);
       }
     } catch (error: any) {
       toast({
@@ -186,6 +224,8 @@ export default function RoomEditor() {
       setCellOperationInProgress(false);
     }
   };
+
+  const [selectedCell, setSelectedCell] = useState<Cell | null>(null);
 
   // Drag and Drop Handlers
   const handleDragStart = (e: React.DragEvent, type: DeskType, source: 'palette' | 'grid', cell?: Cell) => {
@@ -296,6 +336,7 @@ export default function RoomEditor() {
     try {
       await callRoomFunction('delete_cell', { cellId: cell.id });
       setCells(cells.filter(c => c.id !== cell.id));
+      if (selectedCell?.id === cell.id) setSelectedCell(null);
       toast({ title: 'Desk deleted successfully' });
     } catch (error: any) {
       toast({
@@ -312,10 +353,78 @@ export default function RoomEditor() {
     try {
       await callRoomFunction('delete_all_cells', { roomId: roomId! });
       setCells([]);
+      setWalls([]);
+      setSelectedCell(null);
       toast({ title: 'All cells cleared' });
     } catch (error: any) {
       toast({
         title: 'Error clearing cells',
+        description: error.message,
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const handleToggleWall = async (cell: Cell, direction: 'top' | 'right' | 'bottom' | 'left') => {
+    // Determine wall coordinates based on cell and direction
+    let start_row, start_col, end_row, end_col, orientation: 'horizontal' | 'vertical';
+
+    if (direction === 'top') {
+      start_row = cell.y;
+      start_col = cell.x;
+      end_row = cell.y;
+      end_col = cell.x + 1;
+      orientation = 'horizontal';
+    } else if (direction === 'bottom') {
+      start_row = cell.y + 1;
+      start_col = cell.x;
+      end_row = cell.y + 1;
+      end_col = cell.x + 1;
+      orientation = 'horizontal';
+    } else if (direction === 'left') {
+      start_row = cell.y;
+      start_col = cell.x;
+      end_row = cell.y + 1;
+      end_col = cell.x;
+      orientation = 'vertical';
+    } else { // right
+      start_row = cell.y;
+      start_col = cell.x + 1;
+      end_row = cell.y + 1;
+      end_col = cell.x + 1;
+      orientation = 'vertical';
+    }
+
+    // Check if wall exists
+    const existingWall = walls.find(w =>
+      w.start_row === start_row &&
+      w.start_col === start_col &&
+      w.end_row === end_row &&
+      w.end_col === end_col
+    );
+
+    try {
+      if (existingWall) {
+        // Delete wall
+        await callRoomFunction('delete_wall', { wallId: existingWall.id });
+        setWalls(walls.filter(w => w.id !== existingWall.id));
+      } else {
+        // Create wall
+        const newWall = await callRoomFunction('create_wall', {
+          wall: {
+            room_id: roomId!,
+            start_row,
+            start_col,
+            end_row,
+            end_col,
+            orientation
+          }
+        });
+        setWalls([...walls, newWall]);
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error updating wall',
         description: error.message,
         variant: 'destructive'
       });
@@ -355,101 +464,330 @@ export default function RoomEditor() {
         </div>
       </div>
 
-      <Card className="p-6">
-        <div className="mb-6">
-          <h3 className="text-sm font-medium mb-3">Drag items to the grid</h3>
-          <div className="flex flex-wrap gap-3">
-            {DESK_TYPES.map(({ type, label, color, bgColor, icon: Icon }) => (
-              <div
-                key={type}
-                draggable
-                onDragStart={(e) => handleDragStart(e, type, 'palette')}
-                onClick={() => setSelectedType(type)}
-                className={`flex items-center gap-2 px-4 py-3 rounded-lg border-2 transition-all cursor-grab active:cursor-grabbing ${selectedType === type
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-6">
+        <Card className="p-6">
+          <div className="mb-6">
+            <h3 className="text-sm font-medium mb-3">Drag items to the grid</h3>
+            <div className="flex flex-wrap gap-3">
+              {DESK_TYPES.map(({ type, label, color, bgColor, icon: Icon }) => (
+                <div
+                  key={type}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, type, 'palette')}
+                  onClick={() => setSelectedType(type)}
+                  className={`flex items-center gap-2 px-4 py-3 rounded-lg border-2 transition-all cursor-grab active:cursor-grabbing ${selectedType === type
                     ? `${bgColor} border-current shadow-md`
                     : 'bg-background border-border hover:border-muted-foreground'
-                  }`}
-              >
-                <Icon className={`h-5 w-5 ${selectedType === type ? color : 'text-muted-foreground'}`} />
-                <span className={`font-medium ${selectedType === type ? color : 'text-muted-foreground'}`}>
-                  {label}
-                </span>
-              </div>
-            ))}
+                    }`}
+                >
+                  <Icon className={`h-5 w-5 ${selectedType === type ? color : 'text-muted-foreground'}`} />
+                  <span className={`font-medium ${selectedType === type ? color : 'text-muted-foreground'}`}>
+                    {label}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
 
-        <div className="border-2 border-border rounded-lg p-6 bg-muted/30 overflow-auto">
-          <div
-            className="inline-block"
-            style={{
-              display: 'grid',
-              gridTemplateColumns: `repeat(${room.grid_width}, ${CELL_SIZE}px)`,
-              gap: '4px'
-            }}
-          >
-            {Array.from({ length: room.grid_height }, (_, y) =>
-              Array.from({ length: room.grid_width }, (_, x) => {
-                const cell = getCellAt(x, y);
-                const deskInfo = DESK_TYPES.find(d => d.type === cell?.type);
-                const Icon = deskInfo?.icon;
+          <div className="border-2 border-border rounded-lg p-6 bg-muted/30 overflow-auto relative">
+            <div
+              className="inline-block relative"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: `repeat(${room.grid_width}, ${CELL_SIZE}px)`,
+                gap: '4px'
+              }}
+            >
+              {/* Render Walls */}
+              {walls.map(wall => (
+                <div
+                  key={wall.id}
+                  className="absolute bg-blue-900 z-10 pointer-events-none"
+                  style={{
+                    left: wall.orientation === 'vertical'
+                      ? (wall.start_col * (CELL_SIZE + 4)) - 2 // -2 to center on gap
+                      : (wall.start_col * (CELL_SIZE + 4)),
+                    top: wall.orientation === 'horizontal'
+                      ? (wall.start_row * (CELL_SIZE + 4)) - 2
+                      : (wall.start_row * (CELL_SIZE + 4)),
+                    width: wall.orientation === 'vertical' ? 4 : CELL_SIZE + 4, // +4 to cover gap
+                    height: wall.orientation === 'horizontal' ? 4 : CELL_SIZE + 4,
+                  }}
+                />
+              ))}
 
-                const cellContent = (
+              {Array.from({ length: room.grid_height }, (_, y) =>
+                Array.from({ length: room.grid_width }, (_, x) => {
+                  const cell = getCellAt(x, y);
+                  const deskInfo = DESK_TYPES.find(d => d.type === cell?.type);
+                  const Icon = deskInfo?.icon;
+                  const isSelected = selectedCell?.x === x && selectedCell?.y === y;
+
+                  const cellContent = (
+                    <div
+                      className={`
+                        border-2 transition-all rounded-md
+                        flex items-center justify-center relative
+                        ${cell && deskInfo
+                          ? `${deskInfo.bgColor} ${deskInfo.color} cursor-grab active:cursor-grabbing`
+                          : 'bg-background border-border hover:bg-muted cursor-pointer'
+                        }
+                        ${isSelected ? 'ring-2 ring-primary ring-offset-2' : ''}
+                      `}
+                      style={{ width: CELL_SIZE, height: CELL_SIZE }}
+                      onClick={() => handleCellClick(x, y)}
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, x, y)}
+                      draggable={!!cell}
+                      onDragStart={(e) => cell && handleDragStart(e, cell.type, 'grid', cell)}
+                      title={cell ? `${x}, ${y} - ${deskInfo?.label}` : `${x}, ${y} - Empty`}
+                    >
+                      {cell && Icon && (
+                        <Icon className="h-6 w-6" strokeWidth={2.5} />
+                      )}
+                      {cell?.label && (
+                        <div className="absolute bottom-1 right-1 text-xs font-mono bg-background/80 px-1 rounded">
+                          {cell.label}
+                        </div>
+                      )}
+                    </div>
+                  );
+
+                  return cell ? (
+                    <ContextMenu key={`${x}-${y}`}>
+                      <ContextMenuTrigger>
+                        {cellContent}
+                      </ContextMenuTrigger>
+                      <ContextMenuContent>
+                        <ContextMenuItem onClick={() => handleRenameClick(cell)}>
+                          <Edit className="mr-2 h-4 w-4" />
+                          Rename
+                        </ContextMenuItem>
+                        <ContextMenuItem
+                          onClick={() => handleDeleteCell(cell)}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </ContextMenuItem>
+                      </ContextMenuContent>
+                    </ContextMenu>
+                  ) : (
+                    <div key={`${x}-${y}`}>{cellContent}</div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </Card>
+
+        {/* Right Sidebar */}
+        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col h-[calc(100vh-140px)] sticky top-24">
+
+          {/* Tabs */}
+          <div className="flex p-1 bg-gray-100 rounded-xl mb-6">
+            <button
+              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'desks'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+                }`}
+              onClick={() => setActiveTab('desks')}
+            >
+              Desks
+            </button>
+            <button
+              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'rooms'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+                }`}
+              onClick={() => setActiveTab('rooms')}
+            >
+              Rooms
+            </button>
+          </div>
+
+          {activeTab === 'desks' ? (
+            selectedCell ? (
+              <div className="mb-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-gray-900">Selected Desk</h3>
+                  <Button variant="ghost" size="sm" onClick={() => setSelectedCell(null)}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
+                  <p className="font-medium text-blue-900">{selectedCell.label || `Desk ${selectedCell.x}-${selectedCell.y}`}</p>
+                  <p className="text-xs text-blue-700 mt-1">
+                    Type: {DESK_TYPES.find(d => d.type === selectedCell.type)?.label}
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Borders</Label>
+                  <div className="grid grid-cols-3 gap-2 max-w-[150px] mx-auto">
+                    <div />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-10 w-10"
+                      onClick={() => handleToggleWall(selectedCell, 'top')}
+                    >
+                      <div className="w-full h-0.5 bg-current" />
+                    </Button>
+                    <div />
+
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-10 w-10"
+                      onClick={() => handleToggleWall(selectedCell, 'left')}
+                    >
+                      <div className="h-full w-0.5 bg-current" />
+                    </Button>
+                    <div className="flex items-center justify-center">
+                      <div className="w-2 h-2 rounded-full bg-gray-300" />
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-10 w-10"
+                      onClick={() => handleToggleWall(selectedCell, 'right')}
+                    >
+                      <div className="h-full w-0.5 bg-current" />
+                    </Button>
+
+                    <div />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-10 w-10"
+                      onClick={() => handleToggleWall(selectedCell, 'bottom')}
+                    >
+                      <div className="w-full h-0.5 bg-current" />
+                    </Button>
+                    <div />
+                  </div>
+                </div>
+
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => handleRenameClick(selectedCell)}
+                >
+                  <Edit className="mr-2 h-4 w-4" />
+                  Rename Desk
+                </Button>
+              </div>
+            ) : (
+              <>
+                <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                  All Desks
+                  <Badge variant="secondary" className="rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100">
+                    {cells.filter(c => c.type !== 'entrance').length}
+                  </Badge>
+                </h3>
+
+                <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar flex-1">
+                  {cells
+                    .filter((cell) => cell.type === 'desk' || cell.type === 'premium_desk')
+                    .sort((a, b) => {
+                      const aLabel = a.label || `${a.x}-${a.y}`;
+                      const bLabel = b.label || `${b.x}-${b.y}`;
+                      return aLabel.localeCompare(bLabel);
+                    })
+                    .map((cell) => {
+                      const deskInfo = DESK_TYPES.find((d) => d.type === cell.type);
+                      const Icon = deskInfo?.icon;
+
+                      return (
+                        <div
+                          key={cell.id}
+                          className="group rounded-2xl p-4 transition-all duration-200 cursor-pointer border bg-white border-gray-100 hover:border-blue-200 hover:shadow-md"
+                          onClick={() => setSelectedCell(cell)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <div className="p-3 rounded-xl bg-blue-50 text-blue-600">
+                                {Icon && <Icon className="h-5 w-5" />}
+                              </div>
+                              <div>
+                                <p className="font-semibold text-gray-900">
+                                  {cell.label || `Desk ${cell.x}-${cell.y}`}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                  Click to edit
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                  {cells.filter(c => c.type === 'desk' || c.type === 'premium_desk').length === 0 && (
+                    <div className="text-center py-10 text-gray-400">
+                      <Armchair className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                      <p>No desks created yet.</p>
+                    </div>
+                  )}
+                </div>
+              </>
+            )
+          ) : (
+            <>
+              <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                All Rooms
+                <Badge variant="secondary" className="rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100">
+                  {rooms.length}
+                </Badge>
+              </h3>
+
+              <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar flex-1">
+                {rooms.map((r) => (
                   <div
+                    key={r.id}
                     className={`
-                      border-2 transition-all rounded-md
-                      flex items-center justify-center relative
-                      ${cell && deskInfo
-                        ? `${deskInfo.bgColor} ${deskInfo.color} cursor-grab active:cursor-grabbing`
-                        : 'bg-background border-border hover:bg-muted cursor-pointer'
+                      group rounded-2xl p-4 transition-all duration-200 cursor-pointer border 
+                      ${r.id === roomId
+                        ? 'bg-blue-50 border-blue-200 shadow-sm'
+                        : 'bg-white border-gray-100 hover:border-blue-200 hover:shadow-md'
                       }
                     `}
-                    style={{ width: CELL_SIZE, height: CELL_SIZE }}
-                    onClick={() => handleCellClick(x, y)}
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, x, y)}
-                    draggable={!!cell}
-                    onDragStart={(e) => cell && handleDragStart(e, cell.type, 'grid', cell)}
-                    title={cell ? `${x}, ${y} - ${deskInfo?.label}` : `${x}, ${y} - Empty`}
+                    onClick={() => navigate(`/rooms/${r.id}/edit`)}
                   >
-                    {cell && Icon && (
-                      <Icon className="h-6 w-6" strokeWidth={2.5} />
-                    )}
-                    {cell?.label && (
-                      <div className="absolute bottom-1 right-1 text-xs font-mono bg-background/80 px-1 rounded">
-                        {cell.label}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className={`
+                          p-3 rounded-xl 
+                          ${r.id === roomId ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}
+                        `}>
+                          <Armchair className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className={`font-semibold ${r.id === roomId ? 'text-blue-900' : 'text-gray-900'}`}>
+                            {r.name}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {r.grid_width} × {r.grid_height} Grid
+                          </p>
+                        </div>
                       </div>
-                    )}
+                    </div>
                   </div>
-                );
+                ))}
 
-                return cell ? (
-                  <ContextMenu key={`${x}-${y}`}>
-                    <ContextMenuTrigger>
-                      {cellContent}
-                    </ContextMenuTrigger>
-                    <ContextMenuContent>
-                      <ContextMenuItem onClick={() => handleRenameClick(cell)}>
-                        <Edit className="mr-2 h-4 w-4" />
-                        Rename
-                      </ContextMenuItem>
-                      <ContextMenuItem
-                        onClick={() => handleDeleteCell(cell)}
-                        className="text-destructive focus:text-destructive"
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
-                      </ContextMenuItem>
-                    </ContextMenuContent>
-                  </ContextMenu>
-                ) : (
-                  <div key={`${x}-${y}`}>{cellContent}</div>
-                );
-              })
-            )}
-          </div>
+                {rooms.length === 0 && (
+                  <div className="text-center py-10 text-gray-400">
+                    <Armchair className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                    <p>No rooms found.</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
-      </Card>
+      </div>
 
       {/* Rename Dialog */}
       <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>

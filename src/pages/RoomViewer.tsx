@@ -94,6 +94,18 @@ export default function RoomViewer() {
   const [isRoomAdmin, setIsRoomAdmin] = useState(false);
 
 
+  const [walls, setWalls] = useState<Wall[]>([]);
+
+  interface Wall {
+    id: string;
+    room_id: string;
+    start_row: number;
+    start_col: number;
+    end_row: number;
+    end_col: number;
+    orientation: 'horizontal' | 'vertical';
+  }
+
   useEffect(() => {
     loadRoom();
 
@@ -165,6 +177,7 @@ export default function RoomViewer() {
       const result = await callRoomFunction('get', { roomId });
       setRoom(result.room);
       setCells(result.cells || []);
+      setWalls(result.walls || []);
 
       // Check if user is room admin
       const session = authService.getSession();
@@ -440,13 +453,31 @@ export default function RoomViewer() {
           {/* Room Grid Container */}
           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8 overflow-auto min-h-[600px] flex items-center justify-center">
             <div
-              className="inline-block"
+              className="inline-block relative"
               style={{
                 display: 'grid',
                 gridTemplateColumns: `repeat(${room.grid_width}, ${CELL_SIZE}px)`,
                 gap: '8px', // Increased gap for airy feel
               }}
             >
+              {/* Render Walls */}
+              {walls.map(wall => (
+                <div
+                  key={wall.id}
+                  className="absolute bg-blue-900 z-10 pointer-events-none"
+                  style={{
+                    left: wall.orientation === 'vertical'
+                      ? (wall.start_col * (CELL_SIZE + 8)) - 4 // -4 to center on gap (gap is 8)
+                      : (wall.start_col * (CELL_SIZE + 8)),
+                    top: wall.orientation === 'horizontal'
+                      ? (wall.start_row * (CELL_SIZE + 8)) - 4
+                      : (wall.start_row * (CELL_SIZE + 8)),
+                    width: wall.orientation === 'vertical' ? 4 : CELL_SIZE + 8, // +8 to cover gap
+                    height: wall.orientation === 'horizontal' ? 4 : CELL_SIZE + 8,
+                  }}
+                />
+              ))}
+
               {Array.from({ length: room.grid_height }, (_, y) =>
                 Array.from({ length: room.grid_width }, (_, x) => {
                   const cell = getCellAt(x, y);

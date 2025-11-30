@@ -246,12 +246,18 @@ Deno.serve(async (req) => {
           .select('*')
           .eq('room_id', data.roomId);
 
+        const { data: wallsData, error: wallsError } = await supabase
+          .from('room_walls')
+          .select('*')
+          .eq('room_id', data.roomId);
+
         result = {
           data: {
             room: roomDetail,
-            cells: cellsData || []
+            cells: cellsData || [],
+            walls: wallsData || []
           },
-          error: cellsError
+          error: cellsError || wallsError
         };
         break;
 
@@ -315,6 +321,43 @@ Deno.serve(async (req) => {
           .eq('id', data.cellId);
         break;
 
+      case 'create_wall':
+        // Only room admin can modify layout
+        if (!(await isRoomAdmin(data.wall.room_id))) {
+          return new Response(
+            JSON.stringify({ error: 'Only room admins can modify the layout' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        result = await supabase
+          .from('room_walls')
+          .insert(data.wall)
+          .select()
+          .single();
+        break;
+
+      case 'delete_wall':
+        // Get wall to check room ownership
+        const { data: wallToDelete } = await supabase
+          .from('room_walls')
+          .select('room_id')
+          .eq('id', data.wallId)
+          .single();
+
+        if (!wallToDelete || !(await isRoomAdmin(wallToDelete.room_id))) {
+          return new Response(
+            JSON.stringify({ error: 'Only room admins can modify the layout' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        result = await supabase
+          .from('room_walls')
+          .delete()
+          .eq('id', data.wallId);
+        break;
+
       case 'delete_all_cells':
         // Only room admin can clear layout
         if (!(await isRoomAdmin(data.roomId))) {
@@ -323,6 +366,12 @@ Deno.serve(async (req) => {
             { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
+
+        // Also delete walls
+        await supabase
+          .from('room_walls')
+          .delete()
+          .eq('room_id', data.roomId);
 
         result = await supabase
           .from('room_cells')
