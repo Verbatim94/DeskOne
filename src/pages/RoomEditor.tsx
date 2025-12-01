@@ -436,16 +436,16 @@ export default function RoomEditor() {
   if (!room) return null;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="h-full flex flex-col space-y-4">
+      <div className="flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-4">
           <Button variant="outline" onClick={() => navigate('/rooms')}>
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back
           </Button>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">{room.name}</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-2xl font-bold tracking-tight">{room.name}</h1>
+            <p className="text-muted-foreground text-sm">
               Grid: {room.grid_width} × {room.grid_height}
             </p>
           </div>
@@ -469,11 +469,11 @@ export default function RoomEditor() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-6">
-        <Card className="p-6">
-          <div className="mb-6">
-            <h3 className="text-sm font-medium mb-3">Drag items to the grid</h3>
-            <div className="flex flex-wrap gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-4 flex-1 overflow-hidden">
+        <Card className="p-4 flex flex-col overflow-hidden">
+          <div className="mb-4 flex-shrink-0">
+            <h3 className="text-sm font-medium mb-2">Drag items to the grid</h3>
+            <div className="flex flex-wrap gap-2">
               {DESK_TYPES.map(({ type, label, color, bgColor, icon: Icon }) => (
                 <div
                   key={type}
@@ -494,7 +494,7 @@ export default function RoomEditor() {
             </div>
           </div>
 
-          <div className="border-2 border-border rounded-lg p-6 bg-muted/30 overflow-auto relative">
+          <div className="border-2 border-border rounded-lg p-4 bg-muted/30 overflow-auto flex-1">
             <div
               className="inline-block relative"
               style={{
@@ -623,10 +623,10 @@ export default function RoomEditor() {
         </Card>
 
         {/* Right Sidebar */}
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col h-[calc(100vh-140px)] sticky top-24">
+        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-4 flex flex-col h-full overflow-hidden">
 
           {/* Tabs */}
-          <div className="flex p-1 bg-gray-100 rounded-xl mb-6">
+          <div className="flex p-1 bg-gray-100 rounded-xl mb-4 flex-shrink-0">
             <button
               className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'desks'
                 ? 'bg-white text-gray-900 shadow-sm'

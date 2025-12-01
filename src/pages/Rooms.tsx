@@ -66,14 +66,14 @@ export default function Rooms() {
     try {
       const data = await callRoomFunction('list');
       setRooms(data || []);
-      
+
       // Load room access permissions
       if (user && user.role !== 'admin') {
         const { data: accessData } = await supabase
           .from('room_access')
           .select('room_id, role')
           .eq('user_id', user.id);
-        
+
         const adminMap: Record<string, boolean> = {};
         accessData?.forEach(access => {
           adminMap[access.room_id] = access.role === 'admin';
@@ -198,11 +198,11 @@ export default function Rooms() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="h-full flex flex-col space-y-4 overflow-hidden">
+      <div className="flex items-center justify-between flex-shrink-0">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Manage Rooms</h1>
-          <p className="text-muted-foreground">Create and share office spaces with users</p>
+          <h1 className="text-2xl font-bold tracking-tight">Manage Rooms</h1>
+          <p className="text-muted-foreground text-sm">Create and share office spaces with users</p>
         </div>
         {user && user.role === 'admin' && (
           <Button onClick={openCreateDialog}>
@@ -233,7 +233,7 @@ export default function Rooms() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 overflow-y-auto pr-2">
           {rooms.map((room) => (
             <Card key={room.id} className="hover:shadow-lg transition-shadow">
               <CardHeader>

@@ -365,9 +365,9 @@ export default function RoomViewer() {
   if (!room) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50/50 p-6 space-y-6 font-sans">
+    <div className="h-full bg-gray-50/50 p-4 flex flex-col space-y-4 overflow-hidden">
       {/* Google-style Header */}
-      <div className="flex items-center justify-between bg-white px-6 py-4 rounded-2xl shadow-sm border border-gray-100">
+      <div className="flex items-center justify-between bg-white px-4 py-3 rounded-2xl shadow-sm border border-gray-100 flex-shrink-0">
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
@@ -378,8 +378,8 @@ export default function RoomViewer() {
             <ArrowLeft className="h-5 w-5 text-gray-600" />
           </Button>
           <div>
-            <h1 className="text-xl font-semibold text-gray-900">{room.name}</h1>
-            <p className="text-sm text-gray-500">
+            <h1 className="text-lg font-semibold text-gray-900">{room.name}</h1>
+            <p className="text-xs text-gray-500">
               {format(selectedDate, 'MMMM d, yyyy')}
             </p>
           </div>
@@ -431,11 +431,11 @@ export default function RoomViewer() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-4 flex-1 overflow-hidden">
         {/* Main Content: Grid */}
-        <div className="space-y-4">
+        <div className="flex flex-col space-y-3 overflow-hidden">
           {/* Floating Legend */}
-          <div className="bg-white px-4 py-2 rounded-full shadow-sm border border-gray-100 inline-flex items-center gap-6 text-sm">
+          <div className="bg-white px-4 py-2 rounded-full shadow-sm border border-gray-100 inline-flex items-center gap-6 text-sm flex-shrink-0">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-blue-500 shadow-sm"></div>
               <span className="text-gray-600 font-medium">Available</span>
@@ -451,7 +451,7 @@ export default function RoomViewer() {
           </div>
 
           {/* Room Grid Container */}
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8 overflow-auto min-h-[600px] flex items-center justify-center">
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 overflow-auto flex-1 flex items-center justify-center">
             <div
               className="inline-block relative"
               style={{
@@ -552,8 +552,8 @@ export default function RoomViewer() {
         </div>
 
         {/* Right Sidebar: Available Desks */}
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col h-[calc(100vh-140px)] sticky top-24">
-          <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
+        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-4 flex flex-col h-full overflow-hidden">
+          <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2 flex-shrink-0">
             Available Desks
             <Badge variant="secondary" className="rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100">
               {cells.filter(c => getDeskStatus(c.id).status === 'available' && c.type !== 'entrance').length}

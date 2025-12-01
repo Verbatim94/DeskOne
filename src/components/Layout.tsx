@@ -17,7 +17,7 @@ export function Layout({ children }: LayoutProps) {
   if (!user) return <>{children}</>;
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="h-screen bg-background flex overflow-hidden">
       {/* Desktop Sidebar */}
       <Sidebar />
 
@@ -29,16 +29,16 @@ export function Layout({ children }: LayoutProps) {
       </Sheet>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Mobile Header */}
-        <header className="lg:hidden h-16 border-b flex items-center px-4 gap-4 bg-card">
+        <header className="lg:hidden h-16 border-b flex items-center px-4 gap-4 bg-card flex-shrink-0">
           <Button variant="ghost" size="icon" onClick={() => setIsMobileOpen(true)}>
             <Menu className="h-5 w-5" />
           </Button>
         </header>
 
-        <main className="flex-1 p-6 md:p-8 overflow-y-auto">
-          <div className="max-w-7xl mx-auto">
+        <main className="flex-1 p-4 md:p-6 overflow-y-auto">
+          <div className="max-w-7xl mx-auto h-full">
             {children}
           </div>
         </main>

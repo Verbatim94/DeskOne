@@ -3,10 +3,10 @@ import { Calendar as CalendarIcon } from 'lucide-react';
 
 export default function MyCalendar() {
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">My Calendar</h1>
-        <p className="text-muted-foreground">View your desk bookings</p>
+    <div className="h-full flex flex-col space-y-4 overflow-hidden">
+      <div className="flex-shrink-0">
+        <h1 className="text-2xl font-bold tracking-tight">My Calendar</h1>
+        <p className="text-muted-foreground text-sm">View your desk bookings</p>
       </div>
 
       <Card>

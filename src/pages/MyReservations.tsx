@@ -102,7 +102,7 @@ export default function MyReservations() {
 
   const handleCancelReservation = async (e: React.MouseEvent, reservationId: string, reservationType?: string) => {
     e.stopPropagation();
-    
+
     if (!confirm('Are you sure you want to cancel this reservation?')) return;
 
     try {
@@ -136,7 +136,7 @@ export default function MyReservations() {
   // Calculate days to show from previous and next month
   const startDayOfWeek = monthStart.getDay();
   const daysFromPrevMonth = startDayOfWeek === 0 ? 6 : startDayOfWeek - 1;
-  
+
   const allDays = [];
   for (let i = daysFromPrevMonth; i > 0; i--) {
     const day = new Date(monthStart);
@@ -144,7 +144,7 @@ export default function MyReservations() {
     allDays.push(day);
   }
   allDays.push(...daysInMonth);
-  
+
   const remainingDays = 42 - allDays.length; // 6 weeks * 7 days
   for (let i = 1; i <= remainingDays; i++) {
     const day = new Date(monthEnd);
@@ -175,14 +175,14 @@ export default function MyReservations() {
   const selectedDayReservations = selectedDay ? getReservationsForDay(selectedDay) : [];
 
   return (
-    <div className="space-y-4 px-2 md:px-4 lg:px-6 max-w-[1400px] mx-auto">
+    <div className="h-full flex flex-col space-y-3 overflow-hidden px-2">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-shrink-0">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">My Reservations</h1>
-          <p className="text-sm text-muted-foreground mt-1">View your desk bookings in calendar format</p>
+          <h1 className="text-xl md:text-2xl font-bold tracking-tight">My Reservations</h1>
+          <p className="text-xs text-muted-foreground mt-1">View your desk bookings in calendar format</p>
         </div>
-        <Button 
+        <Button
           onClick={goToToday}
           className="rounded-full px-6 self-start sm:self-auto"
           size="sm"
@@ -192,13 +192,13 @@ export default function MyReservations() {
       </div>
 
       {/* Calendar Card */}
-      <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
-        <div className="p-4 md:p-6">
+      <div className="bg-card rounded-lg border shadow-sm overflow-hidden flex-1 flex flex-col">
+        <div className="p-3 md:p-4 flex-1 flex flex-col overflow-hidden">
           {/* Month Navigation */}
-          <div className="flex items-center justify-center gap-4 mb-6">
-            <Button 
-              variant="ghost" 
-              size="icon" 
+          <div className="flex items-center justify-center gap-4 mb-4 flex-shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={previousMonth}
               className="h-9 w-9 rounded-full hover:bg-accent"
             >
@@ -207,9 +207,9 @@ export default function MyReservations() {
             <h2 className="text-lg md:text-xl font-semibold min-w-[180px] text-center">
               {format(currentMonth, 'MMMM yyyy')}
             </h2>
-            <Button 
-              variant="ghost" 
-              size="icon" 
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={nextMonth}
               className="h-9 w-9 rounded-full hover:bg-accent"
             >
@@ -265,12 +265,12 @@ export default function MyReservations() {
                           className="flex items-center gap-1 text-[10px] md:text-xs"
                           title={`${reservation.room?.name} - ${reservation.status}`}
                         >
-                          <Circle 
+                          <Circle
                             className={cn(
                               "h-2 w-2 flex-shrink-0 fill-current",
                               reservation.status === 'approved' && 'text-primary',
                               reservation.status === 'pending' && 'text-muted-foreground'
-                            )} 
+                            )}
                           />
                           <span className={cn(
                             "truncate",

@@ -94,11 +94,11 @@ export default function Dashboard() {
   });
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full overflow-hidden">
       {/* Left Column - Main Content */}
-      <div className="lg:col-span-2 space-y-8">
+      <div className="lg:col-span-2 space-y-4 overflow-y-auto pr-2">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
+          <h1 className="text-2xl font-bold tracking-tight">
             Hello {user.full_name}!
           </h1>
           <p className="text-muted-foreground mt-1">
@@ -116,13 +116,13 @@ export default function Dashboard() {
       </div>
 
       {/* Right Column - Widgets */}
-      <div className="space-y-8">
+      <div className="space-y-4 overflow-y-auto pr-2">
         <DashboardCalendar bookedDates={bookedDates} />
 
         {/* Shared Rooms Widget */}
-        <div className="space-y-4">
+        <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Shared Rooms</h2>
+            <h2 className="text-base font-semibold">Shared Rooms</h2>
             {userRooms.length > 3 && (
               <Link to="/rooms" className="text-sm text-primary hover:underline">
                 View All
