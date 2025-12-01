@@ -507,7 +507,7 @@ export default function RoomEditor() {
               {walls.map(wall => (
                 <div
                   key={wall.id}
-                  className="absolute bg-blue-900 z-10 pointer-events-none"
+                  className="absolute bg-blue-900 z-10 pointer-events-none rounded-sm"
                   style={{
                     left: wall.orientation === 'vertical'
                       ? (wall.start_col * (CELL_SIZE + 4)) - 2

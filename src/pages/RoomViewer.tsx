@@ -464,7 +464,7 @@ export default function RoomViewer() {
               {walls.map(wall => (
                 <div
                   key={wall.id}
-                  className="absolute bg-blue-900 z-10 pointer-events-none"
+                  className="absolute bg-blue-900 z-10 pointer-events-none rounded-sm"
                   style={{
                     left: wall.orientation === 'vertical'
                       ? (wall.start_col * (CELL_SIZE + 8)) - 4 // -4 to center on gap (gap is 8)
