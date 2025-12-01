@@ -451,7 +451,7 @@ export default function RoomViewer() {
           </div>
 
           {/* Room Grid Container */}
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 overflow-auto flex-1 flex items-center justify-center">
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex-1 flex items-center justify-center overflow-hidden">
             <div
               className="inline-block relative"
               style={{
@@ -464,7 +464,7 @@ export default function RoomViewer() {
               {walls.map(wall => (
                 <div
                   key={wall.id}
-                  className="absolute bg-blue-900 z-10 pointer-events-none rounded-sm"
+                  className="absolute bg-blue-900 z-10 pointer-events-none"
                   style={{
                     left: wall.orientation === 'vertical'
                       ? (wall.start_col * (CELL_SIZE + 8)) - 4 // -4 to center on gap (gap is 8)
@@ -477,6 +477,54 @@ export default function RoomViewer() {
                   }}
                 />
               ))}
+
+              {/* Render Rounded Corners at Wall Intersections */}
+              {(() => {
+                const corners: { row: number; col: number }[] = [];
+
+                // Find all wall intersections
+                walls.forEach(wall1 => {
+                  walls.forEach(wall2 => {
+                    if (wall1.id === wall2.id) return;
+
+                    // Check for perpendicular intersection
+                    if (wall1.orientation === 'horizontal' && wall2.orientation === 'vertical') {
+                      if (wall1.start_row === wall2.start_row && wall1.start_col <= wall2.start_col && wall1.end_col >= wall2.start_col) {
+                        corners.push({ row: wall1.start_row, col: wall2.start_col });
+                      }
+                      if (wall1.start_row === wall2.end_row && wall1.start_col <= wall2.start_col && wall1.end_col >= wall2.start_col) {
+                        corners.push({ row: wall1.start_row, col: wall2.start_col });
+                      }
+                    } else if (wall1.orientation === 'vertical' && wall2.orientation === 'horizontal') {
+                      if (wall2.start_row === wall1.start_row && wall2.start_col <= wall1.start_col && wall2.end_col >= wall1.start_col) {
+                        corners.push({ row: wall2.start_row, col: wall1.start_col });
+                      }
+                      if (wall2.start_row === wall1.end_row && wall2.start_col <= wall1.start_col && wall2.end_col >= wall1.start_col) {
+                        corners.push({ row: wall2.start_row, col: wall1.start_col });
+                      }
+                    }
+                  });
+                });
+
+                // Remove duplicates
+                const uniqueCorners = Array.from(new Set(corners.map(c => `${c.row}-${c.col}`))).map(key => {
+                  const [row, col] = key.split('-').map(Number);
+                  return { row, col };
+                });
+
+                return uniqueCorners.map((corner, idx) => (
+                  <div
+                    key={`corner-${idx}`}
+                    className="absolute bg-blue-900 z-20 pointer-events-none rounded-full"
+                    style={{
+                      left: (corner.col * (CELL_SIZE + 8)) - 6,
+                      top: (corner.row * (CELL_SIZE + 8)) - 6,
+                      width: 12,
+                      height: 12,
+                    }}
+                  />
+                ));
+              })()}
 
               {Array.from({ length: room.grid_height }, (_, y) =>
                 Array.from({ length: room.grid_width }, (_, x) => {
