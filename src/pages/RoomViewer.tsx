@@ -455,308 +455,236 @@ export default function RoomViewer() {
             <div
               className="inline-block relative"
               style={{
-                display: 'grid',
-                gridTemplateColumns: `repeat(${room.grid_width}, ${CELL_SIZE}px)`,
-                gap: '8px', // Increased gap for airy feel
-              }}
-            >
-              {/* Render Walls */}
-              {walls.map(wall => (
-                <div
-                  key={wall.id}
-                  className="absolute bg-blue-900 z-10 pointer-events-none"
-                  style={{
-                    left: wall.orientation === 'vertical'
-                      ? (wall.start_col * (CELL_SIZE + 8)) - 4 // -4 to center on gap (gap is 8)
-                      : (wall.start_col * (CELL_SIZE + 8)),
-                    top: wall.orientation === 'horizontal'
-                      ? (wall.start_row * (CELL_SIZE + 8)) - 4
-                      : (wall.start_row * (CELL_SIZE + 8)),
-                    width: wall.orientation === 'vertical' ? 4 : CELL_SIZE + 8, // +8 to cover gap
-                    height: wall.orientation === 'horizontal' ? 4 : CELL_SIZE + 8,
-                  }}
-                />
-              ))}
+                const Icon = deskInfo?.icon;
+                const isBookable = cell && cell.type !== 'entrance';
+                const { status, reservation, assignedTo } = cell
+                  ? getDeskStatus(cell.id)
+                  : ({ status: 'available' as DeskStatus } as { status: DeskStatus; reservation?: Reservation; assignedTo?: string });
 
-              {/* Render Rounded Corners at Wall Intersections */}
-              {(() => {
-                const corners: { row: number; col: number }[] = [];
+                if(cell) {
 
-                // Find all wall intersections
-                walls.forEach(wall1 => {
-                  walls.forEach(wall2 => {
-                    if (wall1.id === wall2.id) return;
+                  // Custom Google-like styling
+                  let bgClass = 'bg-white border-2 border-gray-200';
+                  let iconColor = 'text-gray-400';
 
-                    // Check for perpendicular intersection
-                    if (wall1.orientation === 'horizontal' && wall2.orientation === 'vertical') {
-                      if (wall1.start_row === wall2.start_row && wall1.start_col <= wall2.start_col && wall1.end_col >= wall2.start_col) {
-                        corners.push({ row: wall1.start_row, col: wall2.start_col });
-                      }
-                      if (wall1.start_row === wall2.end_row && wall1.start_col <= wall2.start_col && wall1.end_col >= wall2.start_col) {
-                        corners.push({ row: wall1.start_row, col: wall2.start_col });
-                      }
-                    } else if (wall1.orientation === 'vertical' && wall2.orientation === 'horizontal') {
-                      if (wall2.start_row === wall1.start_row && wall2.start_col <= wall1.start_col && wall2.end_col >= wall1.start_col) {
-                        corners.push({ row: wall2.start_row, col: wall1.start_col });
-                      }
-                      if (wall2.start_row === wall1.end_row && wall2.start_col <= wall1.start_col && wall2.end_col >= wall1.start_col) {
-                        corners.push({ row: wall2.start_row, col: wall1.start_col });
-                      }
-                    }
-                  });
-                });
+                  if (status === 'available') {
+                    bgClass = 'bg-blue-50 border-2 border-blue-100 hover:border-blue-300 hover:shadow-md';
+                    iconColor = 'text-blue-500';
+                  } else if (status === 'reserved') {
+                    bgClass = 'bg-gray-100 border-2 border-transparent opacity-60';
+                    iconColor = 'text-gray-400';
+                  } else if (status === 'my-reservation') {
+                    bgClass = 'bg-purple-50 border-2 border-purple-200 shadow-sm';
+                    iconColor = 'text-purple-500';
+                  }
 
-                // Remove duplicates
-                const uniqueCorners = Array.from(new Set(corners.map(c => `${c.row}-${c.col}`))).map(key => {
-                  const [row, col] = key.split('-').map(Number);
-                  return { row, col };
-                });
+                  if (cell.type === 'entrance') {
+                    bgClass = 'bg-green-50 border-2 border-green-100';
+                    iconColor = 'text-green-600';
+                  }
 
-                return uniqueCorners.map((corner, idx) => (
-                  <div
-                    key={`corner-${idx}`}
-                    className="absolute bg-blue-900 z-20 pointer-events-none rounded-full"
-                    style={{
-                      left: (corner.col * (CELL_SIZE + 8)) - 6,
-                      top: (corner.row * (CELL_SIZE + 8)) - 6,
-                      width: 12,
-                      height: 12,
-                    }}
-                  />
-                ));
-              })()}
-
-              {Array.from({ length: room.grid_height }, (_, y) =>
-                Array.from({ length: room.grid_width }, (_, x) => {
-                  const cell = getCellAt(x, y);
-                  const deskInfo = DESK_TYPES.find((d) => d.type === cell?.type);
-                  const Icon = deskInfo?.icon;
-                  const isBookable = cell && cell.type !== 'entrance';
-                  const { status, reservation, assignedTo } = cell
-                    ? getDeskStatus(cell.id)
-                    : ({ status: 'available' as DeskStatus } as { status: DeskStatus; reservation?: Reservation; assignedTo?: string });
-
-                  if (cell) {
-
-                    // Custom Google-like styling
-                    let bgClass = 'bg-white border-2 border-gray-200';
-                    let iconColor = 'text-gray-400';
-
-                    if (status === 'available') {
-                      bgClass = 'bg-blue-50 border-2 border-blue-100 hover:border-blue-300 hover:shadow-md';
-                      iconColor = 'text-blue-500';
-                    } else if (status === 'reserved') {
-                      bgClass = 'bg-gray-100 border-2 border-transparent opacity-60';
-                      iconColor = 'text-gray-400';
-                    } else if (status === 'my-reservation') {
-                      bgClass = 'bg-purple-50 border-2 border-purple-200 shadow-sm';
-                      iconColor = 'text-purple-500';
-                    }
-
-                    if (cell.type === 'entrance') {
-                      bgClass = 'bg-green-50 border-2 border-green-100';
-                      iconColor = 'text-green-600';
-                    }
-
-                    return (
-                      <div
-                        key={`${x}-${y}`}
-                        className={`
+                  return (
+                    <div
+                      key={`${x}-${y}`}
+                      className={`
                           relative rounded-2xl transition-all duration-300 ease-out
                           flex items-center justify-center
                           ${bgClass}
                           ${isBookable && status !== 'reserved' ? 'cursor-pointer hover:-translate-y-1' : ''}
                         `}
-                        style={{ width: CELL_SIZE, height: CELL_SIZE }}
-                        onClick={() => cell && isBookable && handleCellClick(cell)}
-                        title={cell.label || 'Desk'}
-                      >
-                        {cell && Icon && (
-                          <Icon className={`h-6 w-6 ${iconColor} transition-colors`} strokeWidth={2} />
-                        )}
-                        {/* Status Dot */}
-                        {isBookable && (
-                          <div className={`absolute top-2 right-2 w-2 h-2 rounded-full ${status === 'available' ? 'bg-blue-400' :
-                            status === 'my-reservation' ? 'bg-purple-400' : 'bg-red-300'
-                            }`} />
-                        )}
-                      </div>
-                    );
-                  } else {
-                    // Empty cell
-                    return (
+                      style={{ width: CELL_SIZE, height: CELL_SIZE }}
+                      onClick={() => cell && isBookable && handleCellClick(cell)}
+                      title={cell.label || 'Desk'}
+                    >
+                      {cell && Icon && (
+                        <Icon className={`h-6 w-6 ${iconColor} transition-colors`} strokeWidth={2} />
+                      )}
+                      {/* Status Dot */}
+                      {isBookable && (
+                        <div className={`absolute top-2 right-2 w-2 h-2 rounded-full ${status === 'available' ? 'bg-blue-400' :
+                          status === 'my-reservation' ? 'bg-purple-400' : 'bg-red-300'
+                          }`} />
+                      )}
+                    </div>
+                  );
+                } else {
+                  // Empty cell
+                  return(
                       <div
-                        key={`${x}-${y}`}
+                        key = {`${x}-${y}`}
                         className="rounded-xl relative flex items-center justify-center transition-all duration-200"
                         style={{ width: CELL_SIZE, height: CELL_SIZE }}
                       >
-                      </div>
-                    );
+          </div>
+          );
                   }
                 }),
               )}
-            </div>
-          </div>
         </div>
+      </div>
+    </div>
 
-        {/* Right Sidebar: Available Desks */}
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-4 flex flex-col h-full overflow-hidden">
-          <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2 flex-shrink-0">
-            Available Desks
-            <Badge variant="secondary" className="rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100">
-              {cells.filter(c => getDeskStatus(c.id).status === 'available' && c.type !== 'entrance').length}
-            </Badge>
-          </h3>
+        {/* Right Sidebar: Available Desks */ }
+  <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-4 flex flex-col h-full overflow-hidden">
+    <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2 flex-shrink-0">
+      Available Desks
+      <Badge variant="secondary" className="rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100">
+        {cells.filter(c => getDeskStatus(c.id).status === 'available' && c.type !== 'entrance').length}
+      </Badge>
+    </h3>
 
-          <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar flex-1">
-            {cells
-              .filter((cell) => cell.type === 'desk' || cell.type === 'premium_desk')
-              .sort((a, b) => {
-                const aLabel = a.label || `${a.x}-${a.y}`;
-                const bLabel = b.label || `${b.x}-${b.y}`;
-                return aLabel.localeCompare(bLabel);
-              })
-              .map((cell) => {
-                const deskInfo = DESK_TYPES.find((d) => d.type === cell.type);
-                const Icon = deskInfo?.icon;
-                const { status, reservation, assignedTo } = getDeskStatus(cell.id);
-                const isAvailable = status === 'available';
-                const isMyReservation = status === 'my-reservation';
+    <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar flex-1">
+      {cells
+        .filter((cell) => cell.type === 'desk' || cell.type === 'premium_desk')
+        .sort((a, b) => {
+          const aLabel = a.label || `${a.x}-${a.y}`;
+          const bLabel = b.label || `${b.x}-${b.y}`;
+          return aLabel.localeCompare(bLabel);
+        })
+        .map((cell) => {
+          const deskInfo = DESK_TYPES.find((d) => d.type === cell.type);
+          const Icon = deskInfo?.icon;
+          const { status, reservation, assignedTo } = getDeskStatus(cell.id);
+          const isAvailable = status === 'available';
+          const isMyReservation = status === 'my-reservation';
 
-                if (!isAvailable && !isMyReservation && !isRoomAdmin) return null; // Hide reserved desks for cleaner look
+          if (!isAvailable && !isMyReservation && !isRoomAdmin) return null; // Hide reserved desks for cleaner look
 
-                return (
-                  <div
-                    key={cell.id}
-                    className={`
+          return (
+            <div
+              key={cell.id}
+              className={`
                       group rounded-2xl p-4 transition-all duration-200 cursor-pointer border
                       ${isAvailable
-                        ? 'bg-white border-gray-100 hover:border-blue-200 hover:shadow-md'
-                        : isMyReservation
-                          ? 'bg-purple-50 border-purple-100'
-                          : 'bg-gray-50 border-transparent opacity-70'
-                      }
+                  ? 'bg-white border-gray-100 hover:border-blue-200 hover:shadow-md'
+                  : isMyReservation
+                    ? 'bg-purple-50 border-purple-100'
+                    : 'bg-gray-50 border-transparent opacity-70'
+                }
                     `}
-                    onClick={() => handleDeskListClick(cell)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className={`
+              onClick={() => handleDeskListClick(cell)}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className={`
                           p-3 rounded-xl 
                           ${isAvailable ? 'bg-blue-50 text-blue-600' : isMyReservation ? 'bg-purple-100 text-purple-600' : 'bg-gray-200 text-gray-500'}
                         `}>
-                          {Icon && <Icon className="h-5 w-5" />}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-gray-900">
-                            {cell.label || `Desk ${cell.x}-${cell.y}`}
-                          </p>
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            {isAvailable ? 'Available all day' : isMyReservation ? 'Reserved by you' : 'Reserved'}
-                          </p>
-                        </div>
-                      </div>
+                    {Icon && <Icon className="h-5 w-5" />}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-900">
+                      {cell.label || `Desk ${cell.x}-${cell.y}`}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {isAvailable ? 'Available all day' : isMyReservation ? 'Reserved by you' : 'Reserved'}
+                    </p>
+                  </div>
+                </div>
 
-                      {(isAvailable || user?.role === 'admin') && (
-                        <Button
-                          size="sm"
-                          className={`
+                {(isAvailable || user?.role === 'admin') && (
+                  <Button
+                    size="sm"
+                    className={`
                             rounded-full px-4 opacity-0 group-hover:opacity-100 transition-all
                             ${isAvailable ? 'bg-blue-600 hover:bg-blue-700' : ''}
                           `}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeskListClick(cell);
-                          }}
-                        >
-                          Book
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-
-            {cells.filter(c => getDeskStatus(c.id).status === 'available').length === 0 && (
-              <div className="text-center py-10 text-gray-400">
-                <Armchair className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                <p>No desks available for this date.</p>
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeskListClick(cell);
+                    }}
+                  >
+                    Book
+                  </Button>
+                )}
               </div>
-            )}
-          </div>
+            </div>
+          );
+        })}
+
+      {cells.filter(c => getDeskStatus(c.id).status === 'available').length === 0 && (
+        <div className="text-center py-10 text-gray-400">
+          <Armchair className="h-12 w-12 mx-auto mb-3 opacity-20" />
+          <p>No desks available for this date.</p>
         </div>
-      </div>
-
-      {selectedCell && room && (
-        <BookDeskDialog
-          open={bookingDialogOpen}
-          onOpenChange={setBookingDialogOpen}
-          roomId={room.id}
-          roomName={room.name}
-          cellId={selectedCell.id}
-          cellLabel={selectedCell.label}
-          initialDate={selectedDate}
-          onBookingComplete={(newReservation) => {
-            if (newReservation && user) {
-              const optimisticReservation: Reservation = {
-                ...newReservation,
-                user: {
-                  id: user.id,
-                  username: user.username,
-                  full_name: user.full_name
-                }
-              };
-              setReservations(prev => [...prev, optimisticReservation]);
-            }
-            loadReservations();
-            setBookingDialogOpen(false);
-          }}
-        />
-      )}
-
-      {selectedReservation && (
-        <ReservationDetailsDialog
-          open={reservationDetailsOpen}
-          onOpenChange={setReservationDetailsOpen}
-          reservation={selectedReservation}
-          isAdmin={isRoomAdmin}
-          onDelete={
-            isRoomAdmin || (user && selectedReservation.user_id === user.id)
-              ? async () => {
-                try {
-                  if (selectedReservation.type === 'fixed_assignment') {
-                    await callReservationFunction('delete_fixed_assignment', {
-                      assignmentId: selectedReservation.id
-                    });
-                    toast({
-                      title: 'Assignment removed',
-                      description: 'Fixed assignment deleted successfully'
-                    });
-                  } else {
-                    await callReservationFunction('cancel', {
-                      reservationId: selectedReservation.id
-                    });
-                    toast({
-                      title: 'Reservation cancelled',
-                      description: 'Reservation cancelled successfully'
-                    });
-                  }
-                  setReservationDetailsOpen(false);
-                  setSelectedReservation(null);
-                  loadReservations();
-                  loadFixedAssignments();
-                } catch (error: any) {
-                  toast({
-                    title: 'Error',
-                    description: error.message,
-                    variant: 'destructive'
-                  });
-                }
-              }
-              : undefined
-          }
-        />
       )}
     </div>
+  </div>
+      </div >
+
+    { selectedCell && room && (
+      <BookDeskDialog
+        open={bookingDialogOpen}
+        onOpenChange={setBookingDialogOpen}
+        roomId={room.id}
+        roomName={room.name}
+        cellId={selectedCell.id}
+        cellLabel={selectedCell.label}
+        initialDate={selectedDate}
+        onBookingComplete={(newReservation) => {
+          if (newReservation && user) {
+            const optimisticReservation: Reservation = {
+              ...newReservation,
+              user: {
+                id: user.id,
+                username: user.username,
+                full_name: user.full_name
+              }
+            };
+            setReservations(prev => [...prev, optimisticReservation]);
+          }
+          loadReservations();
+          setBookingDialogOpen(false);
+        }}
+      />
+    )
+}
+
+{
+  selectedReservation && (
+    <ReservationDetailsDialog
+      open={reservationDetailsOpen}
+      onOpenChange={setReservationDetailsOpen}
+      reservation={selectedReservation}
+      isAdmin={isRoomAdmin}
+      onDelete={
+        isRoomAdmin || (user && selectedReservation.user_id === user.id)
+          ? async () => {
+            try {
+              if (selectedReservation.type === 'fixed_assignment') {
+                await callReservationFunction('delete_fixed_assignment', {
+                  assignmentId: selectedReservation.id
+                });
+                toast({
+                  title: 'Assignment removed',
+                  description: 'Fixed assignment deleted successfully'
+                });
+              } else {
+                await callReservationFunction('cancel', {
+                  reservationId: selectedReservation.id
+                });
+                toast({
+                  title: 'Reservation cancelled',
+                  description: 'Reservation cancelled successfully'
+                });
+              }
+              setReservationDetailsOpen(false);
+              setSelectedReservation(null);
+              loadReservations();
+              loadFixedAssignments();
+            } catch (error: any) {
+              toast({
+                title: 'Error',
+                description: error.message,
+                variant: 'destructive'
+              });
+            }
+          }
+          : undefined
+      }
+    />
+  )
+}
+    </div >
   );
 }
