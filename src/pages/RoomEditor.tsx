@@ -90,6 +90,7 @@ export default function RoomEditor() {
   const [customName, setCustomName] = useState('');
   const [cellOperationInProgress, setCellOperationInProgress] = useState(false);
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
+  const [wallOperationInProgress, setWallOperationInProgress] = useState(false);
 
 
   const [isWallMode, setIsWallMode] = useState(false);
@@ -370,6 +371,9 @@ export default function RoomEditor() {
   };
 
   const handleToggleWall = async (start_row: number, start_col: number, end_row: number, end_col: number, orientation: 'horizontal' | 'vertical') => {
+    // Prevent concurrent operations
+    if (wallOperationInProgress) return;
+
     // Check if wall exists
     const existingWall = walls.find(w =>
       w.start_row === start_row &&
@@ -378,12 +382,18 @@ export default function RoomEditor() {
       w.end_col === end_col
     );
 
+    // Generate unique temp ID for this specific wall
+    const tempId = `temp-${start_row}-${start_col}-${end_row}-${end_col}-${Date.now()}`;
+
+    // Store previous state for rollback
+    const previousWalls = [...walls];
+
     // Optimistic update
     if (existingWall) {
       setWalls(walls.filter(w => w.id !== existingWall.id));
     } else {
       const tempWall: Wall = {
-        id: `temp-${Date.now()}`,
+        id: tempId,
         room_id: roomId!,
         start_row,
         start_col,
@@ -393,6 +403,8 @@ export default function RoomEditor() {
       };
       setWalls([...walls, tempWall]);
     }
+
+    setWallOperationInProgress(true);
 
     try {
       if (existingWall) {
@@ -410,18 +422,21 @@ export default function RoomEditor() {
             orientation
           }
         });
-        // Replace temp wall with real one
-        setWalls(prev => prev.map(w => w.id.startsWith('temp-') ? newWall : w));
+        // Replace the specific temp wall with real one
+        setWalls(prev => prev.map(w => w.id === tempId ? newWall : w));
       }
     } catch (error: any) {
-      // Revert on error
+      // Revert to previous state instead of reloading entire room
       console.error('Error toggling wall:', error);
+      setWalls(previousWalls);
+
       toast({
         title: 'Error updating wall',
-        description: error.message,
+        description: error.message || 'Failed to update wall. Please try again.',
         variant: 'destructive'
       });
-      loadRoom(); // Reload to ensure state is consistent
+    } finally {
+      setWallOperationInProgress(false);
     }
   };
 
