@@ -28,7 +28,10 @@ export const authService = {
         .eq('is_active', true)
         .limit(1);
 
+      console.log('Login query result:', { users, error, username, password });
+
       if (error || !users || users.length === 0) {
+        console.log('Login failed - no users found or error');
         return null;
       }
 

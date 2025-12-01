@@ -91,6 +91,9 @@ export default function RoomEditor() {
   const [cellOperationInProgress, setCellOperationInProgress] = useState(false);
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
 
+
+  const [isWallMode, setIsWallMode] = useState(false);
+
   const [walls, setWalls] = useState<Wall[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [activeTab, setActiveTab] = useState<'desks' | 'rooms'>('desks');
@@ -185,6 +188,7 @@ export default function RoomEditor() {
 
   const handleCellClick = async (x: number, y: number) => {
     if (cellOperationInProgress) return;
+    if (isWallMode) return; // Disable cell selection in wall mode
 
     const existingCell = getCellAt(x, y);
 
@@ -365,36 +369,7 @@ export default function RoomEditor() {
     }
   };
 
-  const handleToggleWall = async (cell: Cell, direction: 'top' | 'right' | 'bottom' | 'left') => {
-    // Determine wall coordinates based on cell and direction
-    let start_row, start_col, end_row, end_col, orientation: 'horizontal' | 'vertical';
-
-    if (direction === 'top') {
-      start_row = cell.y;
-      start_col = cell.x;
-      end_row = cell.y;
-      end_col = cell.x + 1;
-      orientation = 'horizontal';
-    } else if (direction === 'bottom') {
-      start_row = cell.y + 1;
-      start_col = cell.x;
-      end_row = cell.y + 1;
-      end_col = cell.x + 1;
-      orientation = 'horizontal';
-    } else if (direction === 'left') {
-      start_row = cell.y;
-      start_col = cell.x;
-      end_row = cell.y + 1;
-      end_col = cell.x;
-      orientation = 'vertical';
-    } else { // right
-      start_row = cell.y;
-      start_col = cell.x + 1;
-      end_row = cell.y + 1;
-      end_col = cell.x + 1;
-      orientation = 'vertical';
-    }
-
+  const handleToggleWall = async (start_row: number, start_col: number, end_row: number, end_col: number, orientation: 'horizontal' | 'vertical') => {
     // Check if wall exists
     const existingWall = walls.find(w =>
       w.start_row === start_row &&
@@ -403,11 +378,26 @@ export default function RoomEditor() {
       w.end_col === end_col
     );
 
+    // Optimistic update
+    if (existingWall) {
+      setWalls(walls.filter(w => w.id !== existingWall.id));
+    } else {
+      const tempWall: Wall = {
+        id: `temp-${Date.now()}`,
+        room_id: roomId!,
+        start_row,
+        start_col,
+        end_row,
+        end_col,
+        orientation
+      };
+      setWalls([...walls, tempWall]);
+    }
+
     try {
       if (existingWall) {
         // Delete wall
         await callRoomFunction('delete_wall', { wallId: existingWall.id });
-        setWalls(walls.filter(w => w.id !== existingWall.id));
       } else {
         // Create wall
         const newWall = await callRoomFunction('create_wall', {
@@ -420,14 +410,18 @@ export default function RoomEditor() {
             orientation
           }
         });
-        setWalls([...walls, newWall]);
+        // Replace temp wall with real one
+        setWalls(prev => prev.map(w => w.id.startsWith('temp-') ? newWall : w));
       }
     } catch (error: any) {
+      // Revert on error
+      console.error('Error toggling wall:', error);
       toast({
         title: 'Error updating wall',
         description: error.message,
         variant: 'destructive'
       });
+      loadRoom(); // Reload to ensure state is consistent
     }
   };
 
@@ -457,6 +451,17 @@ export default function RoomEditor() {
           </div>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant={isWallMode ? "default" : "outline"}
+            onClick={() => {
+              setIsWallMode(!isWallMode);
+              setSelectedCell(null); // Deselect cell when entering wall mode
+            }}
+            className={isWallMode ? "bg-blue-600 hover:bg-blue-700" : ""}
+          >
+            <div className="mr-2 h-4 w-4 border-2 border-current rounded-sm" />
+            {isWallMode ? "Exit Wall Mode" : "Edit Walls"}
+          </Button>
           <Button variant="outline" onClick={handleClearAll}>
             <Trash2 className="mr-2 h-4 w-4" />
             Clear All
@@ -505,16 +510,52 @@ export default function RoomEditor() {
                   className="absolute bg-blue-900 z-10 pointer-events-none"
                   style={{
                     left: wall.orientation === 'vertical'
-                      ? (wall.start_col * (CELL_SIZE + 4)) - 2 // -2 to center on gap
+                      ? (wall.start_col * (CELL_SIZE + 4)) - 2
                       : (wall.start_col * (CELL_SIZE + 4)),
                     top: wall.orientation === 'horizontal'
                       ? (wall.start_row * (CELL_SIZE + 4)) - 2
                       : (wall.start_row * (CELL_SIZE + 4)),
-                    width: wall.orientation === 'vertical' ? 4 : CELL_SIZE + 4, // +4 to cover gap
+                    width: wall.orientation === 'vertical' ? 4 : CELL_SIZE + 4,
                     height: wall.orientation === 'horizontal' ? 4 : CELL_SIZE + 4,
                   }}
                 />
               ))}
+
+              {/* Wall Hitboxes (Only in Wall Mode) */}
+              {isWallMode && Array.from({ length: room.grid_height + 1 }, (_, row) =>
+                Array.from({ length: room.grid_width + 1 }, (_, col) => (
+                  <>
+                    {/* Horizontal Hitbox */}
+                    {col < room.grid_width && (
+                      <div
+                        key={`h-${row}-${col}`}
+                        className="absolute z-20 cursor-pointer hover:bg-blue-400/50 transition-colors"
+                        style={{
+                          left: col * (CELL_SIZE + 4),
+                          top: (row * (CELL_SIZE + 4)) - 6,
+                          width: CELL_SIZE + 4,
+                          height: 12,
+                        }}
+                        onClick={() => handleToggleWall(row, col, row, col + 1, 'horizontal')}
+                      />
+                    )}
+                    {/* Vertical Hitbox */}
+                    {row < room.grid_height && (
+                      <div
+                        key={`v-${row}-${col}`}
+                        className="absolute z-20 cursor-pointer hover:bg-blue-400/50 transition-colors"
+                        style={{
+                          left: (col * (CELL_SIZE + 4)) - 6,
+                          top: row * (CELL_SIZE + 4),
+                          width: 12,
+                          height: CELL_SIZE + 4,
+                        }}
+                        onClick={() => handleToggleWall(row, col, row + 1, col, 'vertical')}
+                      />
+                    )}
+                  </>
+                ))
+              )}
 
               {Array.from({ length: room.grid_height }, (_, y) =>
                 Array.from({ length: room.grid_width }, (_, x) => {
@@ -588,8 +629,8 @@ export default function RoomEditor() {
           <div className="flex p-1 bg-gray-100 rounded-xl mb-6">
             <button
               className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'desks'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
                 }`}
               onClick={() => setActiveTab('desks')}
             >
@@ -597,8 +638,8 @@ export default function RoomEditor() {
             </button>
             <button
               className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'rooms'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
                 }`}
               onClick={() => setActiveTab('rooms')}
             >
@@ -621,53 +662,6 @@ export default function RoomEditor() {
                   <p className="text-xs text-blue-700 mt-1">
                     Type: {DESK_TYPES.find(d => d.type === selectedCell.type)?.label}
                   </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Borders</Label>
-                  <div className="grid grid-cols-3 gap-2 max-w-[150px] mx-auto">
-                    <div />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-10 w-10"
-                      onClick={() => handleToggleWall(selectedCell, 'top')}
-                    >
-                      <div className="w-full h-0.5 bg-current" />
-                    </Button>
-                    <div />
-
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-10 w-10"
-                      onClick={() => handleToggleWall(selectedCell, 'left')}
-                    >
-                      <div className="h-full w-0.5 bg-current" />
-                    </Button>
-                    <div className="flex items-center justify-center">
-                      <div className="w-2 h-2 rounded-full bg-gray-300" />
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-10 w-10"
-                      onClick={() => handleToggleWall(selectedCell, 'right')}
-                    >
-                      <div className="h-full w-0.5 bg-current" />
-                    </Button>
-
-                    <div />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-10 w-10"
-                      onClick={() => handleToggleWall(selectedCell, 'bottom')}
-                    >
-                      <div className="w-full h-0.5 bg-current" />
-                    </Button>
-                    <div />
-                  </div>
                 </div>
 
                 <Button
