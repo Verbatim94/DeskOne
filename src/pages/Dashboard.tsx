@@ -72,7 +72,15 @@ export default function Dashboard() {
   const upcomingBookings = allReservations.filter((r: any) =>
     isAfter(new Date(r.date_start), startOfDay(new Date()))
   ).length;
-  const totalSpent = totalBookings * 25; // Dummy value: $25 per booking
+
+  // Calculate Availability
+  const totalDesks = userRooms.reduce((acc: number, room: any) => acc + (room.totalDesks || 0), 0);
+  const totalReserved = userRooms.reduce((acc: number, room: any) => acc + (room.activeReservations || 0), 0);
+
+  // Avoid division by zero
+  const availabilityPercentage = totalDesks > 0
+    ? Math.round(((totalDesks - totalReserved) / totalDesks) * 100)
+    : 0;
 
   // Prepare Chart Data (Last 6 months)
   const chartData = Array.from({ length: 6 }).map((_, i) => {
@@ -109,7 +117,7 @@ export default function Dashboard() {
         <DashboardStats
           totalBookings={totalBookings}
           upcomingBookings={upcomingBookings}
-          totalSpent={totalSpent}
+          availabilityPercentage={availabilityPercentage}
         />
 
         <DashboardChart data={chartData} />

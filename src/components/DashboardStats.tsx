@@ -1,13 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { DollarSign, CalendarCheck, Eye } from 'lucide-react';
+import { Percent, CalendarCheck, Eye } from 'lucide-react';
 
 interface DashboardStatsProps {
     totalBookings: number;
     upcomingBookings: number;
-    totalSpent: number;
+    availabilityPercentage: number;
 }
 
-export function DashboardStats({ totalBookings, upcomingBookings, totalSpent }: DashboardStatsProps) {
+export function DashboardStats({ totalBookings, upcomingBookings, availabilityPercentage }: DashboardStatsProps) {
     return (
         <div className="grid gap-4 md:grid-cols-3">
             <Card className="bg-blue-50/50 border-none shadow-sm">
@@ -40,17 +40,17 @@ export function DashboardStats({ totalBookings, upcomingBookings, totalSpent }: 
                 </CardContent>
             </Card>
 
-            <Card className="bg-purple-50/50 border-none shadow-sm">
+            <Card className="bg-green-50/50 border-none shadow-sm">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground">
-                        Total Value
+                        Availability Today
                     </CardTitle>
-                    <DollarSign className="h-4 w-4 text-purple-500" />
+                    <Percent className="h-4 w-4 text-green-500" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">${totalSpent}</div>
+                    <div className="text-2xl font-bold">{availabilityPercentage}%</div>
                     <p className="text-xs text-muted-foreground">
-                        Estimated value
+                        Free desks across rooms
                     </p>
                 </CardContent>
             </Card>

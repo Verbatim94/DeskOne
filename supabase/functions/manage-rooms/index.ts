@@ -170,18 +170,31 @@ Deno.serve(async (req) => {
             break;
           }
 
-          // Get desk counts for each room
+          // Get desk counts and active reservations for each room
+          const today = new Date().toISOString().split('T')[0];
           const roomsWithDesks = await Promise.all(
             (allRooms || []).map(async (room) => {
+              // Get total desks
               const { data: cells } = await supabase
                 .from('room_cells')
                 .select('type')
                 .eq('room_id', room.id)
                 .in('type', ['desk', 'premium_desk']);
 
+              // Get active reservations for today
+              const { count: activeReservations } = await supabase
+                .from('reservations')
+                .select('*', { count: 'exact', head: true })
+                .eq('room_id', room.id)
+                .lte('date_start', today)
+                .gte('date_end', today)
+                .neq('status', 'cancelled')
+                .neq('status', 'rejected');
+
               return {
                 ...room,
-                totalDesks: cells?.length || 0
+                totalDesks: cells?.length || 0,
+                activeReservations: activeReservations || 0
               };
             })
           );
@@ -201,18 +214,31 @@ Deno.serve(async (req) => {
 
           const rooms = accessibleRooms?.map(a => a.rooms).filter(Boolean) || [];
 
-          // Get desk counts for each room
+          // Get desk counts and active reservations for each room
+          const today = new Date().toISOString().split('T')[0];
           const roomsWithDesks = await Promise.all(
             rooms.map(async (room: any) => {
+              // Get total desks
               const { data: cells } = await supabase
                 .from('room_cells')
                 .select('type')
                 .eq('room_id', room.id)
                 .in('type', ['desk', 'premium_desk']);
 
+              // Get active reservations for today
+              const { count: activeReservations } = await supabase
+                .from('reservations')
+                .select('*', { count: 'exact', head: true })
+                .eq('room_id', room.id)
+                .lte('date_start', today)
+                .gte('date_end', today)
+                .neq('status', 'cancelled')
+                .neq('status', 'rejected');
+
               return {
                 ...room,
-                totalDesks: cells?.length || 0
+                totalDesks: cells?.length || 0,
+                activeReservations: activeReservations || 0
               };
             })
           );
