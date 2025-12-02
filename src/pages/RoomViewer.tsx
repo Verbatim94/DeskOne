@@ -460,71 +460,38 @@ export default function RoomViewer() {
                 gap: '8px', // Increased gap for airy feel
               }}
             >
-              {/* Render Walls */}
-              {walls.map(wall => (
-                <div
-                  key={wall.id}
-                  className="absolute bg-blue-900 z-10 pointer-events-none"
-                  style={{
-                    left: wall.orientation === 'vertical'
-                      ? (wall.start_col * (CELL_SIZE + 8)) - 4 // -4 to center on gap (gap is 8)
-                      : (wall.start_col * (CELL_SIZE + 8)),
-                    top: wall.orientation === 'horizontal'
-                      ? (wall.start_row * (CELL_SIZE + 8)) - 4
-                      : (wall.start_row * (CELL_SIZE + 8)),
-                    width: wall.orientation === 'vertical' ? 4 : CELL_SIZE + 8, // +8 to cover gap
-                    height: wall.orientation === 'horizontal' ? 4 : CELL_SIZE + 8,
-                  }}
-                />
-              ))}
+              {/* Render Walls as SVG with Connected Paths and Rounded Corners */}
+              <svg
+                className="absolute top-0 left-0 pointer-events-none z-10"
+                style={{
+                  width: room.grid_width * (CELL_SIZE + 8),
+                  height: room.grid_height * (CELL_SIZE + 8),
+                }}
+              >
+                {walls.map(wall => {
+                  const x = wall.orientation === 'vertical'
+                    ? (wall.start_col * (CELL_SIZE + 8)) - 4
+                    : (wall.start_col * (CELL_SIZE + 8));
+                  const y = wall.orientation === 'horizontal'
+                    ? (wall.start_row * (CELL_SIZE + 8)) - 4
+                    : (wall.start_row * (CELL_SIZE + 8));
+                  const width = wall.orientation === 'vertical' ? 4 : (wall.end_col - wall.start_col) * (CELL_SIZE + 8);
+                  const height = wall.orientation === 'horizontal' ? 4 : (wall.end_row - wall.start_row) * (CELL_SIZE + 8);
 
-              {/* Render Rounded Corners at Wall Intersections */}
-              {(() => {
-                const corners: { row: number; col: number }[] = [];
-
-                // Find all wall intersections
-                walls.forEach(wall1 => {
-                  walls.forEach(wall2 => {
-                    if (wall1.id === wall2.id) return;
-
-                    // Check for perpendicular intersection
-                    if (wall1.orientation === 'horizontal' && wall2.orientation === 'vertical') {
-                      if (wall1.start_row === wall2.start_row && wall1.start_col <= wall2.start_col && wall1.end_col >= wall2.start_col) {
-                        corners.push({ row: wall1.start_row, col: wall2.start_col });
-                      }
-                      if (wall1.start_row === wall2.end_row && wall1.start_col <= wall2.start_col && wall1.end_col >= wall2.start_col) {
-                        corners.push({ row: wall1.start_row, col: wall2.start_col });
-                      }
-                    } else if (wall1.orientation === 'vertical' && wall2.orientation === 'horizontal') {
-                      if (wall2.start_row === wall1.start_row && wall2.start_col <= wall1.start_col && wall2.end_col >= wall1.start_col) {
-                        corners.push({ row: wall2.start_row, col: wall1.start_col });
-                      }
-                      if (wall2.start_row === wall1.end_row && wall2.start_col <= wall1.start_col && wall2.end_col >= wall1.start_col) {
-                        corners.push({ row: wall2.start_row, col: wall1.start_col });
-                      }
-                    }
-                  });
-                });
-
-                // Remove duplicates
-                const uniqueCorners = Array.from(new Set(corners.map(c => `${c.row}-${c.col}`))).map(key => {
-                  const [row, col] = key.split('-').map(Number);
-                  return { row, col };
-                });
-
-                return uniqueCorners.map((corner, idx) => (
-                  <div
-                    key={`corner-${idx}`}
-                    className="absolute bg-blue-900 z-20 pointer-events-none rounded-full"
-                    style={{
-                      left: (corner.col * (CELL_SIZE + 8)) - 6,
-                      top: (corner.row * (CELL_SIZE + 8)) - 6,
-                      width: 12,
-                      height: 12,
-                    }}
-                  />
-                ));
-              })()}
+                  return (
+                    <rect
+                      key={wall.id}
+                      x={x}
+                      y={y}
+                      width={width}
+                      height={height}
+                      fill="#1e3a8a"
+                      rx="2"
+                      ry="2"
+                    />
+                  );
+                })}
+              </svg>
 
               {Array.from({ length: room.grid_height }, (_, y) =>
                 Array.from({ length: room.grid_width }, (_, x) => {
@@ -595,6 +562,7 @@ export default function RoomViewer() {
                   }
                 }),
               )}
+
             </div>
           </div>
         </div>
