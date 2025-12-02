@@ -466,14 +466,15 @@ export default function RoomViewer() {
                 style={{
                   width: room.grid_width * (CELL_SIZE + 8),
                   height: room.grid_height * (CELL_SIZE + 8),
+                  overflow: 'visible',
                 }}
               >
                 {walls.map(wall => {
                   const x = wall.orientation === 'vertical'
-                    ? (wall.start_col * (CELL_SIZE + 8)) - 4
+                    ? (wall.start_col * (CELL_SIZE + 8)) - 2
                     : (wall.start_col * (CELL_SIZE + 8));
                   const y = wall.orientation === 'horizontal'
-                    ? (wall.start_row * (CELL_SIZE + 8)) - 4
+                    ? (wall.start_row * (CELL_SIZE + 8)) - 2
                     : (wall.start_row * (CELL_SIZE + 8));
                   const width = wall.orientation === 'vertical' ? 4 : (wall.end_col - wall.start_col) * (CELL_SIZE + 8);
                   const height = wall.orientation === 'horizontal' ? 4 : (wall.end_row - wall.start_row) * (CELL_SIZE + 8);
