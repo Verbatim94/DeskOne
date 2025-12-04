@@ -371,10 +371,10 @@ export default function RoomViewer() {
   if (!room) return null;
 
   return (
-    <div className="h-full bg-gray-50/50 p-4 flex flex-col space-y-4 overflow-hidden">
+    <div className="lg:h-full min-h-screen bg-gray-50/50 p-4 flex flex-col space-y-4 lg:overflow-hidden">
       {/* Google-style Header */}
-      <div className="flex items-center justify-between bg-white px-4 py-3 rounded-2xl shadow-sm border border-gray-100 flex-shrink-0">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col md:flex-row items-center justify-between bg-white px-4 py-3 rounded-2xl shadow-sm border border-gray-100 flex-shrink-0 gap-4">
+        <div className="flex items-center gap-4 w-full md:w-auto">
           <Button
             variant="ghost"
             size="icon"
@@ -391,50 +391,52 @@ export default function RoomViewer() {
           </div>
         </div>
 
-        {/* Date Navigation Pills */}
-        <div className="flex items-center bg-gray-100/80 p-1 rounded-full">
+        <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
+          {/* Date Navigation Pills */}
+          <div className="flex items-center justify-between w-full sm:w-auto bg-gray-100/80 p-1 rounded-full">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-full hover:bg-white hover:shadow-sm transition-all"
+              disabled={selectedDate <= new Date(new Date().setHours(0, 0, 0, 0))}
+              onClick={() => {
+                const prevDay = new Date(selectedDate);
+                prevDay.setDate(prevDay.getDate() - 1);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                if (prevDay >= today) setSelectedDate(prevDay);
+              }}
+            >
+              <ChevronLeft className="h-4 w-4 text-gray-600" />
+            </Button>
+            <span className="px-4 text-sm font-medium text-gray-700 min-w-[120px] text-center flex-1 sm:flex-none">
+              {format(selectedDate, 'EEE, MMM d')}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-full hover:bg-white hover:shadow-sm transition-all"
+              onClick={() => {
+                const nextDay = new Date(selectedDate);
+                nextDay.setDate(nextDay.getDate() + 1);
+                setSelectedDate(nextDay);
+              }}
+            >
+              <ChevronRight className="h-4 w-4 text-gray-600" />
+            </Button>
+          </div>
+
           <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 rounded-full hover:bg-white hover:shadow-sm transition-all"
-            disabled={selectedDate <= new Date(new Date().setHours(0, 0, 0, 0))}
-            onClick={() => {
-              const prevDay = new Date(selectedDate);
-              prevDay.setDate(prevDay.getDate() - 1);
-              const today = new Date();
-              today.setHours(0, 0, 0, 0);
-              if (prevDay >= today) setSelectedDate(prevDay);
-            }}
+            variant={selectedDate.toDateString() === new Date().toDateString() ? 'default' : 'ghost'}
+            onClick={() => setSelectedDate(new Date())}
+            className={`rounded-full px-6 w-full sm:w-auto ${selectedDate.toDateString() === new Date().toDateString()
+              ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-200'
+              : 'text-gray-600 hover:bg-gray-100'
+              }`}
           >
-            <ChevronLeft className="h-4 w-4 text-gray-600" />
-          </Button>
-          <span className="px-4 text-sm font-medium text-gray-700 min-w-[140px] text-center">
-            {format(selectedDate, 'EEE, MMM d')}
-          </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 rounded-full hover:bg-white hover:shadow-sm transition-all"
-            onClick={() => {
-              const nextDay = new Date(selectedDate);
-              nextDay.setDate(nextDay.getDate() + 1);
-              setSelectedDate(nextDay);
-            }}
-          >
-            <ChevronRight className="h-4 w-4 text-gray-600" />
+            Today
           </Button>
         </div>
-
-        <Button
-          variant={selectedDate.toDateString() === new Date().toDateString() ? 'default' : 'ghost'}
-          onClick={() => setSelectedDate(new Date())}
-          className={`rounded-full px-6 ${selectedDate.toDateString() === new Date().toDateString()
-            ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-200'
-            : 'text-gray-600 hover:bg-gray-100'
-            }`}
-        >
-          Today
-        </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-4 lg:flex-1 lg:overflow-hidden">
