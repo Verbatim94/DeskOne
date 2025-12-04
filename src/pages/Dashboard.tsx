@@ -244,7 +244,7 @@ export default function Dashboard() {
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="font-medium truncate">{room.name}</h3>
-                    <span className="text-xs text-muted-foreground bg-secondary px-2 py-1 rounded-full">
+                    <span className="text-xs text-white bg-blue-600 px-2 py-1 rounded-full">
                       {room.totalDesks} desks
                     </span>
                   </div>
