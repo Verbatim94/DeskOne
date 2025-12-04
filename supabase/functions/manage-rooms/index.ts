@@ -179,7 +179,7 @@ Deno.serve(async (req) => {
                 .from('room_cells')
                 .select('type')
                 .eq('room_id', room.id)
-                .in('type', ['desk', 'premium_desk']);
+                .in('type', ['desk']);
 
               // Get active reservations for today
               const { count: activeReservations } = await supabase
@@ -223,7 +223,7 @@ Deno.serve(async (req) => {
                 .from('room_cells')
                 .select('type')
                 .eq('room_id', room.id)
-                .in('type', ['desk', 'premium_desk']);
+                .in('type', ['desk']);
 
               // Get active reservations for today
               const { count: activeReservations } = await supabase

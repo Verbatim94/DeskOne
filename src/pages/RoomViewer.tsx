@@ -13,7 +13,7 @@ import ReservationDetailsDialog from '@/components/ReservationDetailsDialog';
 import { format, parseISO, isWithinInterval } from 'date-fns';
 
 
-type DeskType = 'desk' | 'premium_desk' | 'entrance';
+type DeskType = 'desk' | 'entrance';
 
 interface Cell {
   id: string;
@@ -58,13 +58,6 @@ const DESK_TYPES: {
       color: 'text-blue-600',
       bgColor: 'bg-blue-100 hover:bg-blue-200 border-blue-300',
       icon: Armchair,
-    },
-    {
-      type: 'premium_desk',
-      label: 'Premium Desk',
-      color: 'text-amber-600',
-      bgColor: 'bg-amber-100 hover:bg-amber-200 border-amber-300',
-      icon: Crown,
     },
     {
       type: 'entrance',
@@ -592,7 +585,7 @@ export default function RoomViewer() {
 
           <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar flex-1">
             {cells
-              .filter((cell) => cell.type === 'desk' || cell.type === 'premium_desk')
+              .filter((cell) => cell.type === 'desk')
               .sort((a, b) => {
                 const aLabel = a.label || `${a.x}-${a.y}`;
                 const bLabel = b.label || `${b.x}-${b.y}`;
