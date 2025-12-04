@@ -101,6 +101,81 @@ export default function Dashboard() {
     return dates;
   });
 
+  // Calculate availability for next 60 days
+  const { data: availabilityData = { available: [], unavailable: [] } } = useQuery({
+    queryKey: ['desk-availability', user.id, userRooms.map((r: any) => r.id)],
+    queryFn: async () => {
+      if (user.role === 'admin' || userRooms.length === 0) {
+        return { available: [], unavailable: [] };
+      }
+
+      const session = authService.getSession();
+      if (!session) return { available: [], unavailable: [] };
+
+      // Get next 60 days
+      const today = startOfDay(new Date());
+      const endDate = new Date(today);
+      endDate.setDate(endDate.getDate() + 60);
+      const daysToCheck = eachDayOfInterval({ start: today, end: endDate });
+
+      const availableDates: Date[] = [];
+      const unavailableDates: Date[] = [];
+
+      // For each day, check if there are available desks
+      for (const day of daysToCheck) {
+        const dayStr = format(day, 'yyyy-MM-dd');
+
+        // Skip if user already has a reservation on this day
+        const hasUserReservation = bookedDates.some(
+          bookedDate => format(bookedDate, 'yyyy-MM-dd') === dayStr
+        );
+        if (hasUserReservation) continue;
+
+        // Check availability across all user's rooms
+        let hasAvailableDesk = false;
+
+        for (const room of userRooms) {
+          const totalDesks = room.totalDesks || 0;
+          if (totalDesks === 0) continue;
+
+          // Get reservations for this room on this day
+          const { count: reservedCount } = await supabase
+            .from('reservations')
+            .select('*', { count: 'exact', head: true })
+            .eq('room_id', room.id)
+            .lte('date_start', dayStr)
+            .gte('date_end', dayStr)
+            .neq('status', 'cancelled')
+            .neq('status', 'rejected');
+
+          // Get fixed assignments for this room on this day
+          const { count: assignedCount } = await supabase
+            .from('fixed_assignments')
+            .select('*', { count: 'exact', head: true })
+            .eq('room_id', room.id)
+            .lte('date_start', dayStr)
+            .gte('date_end', dayStr);
+
+          const totalOccupied = (reservedCount || 0) + (assignedCount || 0);
+
+          if (totalOccupied < totalDesks) {
+            hasAvailableDesk = true;
+            break;
+          }
+        }
+
+        if (hasAvailableDesk) {
+          availableDates.push(day);
+        } else {
+          unavailableDates.push(day);
+        }
+      }
+
+      return { available: availableDates, unavailable: unavailableDates };
+    },
+    enabled: userRooms.length > 0 && user.role !== 'admin',
+  });
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full overflow-hidden">
       {/* Left Column - Main Content */}
@@ -125,7 +200,11 @@ export default function Dashboard() {
 
       {/* Right Column - Widgets */}
       <div className="space-y-4 overflow-y-auto pr-2">
-        <DashboardCalendar bookedDates={bookedDates} />
+        <DashboardCalendar
+          bookedDates={bookedDates}
+          availableDates={availabilityData.available}
+          unavailableDates={availabilityData.unavailable}
+        />
 
         {/* Shared Rooms Widget */}
         <div className="space-y-3">

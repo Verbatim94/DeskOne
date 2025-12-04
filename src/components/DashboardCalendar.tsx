@@ -4,9 +4,11 @@ import { useState } from 'react';
 
 interface DashboardCalendarProps {
     bookedDates: Date[];
+    availableDates?: Date[];
+    unavailableDates?: Date[];
 }
 
-export function DashboardCalendar({ bookedDates }: DashboardCalendarProps) {
+export function DashboardCalendar({ bookedDates, availableDates = [], unavailableDates = [] }: DashboardCalendarProps) {
     const [date, setDate] = useState<Date | undefined>(new Date());
 
     return (
@@ -21,17 +23,68 @@ export function DashboardCalendar({ bookedDates }: DashboardCalendarProps) {
                     onSelect={setDate}
                     className="rounded-md border shadow-sm mx-auto"
                     modifiers={{
-                        booked: bookedDates
+                        hasReservation: bookedDates,
+                        hasAvailability: availableDates,
+                        noAvailability: unavailableDates
                     }}
-                    modifiersStyles={{
-                        booked: {
-                            fontWeight: 'bold',
-                            backgroundColor: 'var(--primary)',
-                            color: 'white',
-                            borderRadius: '100%'
-                        }
+                    modifiersClassNames={{
+                        hasReservation: 'has-reservation',
+                        hasAvailability: 'has-availability',
+                        noAvailability: 'no-availability'
                     }}
                 />
+                <style>{`
+                    .has-reservation {
+                        position: relative;
+                        font-weight: 600;
+                    }
+                    .has-reservation::before {
+                        content: '';
+                        position: absolute;
+                        bottom: 2px;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        width: 6px;
+                        height: 6px;
+                        border-radius: 50%;
+                        background-color: #3b82f6;
+                    }
+                    .has-availability {
+                        position: relative;
+                        font-weight: 500;
+                    }
+                    .has-availability::before {
+                        content: '';
+                        position: absolute;
+                        bottom: 2px;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        width: 6px;
+                        height: 6px;
+                        border-radius: 50%;
+                        background-color: #10b981;
+                    }
+                    .no-availability {
+                        position: relative;
+                        font-weight: 500;
+                    }
+                    .no-availability::before {
+                        content: '';
+                        position: absolute;
+                        bottom: 2px;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        width: 6px;
+                        height: 6px;
+                        border-radius: 50%;
+                        background-color: #ef4444;
+                    }
+                    /* Today styling with red text */
+                    .rdp-day_today {
+                        color: #ef4444 !important;
+                        font-weight: 700;
+                    }
+                `}</style>
             </CardContent>
         </Card>
     );
