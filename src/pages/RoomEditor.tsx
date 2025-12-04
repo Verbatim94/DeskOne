@@ -477,7 +477,7 @@ export default function RoomEditor() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-4 flex-1 overflow-hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-4 lg:flex-1 lg:overflow-hidden">
         <Card className="p-4 flex flex-col overflow-hidden">
           <div className="mb-4 flex-shrink-0">
             <h3 className="text-sm font-medium mb-2">Drag items to the grid</h3>
@@ -502,7 +502,7 @@ export default function RoomEditor() {
             </div>
           </div>
 
-          <div className="border-2 border-border rounded-lg p-4 bg-muted/30 flex-1 flex items-center justify-center overflow-hidden">
+          <div className="border-2 border-border rounded-lg p-4 bg-muted/30 lg:flex-1 flex items-start justify-center overflow-auto">
             <div
               className="inline-block relative"
               style={{
@@ -646,7 +646,7 @@ export default function RoomEditor() {
         </Card>
 
         {/* Right Sidebar */}
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-4 flex flex-col h-full overflow-hidden">
+        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-4 flex flex-col lg:h-full lg:overflow-hidden">
 
           {/* Tabs */}
           <div className="flex p-1 bg-gray-100 rounded-xl mb-4 flex-shrink-0">
@@ -705,7 +705,7 @@ export default function RoomEditor() {
                   </Badge>
                 </h3>
 
-                <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar flex-1">
+                <div className="space-y-3 lg:overflow-y-auto lg:pr-2 custom-scrollbar lg:flex-1">
                   {cells
                     .filter((cell) => cell.type === 'desk')
                     .sort((a, b) => {

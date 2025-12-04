@@ -19,12 +19,12 @@ export function Layout({ children }: LayoutProps) {
   return (
     <div className="h-screen bg-background flex overflow-hidden">
       {/* Desktop Sidebar */}
-      <Sidebar />
+      <Sidebar className="hidden lg:flex w-64 min-h-screen" />
 
       {/* Mobile Sidebar */}
       <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
         <SheetContent side="left" className="p-0 w-64">
-          <Sidebar />
+          <Sidebar className="w-full border-none" />
         </SheetContent>
       </Sheet>
 

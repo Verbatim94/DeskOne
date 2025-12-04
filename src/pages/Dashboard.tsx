@@ -198,9 +198,9 @@ export default function Dashboard() {
   });
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full overflow-hidden">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:h-full lg:overflow-hidden">
       {/* Left Column - Main Content */}
-      <div className="lg:col-span-2 space-y-4 overflow-y-auto pr-2">
+      <div className="lg:col-span-2 space-y-4 lg:overflow-y-auto lg:pr-2">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
             Hello {user.full_name}!
@@ -220,7 +220,7 @@ export default function Dashboard() {
       </div>
 
       {/* Right Column - Widgets */}
-      <div className="space-y-4 overflow-y-auto pr-2">
+      <div className="space-y-4 lg:overflow-y-auto lg:pr-2">
         <DashboardCalendar
           bookedDates={bookedDates}
           availableDates={availabilityData.available}

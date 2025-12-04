@@ -437,9 +437,9 @@ export default function RoomViewer() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-4 flex-1 overflow-hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-4 lg:flex-1 lg:overflow-hidden">
         {/* Main Content: Grid */}
-        <div className="flex flex-col space-y-3 overflow-hidden">
+        <div className="flex flex-col space-y-3 lg:overflow-hidden">
           {/* Floating Legend */}
           <div className="bg-white px-4 py-2 rounded-full shadow-sm border border-gray-100 inline-flex items-center gap-6 text-sm flex-shrink-0">
             <div className="flex items-center gap-2">
@@ -457,7 +457,7 @@ export default function RoomViewer() {
           </div>
 
           {/* Room Grid Container */}
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex-1 flex items-center justify-center overflow-hidden">
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 lg:flex-1 flex items-start justify-center overflow-auto">
             <div
               className="inline-block relative"
               style={{
@@ -575,7 +575,7 @@ export default function RoomViewer() {
         </div>
 
         {/* Right Sidebar: Available Desks */}
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-4 flex flex-col h-full overflow-hidden">
+        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-4 flex flex-col lg:h-full lg:overflow-hidden">
           <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2 flex-shrink-0">
             Available Desks
             <Badge variant="secondary" className="rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100">
@@ -583,7 +583,7 @@ export default function RoomViewer() {
             </Badge>
           </h3>
 
-          <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar flex-1">
+          <div className="space-y-3 lg:overflow-y-auto lg:pr-2 custom-scrollbar lg:flex-1">
             {cells
               .filter((cell) => cell.type === 'desk')
               .sort((a, b) => {

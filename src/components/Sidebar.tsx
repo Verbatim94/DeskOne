@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { LogOut, LayoutGrid, Building2, BookCheck, Users } from 'lucide-react';
 import deskOneLogo from '@/assets/deskone-logo.png';
 
-export function Sidebar() {
+export function Sidebar({ className }: { className?: string }) {
     const { user, logout } = useAuth();
     const location = useLocation();
 
@@ -27,7 +27,7 @@ export function Sidebar() {
     );
 
     return (
-        <div className="hidden border-r bg-card lg:block w-64 min-h-screen flex flex-col">
+        <div className={cn("border-r bg-card flex flex-col h-full", className)}>
             <div className="h-24 flex items-center px-6 border-b">
                 <Link to="/" className="flex items-center gap-2">
                     <img
