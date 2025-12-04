@@ -16,12 +16,12 @@ export function DashboardCalendar({ bookedDates, availableDates = [], unavailabl
             <CardHeader>
                 <CardTitle>Calendar</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex flex-col items-center">
                 <Calendar
                     mode="single"
                     selected={date}
                     onSelect={setDate}
-                    className="rounded-md border shadow-sm mx-auto"
+                    className="rounded-md border shadow-sm"
                     modifiers={{
                         hasReservation: bookedDates,
                         hasAvailability: availableDates,
@@ -33,6 +33,23 @@ export function DashboardCalendar({ bookedDates, availableDates = [], unavailabl
                         noAvailability: 'no-availability'
                     }}
                 />
+
+                {/* Legend */}
+                <div className="mt-4 w-full space-y-2 text-xs">
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                        <span className="text-muted-foreground">Your reservation</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                        <span className="text-muted-foreground">Desks available</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                        <span className="text-muted-foreground">No desks available</span>
+                    </div>
+                </div>
+
                 <style>{`
                     .has-reservation {
                         position: relative;
