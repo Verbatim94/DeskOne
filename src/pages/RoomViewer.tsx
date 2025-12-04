@@ -257,8 +257,21 @@ export default function RoomViewer() {
 
     if (activeAssignment) {
       const isMyAssignment = activeAssignment.assigned_to === user?.id;
+      // Convert fixed assignment to reservation format for consistent handling
+      const assignmentAsReservation: any = {
+        id: activeAssignment.id,
+        cell_id: activeAssignment.cell_id,
+        user_id: activeAssignment.assigned_to,
+        status: 'approved',
+        date_start: activeAssignment.date_start,
+        date_end: activeAssignment.date_end,
+        time_segment: 'FULL',
+        type: 'fixed_assignment', // Mark as fixed assignment for proper deletion
+        user: activeAssignment.assigned_user || { id: activeAssignment.assigned_to, username: '', full_name: 'Unknown User' }
+      };
       return {
         status: isMyAssignment ? 'my-reservation' : 'reserved',
+        reservation: assignmentAsReservation,
         assignedTo: activeAssignment.assigned_user?.full_name || 'Unknown User',
       };
     }

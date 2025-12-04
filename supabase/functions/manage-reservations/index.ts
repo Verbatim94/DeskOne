@@ -181,10 +181,28 @@ Deno.serve(async (req) => {
         break;
 
       case 'delete_fixed_assignment':
-        // Only admins can delete fixed assignments
-        if (user.role !== 'admin') {
+        // Get the fixed assignment to check permissions
+        const { data: fixedAssignment } = await supabase
+          .from('fixed_assignments')
+          .select('room_id, assigned_to')
+          .eq('id', data.assignmentId)
+          .single();
+
+        if (!fixedAssignment) {
           return new Response(
-            JSON.stringify({ error: 'Only admins can delete fixed assignments' }),
+            JSON.stringify({ error: 'Fixed assignment not found' }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Users can delete assignments assigned to them, or admins can delete any assignment in their rooms
+        const canDelete =
+          fixedAssignment.assigned_to === user.id ||
+          await isRoomAdmin(fixedAssignment.room_id);
+
+        if (!canDelete) {
+          return new Response(
+            JSON.stringify({ error: 'You can only delete assignments assigned to you or assignments in rooms you manage' }),
             { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -541,7 +559,7 @@ Deno.serve(async (req) => {
       case 'cancel':
         const { data: cancelReservation } = await supabase
           .from('reservations')
-          .select('user_id, status')
+          .select('user_id, status, room_id')
           .eq('id', data.reservationId)
           .single();
 
@@ -552,8 +570,12 @@ Deno.serve(async (req) => {
           );
         }
 
-        // Admins can cancel any reservation, users can only cancel their own
-        if (user.role !== 'admin' && cancelReservation.user_id !== user.id) {
+        // Global admins, room admins, or the user themselves can cancel a reservation
+        const canCancel =
+          cancelReservation.user_id === user.id ||
+          await isRoomAdmin(cancelReservation.room_id);
+
+        if (!canCancel) {
           return new Response(
             JSON.stringify({ error: 'You can only cancel your own reservations' }),
             { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
