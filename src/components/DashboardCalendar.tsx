@@ -47,7 +47,7 @@ export function DashboardCalendar({ bookedDates, availableDates = [], unavailabl
                         width: 6px;
                         height: 6px;
                         border-radius: 50%;
-                        background-color: #3b82f6;
+                        background-color: #a855f7;
                     }
                     .has-availability {
                         position: relative;
