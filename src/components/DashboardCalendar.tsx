@@ -35,18 +35,18 @@ export function DashboardCalendar({ bookedDates, availableDates = [], unavailabl
                 />
 
                 {/* Legend */}
-                <div className="mt-4 w-full space-y-2 text-xs">
-                    <div className="flex items-center gap-2">
+                <div className="mt-4 w-full flex items-center justify-center gap-4 text-xs">
+                    <div className="flex items-center gap-1.5">
                         <div className="w-3 h-3 rounded-full bg-purple-500"></div>
-                        <span className="text-muted-foreground">Your reservation</span>
+                        <span className="text-muted-foreground">Reserved</span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                         <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                        <span className="text-muted-foreground">Desks available</span>
+                        <span className="text-muted-foreground">Available</span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                         <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                        <span className="text-muted-foreground">No desks available</span>
+                        <span className="text-muted-foreground">Not available</span>
                     </div>
                 </div>
 

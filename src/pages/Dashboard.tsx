@@ -121,6 +121,31 @@ export default function Dashboard() {
       const availableDates: Date[] = [];
       const unavailableDates: Date[] = [];
 
+      // Get all room IDs
+      const roomIds = userRooms.map((r: any) => r.id);
+      if (roomIds.length === 0) return { available: [], unavailable: [] };
+
+      const startDateStr = format(daysToCheck[0], 'yyyy-MM-dd');
+      const endDateStr = format(daysToCheck[daysToCheck.length - 1], 'yyyy-MM-dd');
+
+      // Fetch ALL reservations for the date range in one query
+      const { data: allReservations } = await supabase
+        .from('reservations')
+        .select('room_id, date_start, date_end')
+        .in('room_id', roomIds)
+        .lte('date_start', endDateStr)
+        .gte('date_end', startDateStr)
+        .neq('status', 'cancelled')
+        .neq('status', 'rejected');
+
+      // Fetch ALL fixed assignments for the date range in one query
+      const { data: allAssignments } = await supabase
+        .from('fixed_assignments')
+        .select('room_id, date_start, date_end')
+        .in('room_id', roomIds)
+        .lte('date_start', endDateStr)
+        .gte('date_end', startDateStr);
+
       // For each day, check if there are available desks
       for (const day of daysToCheck) {
         const dayStr = format(day, 'yyyy-MM-dd');
@@ -138,25 +163,21 @@ export default function Dashboard() {
           const totalDesks = room.totalDesks || 0;
           if (totalDesks === 0) continue;
 
-          // Get reservations for this room on this day
-          const { count: reservedCount } = await supabase
-            .from('reservations')
-            .select('*', { count: 'exact', head: true })
-            .eq('room_id', room.id)
-            .lte('date_start', dayStr)
-            .gte('date_end', dayStr)
-            .neq('status', 'cancelled')
-            .neq('status', 'rejected');
+          // Count reservations for this room on this day (from cached data)
+          const reservedCount = (allReservations || []).filter((r: any) =>
+            r.room_id === room.id &&
+            r.date_start <= dayStr &&
+            r.date_end >= dayStr
+          ).length;
 
-          // Get fixed assignments for this room on this day
-          const { count: assignedCount } = await supabase
-            .from('fixed_assignments')
-            .select('*', { count: 'exact', head: true })
-            .eq('room_id', room.id)
-            .lte('date_start', dayStr)
-            .gte('date_end', dayStr);
+          // Count fixed assignments for this room on this day (from cached data)
+          const assignedCount = (allAssignments || []).filter((a: any) =>
+            a.room_id === room.id &&
+            a.date_start <= dayStr &&
+            a.date_end >= dayStr
+          ).length;
 
-          const totalOccupied = (reservedCount || 0) + (assignedCount || 0);
+          const totalOccupied = reservedCount + assignedCount;
 
           if (totalOccupied < totalDesks) {
             hasAvailableDesk = true;
