@@ -112,11 +112,11 @@ export default function Dashboard() {
       const session = authService.getSession();
       if (!session) return { available: [], unavailable: [] };
 
-      // Get next 60 days
-      const today = startOfDay(new Date());
-      const endDate = new Date(today);
-      endDate.setDate(endDate.getDate() + 60);
-      const daysToCheck = eachDayOfInterval({ start: today, end: endDate });
+      // Get date range for visible calendar (current month + next 2 months)
+      const today = new Date();
+      const startDate = new Date(today.getFullYear(), today.getMonth(), 1); // First day of current month
+      const endDate = new Date(today.getFullYear(), today.getMonth() + 3, 0); // Last day of 2 months ahead
+      const daysToCheck = eachDayOfInterval({ start: startDate, end: endDate });
 
       const availableDates: Date[] = [];
       const unavailableDates: Date[] = [];
