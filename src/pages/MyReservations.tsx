@@ -193,7 +193,7 @@ export default function MyReservations() {
 
       {/* Calendar Card */}
       <div className="bg-card rounded-lg border shadow-sm overflow-hidden flex-1 flex flex-col">
-        <div className="p-3 md:p-4 flex-1 flex flex-col overflow-hidden">
+        <div className="p-3 md:p-4 flex-1 flex flex-col overflow-y-auto">
           {/* Month Navigation */}
           <div className="flex items-center justify-center gap-4 mb-4 flex-shrink-0">
             <Button
