@@ -91,6 +91,8 @@ export default function RoomViewer() {
 
 
   const [walls, setWalls] = useState<Wall[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [activeTab, setActiveTab] = useState<'desks' | 'rooms'>('desks');
 
   interface Wall {
     id: string;
@@ -104,6 +106,7 @@ export default function RoomViewer() {
 
   useEffect(() => {
     loadRoom();
+    loadRooms();
 
     const channel = supabase
       .channel('room-reservations')
@@ -202,6 +205,15 @@ export default function RoomViewer() {
     }
 
     setLoading(false);
+  };
+
+  const loadRooms = async () => {
+    try {
+      const result = await callRoomFunction('list');
+      setRooms(result || []);
+    } catch (error) {
+      console.error('Error loading rooms:', error);
+    }
   };
 
   const loadReservations = async () => {
@@ -596,89 +608,166 @@ export default function RoomViewer() {
 
         {/* Right Sidebar: Available Desks */}
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-4 flex flex-col lg:h-full lg:overflow-hidden">
-          <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2 flex-shrink-0">
-            Available Desks
-            <Badge variant="secondary" className="rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100">
-              {cells.filter(c => getDeskStatus(c.id).status === 'available' && c.type !== 'entrance').length}
-            </Badge>
-          </h3>
+          {/* Tabs */}
+          <div className="flex p-1 bg-gray-100 rounded-xl mb-4 flex-shrink-0">
+            <button
+              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'desks'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+                }`}
+              onClick={() => setActiveTab('desks')}
+            >
+              Desks
+            </button>
+            <button
+              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'rooms'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+                }`}
+              onClick={() => setActiveTab('rooms')}
+            >
+              Rooms
+            </button>
+          </div>
 
-          <div className="space-y-3 lg:overflow-y-auto lg:pr-2 custom-scrollbar lg:flex-1">
-            {cells
-              .filter((cell) => cell.type === 'desk')
-              .sort((a, b) => {
-                const aLabel = a.label || `${a.x}-${a.y}`;
-                const bLabel = b.label || `${b.x}-${b.y}`;
-                return aLabel.localeCompare(bLabel);
-              })
-              .map((cell) => {
-                const deskInfo = DESK_TYPES.find((d) => d.type === cell.type);
-                const Icon = deskInfo?.icon;
-                const { status, reservation, assignedTo } = getDeskStatus(cell.id);
-                const isAvailable = status === 'available';
-                const isMyReservation = status === 'my-reservation';
+          {activeTab === 'desks' ? (
+            <>
+              <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2 flex-shrink-0">
+                Available Desks
+                <Badge variant="secondary" className="rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100">
+                  {cells.filter(c => getDeskStatus(c.id).status === 'available' && c.type !== 'entrance').length}
+                </Badge>
+              </h3>
 
-                if (!isAvailable && !isMyReservation && !isRoomAdmin) return null; // Hide reserved desks for cleaner look
+              <div className="space-y-3 lg:overflow-y-auto lg:pr-2 custom-scrollbar lg:flex-1">
+                {cells
+                  .filter((cell) => cell.type === 'desk')
+                  .sort((a, b) => {
+                    const aLabel = a.label || `${a.x}-${a.y}`;
+                    const bLabel = b.label || `${b.x}-${b.y}`;
+                    return aLabel.localeCompare(bLabel);
+                  })
+                  .map((cell) => {
+                    const deskInfo = DESK_TYPES.find((d) => d.type === cell.type);
+                    const Icon = deskInfo?.icon;
+                    const { status, reservation, assignedTo } = getDeskStatus(cell.id);
+                    const isAvailable = status === 'available';
+                    const isMyReservation = status === 'my-reservation';
 
-                return (
+                    if (!isAvailable && !isMyReservation && !isRoomAdmin) return null; // Hide reserved desks for cleaner look
+
+                    return (
+                      <div
+                        key={cell.id}
+                        className={`
+                        group rounded-2xl p-4 transition-all duration-200 cursor-pointer border
+                        ${isAvailable
+                            ? 'bg-white border-gray-100 hover:border-blue-200 hover:shadow-md'
+                            : isMyReservation
+                              ? 'bg-purple-50 border-purple-100'
+                              : 'bg-gray-50 border-transparent opacity-70'
+                          }
+                      `}
+                        onClick={() => handleDeskListClick(cell)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className={`
+                            p-3 rounded-xl 
+                            ${isAvailable ? 'bg-blue-50 text-blue-600' : isMyReservation ? 'bg-purple-100 text-purple-600' : 'bg-gray-200 text-gray-500'}
+                          `}>
+                              {Icon && <Icon className="h-5 w-5" />}
+                            </div>
+                            <div>
+                              <p className="font-semibold text-gray-900">
+                                {cell.label || `Desk ${cell.x}-${cell.y}`}
+                              </p>
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                {isAvailable ? 'Available all day' : isMyReservation ? 'Reserved by you' : 'Reserved'}
+                              </p>
+                            </div>
+                          </div>
+
+                          {(isAvailable || user?.role === 'admin') && (
+                            <Button
+                              size="sm"
+                              className={`
+                              rounded-full px-4 opacity-0 group-hover:opacity-100 transition-all
+                              ${isAvailable ? 'bg-blue-600 hover:bg-blue-700' : ''}
+                            `}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeskListClick(cell);
+                              }}
+                            >
+                              Book
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                {cells.filter(c => getDeskStatus(c.id).status === 'available').length === 0 && (
+                  <div className="text-center py-10 text-gray-400">
+                    <Armchair className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                    <p>No desks available for this date.</p>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                All Rooms
+                <Badge variant="secondary" className="rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100">
+                  {rooms.length}
+                </Badge>
+              </h3>
+
+              <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar flex-1">
+                {rooms.map((r) => (
                   <div
-                    key={cell.id}
+                    key={r.id}
                     className={`
-                      group rounded-2xl p-4 transition-all duration-200 cursor-pointer border
-                      ${isAvailable
-                        ? 'bg-white border-gray-100 hover:border-blue-200 hover:shadow-md'
-                        : isMyReservation
-                          ? 'bg-purple-50 border-purple-100'
-                          : 'bg-gray-50 border-transparent opacity-70'
+                      group rounded-2xl p-4 transition-all duration-200 cursor-pointer border 
+                      ${r.id === roomId
+                        ? 'bg-blue-50 border-blue-200 shadow-sm'
+                        : 'bg-white border-gray-100 hover:border-blue-200 hover:shadow-md'
                       }
                     `}
-                    onClick={() => handleDeskListClick(cell)}
+                    onClick={() => navigate(`/rooms/${r.id}/view`)}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <div className={`
                           p-3 rounded-xl 
-                          ${isAvailable ? 'bg-blue-50 text-blue-600' : isMyReservation ? 'bg-purple-100 text-purple-600' : 'bg-gray-200 text-gray-500'}
+                          ${r.id === roomId ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}
                         `}>
-                          {Icon && <Icon className="h-5 w-5" />}
+                          <Armchair className="h-5 w-5" />
                         </div>
                         <div>
-                          <p className="font-semibold text-gray-900">
-                            {cell.label || `Desk ${cell.x}-${cell.y}`}
+                          <p className={`font-semibold ${r.id === roomId ? 'text-blue-900' : 'text-gray-900'}`}>
+                            {r.name}
                           </p>
                           <p className="text-xs text-gray-500 mt-0.5">
-                            {isAvailable ? 'Available all day' : isMyReservation ? 'Reserved by you' : 'Reserved'}
+                            {r.grid_width} × {r.grid_height} Grid
                           </p>
                         </div>
                       </div>
-
-                      {(isAvailable || user?.role === 'admin') && (
-                        <Button
-                          size="sm"
-                          className={`
-                            rounded-full px-4 opacity-0 group-hover:opacity-100 transition-all
-                            ${isAvailable ? 'bg-blue-600 hover:bg-blue-700' : ''}
-                          `}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeskListClick(cell);
-                          }}
-                        >
-                          Book
-                        </Button>
-                      )}
                     </div>
                   </div>
-                );
-              })}
+                ))}
 
-            {cells.filter(c => getDeskStatus(c.id).status === 'available').length === 0 && (
-              <div className="text-center py-10 text-gray-400">
-                <Armchair className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                <p>No desks available for this date.</p>
+                {rooms.length === 0 && (
+                  <div className="text-center py-10 text-gray-400">
+                    <Armchair className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                    <p>No rooms found.</p>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          )}
         </div>
       </div >
 
