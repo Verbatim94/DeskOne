@@ -42,7 +42,7 @@ interface Room {
   grid_height: number;
 }
 
-const CELL_SIZE = 70;
+const CELL_SIZE = 50;
 
 const DESK_TYPES: {
   type: DeskType;

@@ -342,7 +342,7 @@ export default function Rooms() {
                   id="grid_width"
                   type="number"
                   min="5"
-                  max="50"
+                  max="12"
                   value={formData.grid_width}
                   onChange={(e) => setFormData({ ...formData, grid_width: parseInt(e.target.value) })}
                   required
@@ -354,7 +354,7 @@ export default function Rooms() {
                   id="grid_height"
                   type="number"
                   min="5"
-                  max="50"
+                  max="12"
                   value={formData.grid_height}
                   onChange={(e) => setFormData({ ...formData, grid_height: parseInt(e.target.value) })}
                   required

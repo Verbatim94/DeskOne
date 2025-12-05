@@ -10,6 +10,9 @@ import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Loader2, Armchair, Crown, DoorOpen, ChevronLeft, ChevronRight } from 'lucide-react';
 import BookDeskDialog from '@/components/BookDeskDialog';
 import ReservationDetailsDialog from '@/components/ReservationDetailsDialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
 import { format, parseISO, isWithinInterval } from 'date-fns';
 
 
@@ -409,9 +412,24 @@ export default function RoomViewer() {
             >
               <ChevronLeft className="h-4 w-4 text-gray-600" />
             </Button>
-            <span className="px-4 text-sm font-medium text-gray-700 min-w-[120px] text-center flex-1 sm:flex-none">
-              {format(selectedDate, 'EEE, MMM d')}
-            </span>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  className="px-4 text-sm font-medium text-gray-700 min-w-[120px] text-center flex-1 sm:flex-none hover:bg-gray-200 rounded-md py-1 transition-colors"
+                >
+                  {format(selectedDate, 'EEE, MMM d')}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="center">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={(date) => date && setSelectedDate(date)}
+                  disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
             <Button
               variant="ghost"
               size="icon"
