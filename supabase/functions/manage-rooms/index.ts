@@ -228,7 +228,7 @@ Deno.serve(async (req) => {
             break;
           }
 
-          const rooms = (accessibleRooms as unknown as RoomAccessWithRoom[])?.map((a) => a.rooms).filter((r): r is Room => r !== null) || [];
+          const rooms = (accessibleRooms as unknown as RoomAccessWithRoom[])?.map((a) => a.rooms).filter((r): r is Room => !!r) || [];
 
           // Get desk counts and active reservations for each room
           const today = new Date().toISOString().split('T')[0];
