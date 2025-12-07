@@ -1,0 +1,83 @@
+﻿
+C:\Users\niedd\Downloads\deskone-main\deskone-main\src\components\DeskRatingsView.tsx
+  35:6  warning  React Hook useEffect has a missing dependency: 'loadRatings'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\niedd\Downloads\deskone-main\deskone-main\src\components\RoomAccessDialog.tsx
+  49:6  warning  React Hook useEffect has missing dependencies: 'loadAvailableUsers' and 'loadRoomUsers'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\niedd\Downloads\deskone-main\deskone-main\src\components\RoomWeeklyAvailability.tsx
+  53:53  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\niedd\Downloads\deskone-main\deskone-main\src\components\TodayOccupancy.tsx
+  39:51  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\niedd\Downloads\deskone-main\deskone-main\src\components\ui\badge.tsx
+  29:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\niedd\Downloads\deskone-main\deskone-main\src\components\ui\button.tsx
+  47:18  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\niedd\Downloads\deskone-main\deskone-main\src\components\ui\command.tsx
+  24:11  error  An interface declaring no members is equivalent to its supertype  @typescript-eslint/no-empty-object-type
+
+C:\Users\niedd\Downloads\deskone-main\deskone-main\src\components\ui\form.tsx
+  129:10  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\niedd\Downloads\deskone-main\deskone-main\src\components\ui\navigation-menu.tsx
+  111:3  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\niedd\Downloads\deskone-main\deskone-main\src\components\ui\sidebar.tsx
+  636:3  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\niedd\Downloads\deskone-main\deskone-main\src\components\ui\sonner.tsx
+  27:19  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\niedd\Downloads\deskone-main\deskone-main\src\components\ui\textarea.tsx
+  5:18  error  An interface declaring no members is equivalent to its supertype  @typescript-eslint/no-empty-object-type
+
+C:\Users\niedd\Downloads\deskone-main\deskone-main\src\components\ui\toggle.tsx
+  37:18  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\niedd\Downloads\deskone-main\deskone-main\src\contexts\AuthContext.tsx
+  65:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\niedd\Downloads\deskone-main\deskone-main\src\pages\MyReservations.tsx
+   45:6   warning  React Hook useEffect has a missing dependency: 'loadReservations'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+   47:68  error    Unexpected any. Specify a different type                                                                             @typescript-eslint/no-explicit-any
+   67:21  error    Unexpected any. Specify a different type                                                                             @typescript-eslint/no-explicit-any
+   68:18  error    Unexpected any. Specify a different type                                                                             @typescript-eslint/no-explicit-any
+   76:21  error    Unexpected any. Specify a different type                                                                             @typescript-eslint/no-explicit-any
+  123:21  error    Unexpected any. Specify a different type                                                                             @typescript-eslint/no-explicit-any
+
+C:\Users\niedd\Downloads\deskone-main\deskone-main\src\pages\PendingApprovals.tsx
+   41:6   warning  React Hook useEffect has a missing dependency: 'loadPendingReservations'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+   43:68  error    Unexpected any. Specify a different type                                                                                    @typescript-eslint/no-explicit-any
+   64:21  error    Unexpected any. Specify a different type                                                                                    @typescript-eslint/no-explicit-any
+   65:18  error    Unexpected any. Specify a different type                                                                                    @typescript-eslint/no-explicit-any
+   72:21  error    Unexpected any. Specify a different type                                                                                    @typescript-eslint/no-explicit-any
+   87:21  error    Unexpected any. Specify a different type                                                                                    @typescript-eslint/no-explicit-any
+  103:21  error    Unexpected any. Specify a different type                                                                                    @typescript-eslint/no-explicit-any
+  247:75  error    Unexpected any. Specify a different type                                                                                    @typescript-eslint/no-explicit-any
+
+C:\Users\niedd\Downloads\deskone-main\deskone-main\src\pages\ReservationsCalendar.tsx
+   45:6   warning  React Hook useEffect has a missing dependency: 'loadData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+   47:61  error    Unexpected any. Specify a different type                                                                     @typescript-eslint/no-explicit-any
+   62:68  error    Unexpected any. Specify a different type                                                                     @typescript-eslint/no-explicit-any
+   92:71  error    Unexpected any. Specify a different type                                                                     @typescript-eslint/no-explicit-any
+  104:21  error    Unexpected any. Specify a different type                                                                     @typescript-eslint/no-explicit-any
+
+C:\Users\niedd\Downloads\deskone-main\deskone-main\src\pages\RoomEditor.tsx
+  108:6  warning  React Hook useEffect has missing dependencies: 'loadRoom' and 'loadRooms'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\niedd\Downloads\deskone-main\deskone-main\src\pages\RoomViewer.tsx
+  149:6  warning  React Hook useEffect has missing dependencies: 'loadReservations', 'loadRoom', and 'loadRooms'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  156:6  warning  React Hook useEffect has missing dependencies: 'loadFixedAssignments' and 'loadReservations'. Either include them or remove the dependency array    react-hooks/exhaustive-deps
+
+C:\Users\niedd\Downloads\deskone-main\deskone-main\src\pages\Rooms.tsx
+  47:6  warning  React Hook useEffect has a missing dependency: 'loadRooms'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\niedd\Downloads\deskone-main\deskone-main\src\pages\Users.tsx
+  45:6  warning  React Hook useEffect has a missing dependency: 'loadUsers'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+Ô£û 38 problems (20 errors, 18 warnings)
+

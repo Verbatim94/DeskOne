@@ -520,7 +520,7 @@ export default function RoomViewer() {
           </div>
 
           {/* Room Grid Container */}
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 lg:flex-1 flex items-start justify-center overflow-auto">
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-4 lg:flex-1 flex items-start justify-center">
             <div
               className="inline-block relative"
               style={{

@@ -530,7 +530,7 @@ export default function RoomEditor() {
             </div>
           </div>
 
-          <div className="border-2 border-border rounded-lg p-4 bg-muted/30 lg:flex-1 flex items-start justify-center overflow-auto">
+          <div className="border-2 border-border rounded-lg p-4 bg-muted/30 lg:flex-1 flex items-start justify-center">
             <div
               className="inline-block relative"
               style={{

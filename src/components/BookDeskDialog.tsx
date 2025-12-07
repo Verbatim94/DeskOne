@@ -23,6 +23,17 @@ import { CalendarIcon, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-rea
 import { format, differenceInDays, addYears } from 'date-fns';
 import { cn } from '@/lib/utils';
 
+interface Reservation {
+  id: string;
+  room_id: string;
+  cell_id: string;
+  user_id: string;
+  date_start: string;
+  date_end: string;
+  status: string;
+  type: string;
+}
+
 interface BookDeskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -31,7 +42,7 @@ interface BookDeskDialogProps {
   cellId: string;
   cellLabel: string | null;
   initialDate?: Date;
-  onBookingComplete?: (reservation?: any) => void;
+  onBookingComplete?: (reservation?: Reservation) => void;
 }
 
 interface User {
@@ -95,7 +106,7 @@ export default function BookDeskDialog({
     }
   };
 
-  const callReservationFunction = async (operation: string, data?: any) => {
+  const callReservationFunction = async (operation: string, data?: Record<string, unknown>) => {
     const session = authService.getSession();
     if (!session) throw new Error('No session');
 
@@ -107,7 +118,7 @@ export default function BookDeskDialog({
     });
 
     if (response.error) {
-      const errorData = response.error as any;
+      const errorData = response.error as { message?: string; error?: string };
       const errorMessage = errorData?.message || errorData?.error || JSON.stringify(errorData);
 
       if (errorMessage.includes("That's two!") || errorMessage.includes('limit reservations to one')) {
@@ -151,8 +162,15 @@ export default function BookDeskDialog({
       if (onBookingComplete) onBookingComplete(newReservation);
 
       setSelectedDate(new Date());
-    } catch (error: any) {
-      const message = error?.message || 'Unknown error';
+      setSelectedDate(new Date());
+    } catch (error: unknown) {
+      let message = 'Unknown error';
+      if (error instanceof Error) {
+        message = error.message;
+      } else if (typeof error === 'object' && error !== null) {
+        const e = error as { message?: string; error?: string };
+        message = e.message || e.error || 'Unknown error';
+      }
 
       if (message.startsWith('ONE_PER_DAY:')) {
         setErrorDialogMessage("You cannot book more than one desk per day.");
@@ -242,10 +260,18 @@ export default function BookDeskDialog({
       setStartDate(new Date());
       setEndDate(new Date());
       setSelectedUserId('');
-    } catch (error: any) {
+      setSelectedUserId('');
+    } catch (error: unknown) {
+      let message = 'Unknown error';
+      if (error instanceof Error) {
+        message = error.message;
+      } else if (typeof error === 'object' && error !== null) {
+        const e = error as { message?: string; error?: string };
+        message = e.message || e.error || 'Unknown error';
+      }
       toast({
         title: 'Assignment failed',
-        description: error?.message || 'Unknown error',
+        description: message,
         variant: 'destructive',
       });
     }
