@@ -11,15 +11,30 @@ import { DashboardChart } from '@/components/DashboardChart';
 import { DashboardCalendar } from '@/components/DashboardCalendar';
 import { Grid3x3, ArrowRight } from 'lucide-react';
 
+interface Room {
+  id: string;
+  name: string;
+  description: string | null;
+  totalDesks: number;
+  activeReservations: number;
+}
+
+interface Reservation {
+  id: string;
+  room_id: string;
+  date_start: string;
+  date_end: string;
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
 
-  if (!user) return null;
-
   // Fetch user's rooms and reservations
   const { data: userRooms = [] } = useQuery({
-    queryKey: ['user-rooms', user.id, user.role],
+    queryKey: ['user-rooms', user?.id, user?.role],
     queryFn: async () => {
+      if (!user) return [];
       const session = authService.getSession();
       if (!session) throw new Error('No session');
 
@@ -36,11 +51,13 @@ export default function Dashboard() {
 
       return response.data || [];
     },
+    enabled: !!user,
   });
 
   const { data: allReservations = [] } = useQuery({
-    queryKey: ['all-reservations', user.id],
+    queryKey: ['all-reservations', user?.id],
     queryFn: async () => {
+      if (!user) return [];
       // Admins don't need reservations
       if (user.role === 'admin') return [];
 
@@ -61,21 +78,22 @@ export default function Dashboard() {
       }
 
       const reservations = response.data || [];
-      return reservations.filter((r: any) =>
+      return reservations.filter((r: Reservation) =>
         r.status === 'approved' || r.status === 'pending'
       );
     },
+    enabled: !!user,
   });
 
   // Calculate Stats
   const totalBookings = allReservations.length;
-  const upcomingBookings = allReservations.filter((r: any) =>
+  const upcomingBookings = allReservations.filter((r: Reservation) =>
     isAfter(new Date(r.date_start), startOfDay(new Date()))
   ).length;
 
   // Calculate Availability
-  const totalDesks = userRooms.reduce((acc: number, room: any) => acc + (room.totalDesks || 0), 0);
-  const totalReserved = userRooms.reduce((acc: number, room: any) => acc + (room.activeReservations || 0), 0);
+  const totalDesks = userRooms.reduce((acc: number, room: Room) => acc + (room.totalDesks || 0), 0);
+  const totalReserved = userRooms.reduce((acc: number, room: Room) => acc + (room.activeReservations || 0), 0);
 
   // Avoid division by zero
   const availabilityPercentage = totalDesks > 0
@@ -86,7 +104,7 @@ export default function Dashboard() {
   const chartData = Array.from({ length: 6 }).map((_, i) => {
     const date = subMonths(new Date(), 5 - i);
     const monthName = format(date, 'MMM');
-    const bookingsInMonth = allReservations.filter((r: any) =>
+    const bookingsInMonth = allReservations.filter((r: Reservation) =>
       isSameMonth(new Date(r.date_start), date)
     ).length;
 
@@ -94,7 +112,7 @@ export default function Dashboard() {
   });
 
   // Expand reservations to include all dates in the range for Calendar
-  const bookedDates = allReservations.flatMap((r: any) => {
+  const bookedDates = allReservations.flatMap((r: Reservation) => {
     const startDate = new Date(r.date_start);
     const endDate = new Date(r.date_end);
     const dates = eachDayOfInterval({ start: startDate, end: endDate });
@@ -103,8 +121,9 @@ export default function Dashboard() {
 
   // Calculate availability for next 60 days
   const { data: availabilityData = { available: [], unavailable: [] } } = useQuery({
-    queryKey: ['desk-availability', user.id, userRooms.map((r: any) => r.id)],
+    queryKey: ['desk-availability', user?.id, userRooms.map((r: Room) => r.id)],
     queryFn: async () => {
+      if (!user) return { available: [], unavailable: [] };
       if (user.role === 'admin' || userRooms.length === 0) {
         return { available: [], unavailable: [] };
       }
@@ -122,7 +141,7 @@ export default function Dashboard() {
       const unavailableDates: Date[] = [];
 
       // Get all room IDs
-      const roomIds = userRooms.map((r: any) => r.id);
+      const roomIds = userRooms.map((r: Room) => r.id);
       if (roomIds.length === 0) return { available: [], unavailable: [] };
 
       const startDateStr = format(daysToCheck[0], 'yyyy-MM-dd');
@@ -164,14 +183,14 @@ export default function Dashboard() {
           if (totalDesks === 0) continue;
 
           // Count reservations for this room on this day (from cached data)
-          const reservedCount = (allReservations || []).filter((r: any) =>
+          const reservedCount = (allReservations || []).filter((r: { room_id: string; date_start: string; date_end: string }) =>
             r.room_id === room.id &&
             r.date_start <= dayStr &&
             r.date_end >= dayStr
           ).length;
 
           // Count fixed assignments for this room on this day (from cached data)
-          const assignedCount = (allAssignments || []).filter((a: any) =>
+          const assignedCount = (allAssignments || []).filter((a: { room_id: string; date_start: string; date_end: string }) =>
             a.room_id === room.id &&
             a.date_start <= dayStr &&
             a.date_end >= dayStr
@@ -194,8 +213,10 @@ export default function Dashboard() {
 
       return { available: availableDates, unavailable: unavailableDates };
     },
-    enabled: userRooms.length > 0 && user.role !== 'admin',
+    enabled: !!user && userRooms.length > 0 && user.role !== 'admin',
   });
+
+  if (!user) return null;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:h-full lg:overflow-hidden">
@@ -239,7 +260,7 @@ export default function Dashboard() {
           </div>
 
           <div className="space-y-3">
-            {userRooms.slice(0, 3).map((room: any) => (
+            {userRooms.slice(0, 3).map((room: Room) => (
               <Card key={room.id} className="overflow-hidden hover:shadow-md transition-shadow">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-2">

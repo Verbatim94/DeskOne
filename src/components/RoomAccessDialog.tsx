@@ -48,7 +48,7 @@ export default function RoomAccessDialog({ roomId, roomName, open, onOpenChange 
     }
   }, [open, roomId]);
 
-  const callRoomFunction = async (operation: string, data?: any) => {
+  const callRoomFunction = async (operation: string, data?: Record<string, unknown>) => {
     const session = authService.getSession();
     if (!session) throw new Error('No session');
 
@@ -68,10 +68,13 @@ export default function RoomAccessDialog({ roomId, roomName, open, onOpenChange 
     try {
       const data = await callRoomFunction('list_room_users', { roomId });
       setRoomUsers(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      let message = 'Unknown error';
+      if (error instanceof Error) message = error.message;
+      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
       toast({
         title: 'Error loading users',
-        description: error.message,
+        description: message,
         variant: 'destructive'
       });
     }
@@ -82,7 +85,7 @@ export default function RoomAccessDialog({ roomId, roomName, open, onOpenChange 
     try {
       const data = await callRoomFunction('list_available_users', { roomId });
       setAvailableUsers(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error loading available users:', error);
     }
   };
@@ -110,10 +113,13 @@ export default function RoomAccessDialog({ roomId, roomName, open, onOpenChange 
       setSelectedRole('member');
       loadRoomUsers();
       loadAvailableUsers();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      let message = 'Unknown error';
+      if (error instanceof Error) message = error.message;
+      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
       toast({
         title: 'Error adding user',
-        description: error.message,
+        description: message,
         variant: 'destructive'
       });
     }
@@ -132,10 +138,13 @@ export default function RoomAccessDialog({ roomId, roomName, open, onOpenChange 
       toast({ title: 'User removed successfully' });
       loadRoomUsers();
       loadAvailableUsers();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      let message = 'Unknown error';
+      if (error instanceof Error) message = error.message;
+      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
       toast({
         title: 'Error removing user',
-        description: error.message,
+        description: message,
         variant: 'destructive'
       });
     }

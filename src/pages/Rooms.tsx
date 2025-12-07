@@ -46,7 +46,7 @@ export default function Rooms() {
     loadRooms();
   }, []);
 
-  const callRoomFunction = async (operation: string, data?: any) => {
+  const callRoomFunction = async (operation: string, data?: Record<string, unknown>) => {
     const session = authService.getSession();
     if (!session) throw new Error('No session');
 
@@ -87,10 +87,13 @@ export default function Rooms() {
         });
         setRoomAdminMap(adminMap);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      let message = 'Unknown error';
+      if (error instanceof Error) message = error.message;
+      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
       toast({
         title: 'Error loading rooms',
-        description: error.message,
+        description: message,
         variant: 'destructive'
       });
     }
@@ -116,10 +119,13 @@ export default function Rooms() {
         setDialogOpen(false);
         loadRooms();
         resetForm();
-      } catch (error: any) {
+      } catch (error: unknown) {
+        let message = 'Unknown error';
+        if (error instanceof Error) message = error.message;
+        else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
         toast({
           title: 'Error updating room',
-          description: error.message,
+          description: message,
           variant: 'destructive'
         });
       }
@@ -136,10 +142,13 @@ export default function Rooms() {
         setDialogOpen(false);
         loadRooms();
         resetForm();
-      } catch (error: any) {
+      } catch (error: unknown) {
+        let message = 'Unknown error';
+        if (error instanceof Error) message = error.message;
+        else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
         toast({
           title: 'Error creating room',
-          description: error.message,
+          description: message,
           variant: 'destructive'
         });
       }
@@ -153,10 +162,13 @@ export default function Rooms() {
       await callRoomFunction('delete', { id });
       toast({ title: 'Room deleted successfully' });
       loadRooms();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      let message = 'Unknown error';
+      if (error instanceof Error) message = error.message;
+      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
       toast({
         title: 'Error deleting room',
-        description: error.message,
+        description: message,
         variant: 'destructive'
       });
     }

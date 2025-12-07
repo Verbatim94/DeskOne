@@ -107,7 +107,7 @@ export default function RoomEditor() {
     loadRooms();
   }, [roomId]);
 
-  const callRoomFunction = async (operation: string, data?: any) => {
+  const callRoomFunction = async (operation: string, data?: Record<string, unknown>) => {
     const session = authService.getSession();
     if (!session) throw new Error('No session');
 
@@ -155,10 +155,13 @@ export default function RoomEditor() {
           navigate('/rooms');
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      let message = 'Unknown error';
+      if (error instanceof Error) message = error.message;
+      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
       toast({
         title: 'Error loading room',
-        description: error.message,
+        description: message,
         variant: 'destructive'
       });
       navigate('/rooms');
@@ -212,10 +215,13 @@ export default function RoomEditor() {
         setCells([...cells, newCell]);
         setSelectedCell(newCell);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      let message = 'Unknown error';
+      if (error instanceof Error) message = error.message;
+      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
       toast({
         title: 'Error creating cell',
-        description: error.message,
+        description: message,
         variant: 'destructive'
       });
     } finally {
@@ -260,10 +266,13 @@ export default function RoomEditor() {
           }
         });
         setCells([...cells, newCell]);
-      } catch (error: any) {
+      } catch (error: unknown) {
+        let message = 'Unknown error';
+        if (error instanceof Error) message = error.message;
+        else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
         toast({
           title: 'Error creating cell',
-          description: error.message,
+          description: message,
           variant: 'destructive'
         });
       } finally {
@@ -284,12 +293,15 @@ export default function RoomEditor() {
             updates: { x, y }
           });
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Revert on error
         loadRoom();
+        let message = 'Unknown error';
+        if (error instanceof Error) message = error.message;
+        else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
         toast({
           title: 'Error moving cell',
-          description: error.message,
+          description: message,
           variant: 'destructive'
         });
       } finally {
@@ -318,11 +330,15 @@ export default function RoomEditor() {
       setIsRenameDialogOpen(false);
       setRenamingCell(null);
       setCustomName('');
+      setCustomName('');
       toast({ title: 'Desk name updated successfully' });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      let message = 'Unknown error';
+      if (error instanceof Error) message = error.message;
+      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
       toast({
         title: 'Error updating desk name',
-        description: error.message,
+        description: message,
         variant: 'destructive'
       });
     }
@@ -334,12 +350,16 @@ export default function RoomEditor() {
     try {
       await callRoomFunction('delete_cell', { cellId: cell.id });
       setCells(cells.filter(c => c.id !== cell.id));
+      setCells(cells.filter(c => c.id !== cell.id));
       if (selectedCell?.id === cell.id) setSelectedCell(null);
       toast({ title: 'Desk deleted successfully' });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      let message = 'Unknown error';
+      if (error instanceof Error) message = error.message;
+      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
       toast({
         title: 'Error deleting desk',
-        description: error.message,
+        description: message,
         variant: 'destructive'
       });
     }
@@ -352,12 +372,16 @@ export default function RoomEditor() {
       await callRoomFunction('delete_all_cells', { roomId: roomId! });
       setCells([]);
       setWalls([]);
+      setWalls([]);
       setSelectedCell(null);
       toast({ title: 'All cells cleared' });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      let message = 'Unknown error';
+      if (error instanceof Error) message = error.message;
+      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
       toast({
         title: 'Error clearing cells',
-        description: error.message,
+        description: message,
         variant: 'destructive'
       });
     }
@@ -418,14 +442,18 @@ export default function RoomEditor() {
         // Replace the specific temp wall with real one
         setWalls(prev => prev.map(w => w.id === tempId ? newWall : w));
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Revert to previous state instead of reloading entire room
       console.error('Error toggling wall:', error);
       setWalls(previousWalls);
 
+      let message = 'Failed to update wall. Please try again.';
+      if (error instanceof Error) message = error.message || message;
+      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || message;
+
       toast({
         title: 'Error updating wall',
-        description: error.message || 'Failed to update wall. Please try again.',
+        description: message,
         variant: 'destructive'
       });
     } finally {

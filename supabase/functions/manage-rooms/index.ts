@@ -5,6 +5,21 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-session-token',
 };
 
+interface Room {
+  id: string;
+  name: string;
+  created_at: string;
+  created_by: string;
+  grid_width: number;
+  grid_height: number;
+  description: string | null;
+}
+
+interface RoomAccessWithRoom {
+  room_id: string;
+  rooms: Room | null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -86,7 +101,7 @@ Deno.serve(async (req) => {
 
     let result;
     switch (operation) {
-      case 'create':
+      case 'create': {
         // Only admin/super_admin can create rooms
         if (user.role !== 'admin' && user.role !== 'super_admin') {
           return new Response(
@@ -124,6 +139,7 @@ Deno.serve(async (req) => {
 
         result = { data: roomData, error: null };
         break;
+      }
 
       case 'update':
         // Only room admin can update room details
@@ -157,7 +173,7 @@ Deno.serve(async (req) => {
           .eq('id', data.id);
         break;
 
-      case 'list':
+      case 'list': {
         // Get only rooms where user has access
         if (user.role === 'super_admin') {
           const { data: allRooms, error: roomsError } = await supabase
@@ -212,12 +228,12 @@ Deno.serve(async (req) => {
             break;
           }
 
-          const rooms = accessibleRooms?.map(a => a.rooms).filter(Boolean) || [];
+          const rooms = (accessibleRooms as unknown as RoomAccessWithRoom[])?.map((a) => a.rooms).filter((r): r is Room => r !== null) || [];
 
           // Get desk counts and active reservations for each room
           const today = new Date().toISOString().split('T')[0];
           const roomsWithDesks = await Promise.all(
-            rooms.map(async (room: any) => {
+            rooms.map(async (room) => {
               // Get total desks
               const { data: cells } = await supabase
                 .from('room_cells')
@@ -246,8 +262,9 @@ Deno.serve(async (req) => {
           result = { data: roomsWithDesks, error: null };
         }
         break;
+      }
 
-      case 'get':
+      case 'get': {
         // Check if user has access to this room
         if (!(await hasRoomAccess(data.roomId))) {
           return new Response(
@@ -286,6 +303,7 @@ Deno.serve(async (req) => {
           error: cellsError || wallsError
         };
         break;
+      }
 
       case 'create_cell':
         // Only room admin can modify layout
@@ -303,7 +321,7 @@ Deno.serve(async (req) => {
           .single();
         break;
 
-      case 'update_cell':
+      case 'update_cell': {
         // Get cell to check room ownership
         const { data: cellToUpdate } = await supabase
           .from('room_cells')
@@ -325,8 +343,9 @@ Deno.serve(async (req) => {
           .select()
           .single();
         break;
+      }
 
-      case 'delete_cell':
+      case 'delete_cell': {
         // Get cell to check room ownership
         const { data: cellToDelete } = await supabase
           .from('room_cells')
@@ -346,6 +365,7 @@ Deno.serve(async (req) => {
           .delete()
           .eq('id', data.cellId);
         break;
+      }
 
       case 'create_wall':
         // Only room admin can modify layout
@@ -363,7 +383,7 @@ Deno.serve(async (req) => {
           .single();
         break;
 
-      case 'delete_wall':
+      case 'delete_wall': {
         // Get wall to check room ownership
         const { data: wallToDelete } = await supabase
           .from('room_walls')
@@ -383,6 +403,7 @@ Deno.serve(async (req) => {
           .delete()
           .eq('id', data.wallId);
         break;
+      }
 
       case 'delete_all_cells':
         // Only room admin can clear layout
@@ -405,7 +426,7 @@ Deno.serve(async (req) => {
           .eq('room_id', data.roomId);
         break;
 
-      case 'list_room_users':
+      case 'list_room_users': {
         // Only room admin can view access list
         if (!(await isRoomAdmin(data.roomId))) {
           return new Response(
@@ -421,6 +442,7 @@ Deno.serve(async (req) => {
 
         result = { data: roomUsers, error: usersError };
         break;
+      }
 
       case 'add_room_user':
         // Only room admin can add users
@@ -457,7 +479,7 @@ Deno.serve(async (req) => {
           .eq('id', data.accessId);
         break;
 
-      case 'list_available_users':
+      case 'list_available_users': {
         // Only room admin can view available users
         if (!(await isRoomAdmin(data.roomId))) {
           return new Response(
@@ -483,6 +505,7 @@ Deno.serve(async (req) => {
 
         result = { data: availableUsers, error: allUsersError };
         break;
+      }
 
       default:
         return new Response(
@@ -505,7 +528,7 @@ Deno.serve(async (req) => {
       errorMessage = error.message;
     } else if (typeof error === 'object' && error !== null) {
       // Handle Supabase errors
-      const supabaseError = error as any;
+      const supabaseError = error as { message?: string; error_description?: string };
       errorMessage = supabaseError.message || supabaseError.error_description || JSON.stringify(error);
     }
     console.error('Error in manage-rooms function:', errorMessage, error);

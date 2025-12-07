@@ -83,11 +83,15 @@ export default function DeskRatingDialog({
       setRating(0);
       setComment('');
       onOpenChange(false);
+      onOpenChange(false);
       onRatingSubmitted?.();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      let message = 'Unknown error';
+      if (error instanceof Error) message = error.message;
+      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
       toast({
         title: 'Error submitting rating',
-        description: error.message,
+        description: message,
         variant: 'destructive'
       });
     } finally {
@@ -129,11 +133,10 @@ export default function DeskRatingDialog({
                   className="transition-transform hover:scale-110"
                 >
                   <Star
-                    className={`h-8 w-8 ${
-                      star <= (hoveredRating || rating)
+                    className={`h-8 w-8 ${star <= (hoveredRating || rating)
                         ? 'fill-yellow-400 text-yellow-400'
                         : 'text-muted-foreground'
-                    }`}
+                      }`}
                   />
                 </button>
               ))}

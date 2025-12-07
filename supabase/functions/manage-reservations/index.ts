@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
 
     let result;
     switch (operation) {
-      case 'create_fixed_assignment':
+      case 'create_fixed_assignment': {
         // Only admins can create fixed assignments
         if (user.role !== 'admin') {
           return new Response(
@@ -162,8 +162,9 @@ Deno.serve(async (req) => {
 
         console.log('Fixed assignment created:', result.data?.id);
         break;
+      }
 
-      case 'list_fixed_assignments':
+      case 'list_fixed_assignments': {
         const { data: assignments, error: assignmentsError } = await supabase
           .from('fixed_assignments')
           .select(`
@@ -179,8 +180,9 @@ Deno.serve(async (req) => {
 
         result = { data: assignments || [], error: null };
         break;
+      }
 
-      case 'delete_fixed_assignment':
+      case 'delete_fixed_assignment': {
         // Get the fixed assignment to check permissions
         const { data: fixedAssignment } = await supabase
           .from('fixed_assignments')
@@ -216,8 +218,9 @@ Deno.serve(async (req) => {
 
         console.log('Fixed assignment deleted:', data.assignmentId);
         break;
+      }
 
-      case 'create':
+      case 'create': {
         // Check if user has access to the room
         const { data: hasAccess } = await supabase
           .from('room_access')
@@ -333,8 +336,9 @@ Deno.serve(async (req) => {
           .select()
           .single();
         break;
+      }
 
-      case 'list_my_reservations':
+      case 'list_my_reservations': {
         // Fetch regular reservations
         const { data: myReservations, error: myResError } = await supabase
           .from('reservations')
@@ -386,8 +390,9 @@ Deno.serve(async (req) => {
 
         result = { data: combined, error: null };
         break;
+      }
 
-      case 'list_room_reservations':
+      case 'list_room_reservations': {
         // Check if user has access to the room
         if (!(await isRoomAdmin(data.roomId)) && user.role !== 'admin') {
           // Check if regular member has access
@@ -423,8 +428,9 @@ Deno.serve(async (req) => {
 
         result = { data: roomReservations || [], error: null };
         break;
+      }
 
-      case 'list_pending_approvals':
+      case 'list_pending_approvals': {
         // Only room admins can see pending approvals
         if (user.role === 'admin') {
           const { data: pendingReservations, error: reservationsError } = await supabase
@@ -478,8 +484,9 @@ Deno.serve(async (req) => {
           result = { data: pendingReservations || [], error: null };
         }
         break;
+      }
 
-      case 'approve':
+      case 'approve': {
         // Get reservation to check room
         const { data: reservation } = await supabase
           .from('reservations')
@@ -519,8 +526,9 @@ Deno.serve(async (req) => {
           .select()
           .single();
         break;
+      }
 
-      case 'reject':
+      case 'reject': {
         const { data: rejectReservation } = await supabase
           .from('reservations')
           .select('room_id, status')
@@ -555,8 +563,9 @@ Deno.serve(async (req) => {
           .select()
           .single();
         break;
+      }
 
-      case 'cancel':
+      case 'cancel': {
         const { data: cancelReservation } = await supabase
           .from('reservations')
           .select('user_id, status, room_id')
@@ -596,8 +605,9 @@ Deno.serve(async (req) => {
           .select()
           .single();
         break;
+      }
 
-      case 'check_availability':
+      case 'check_availability': {
         const { data: existingReservations } = await supabase
           .from('reservations')
           .select('id, date_start, date_end, time_segment')
@@ -607,6 +617,7 @@ Deno.serve(async (req) => {
 
         result = { data: { available: !existingReservations || existingReservations.length === 0, conflicts: existingReservations }, error: null };
         break;
+      }
 
       default:
         return new Response(

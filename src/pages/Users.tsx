@@ -44,7 +44,7 @@ export default function Users() {
     loadUsers();
   }, []);
 
-  const callUserFunction = async (operation: string, data?: any) => {
+  const callUserFunction = async (operation: string, data?: Record<string, unknown>) => {
     const session = authService.getSession();
     if (!session) throw new Error('No session');
 
@@ -64,10 +64,13 @@ export default function Users() {
     try {
       const data = await callUserFunction('list');
       setUsers(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      let message = 'Unknown error';
+      if (error instanceof Error) message = error.message;
+      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
       toast({
         title: 'Error loading users',
-        description: error.message,
+        description: message,
         variant: 'destructive'
       });
     }
@@ -94,10 +97,13 @@ export default function Users() {
         setDialogOpen(false);
         loadUsers();
         resetForm();
-      } catch (error: any) {
+      } catch (error: unknown) {
+        let message = 'Unknown error';
+        if (error instanceof Error) message = error.message;
+        else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
         toast({
           title: 'Error updating user',
-          description: error.message,
+          description: message,
           variant: 'destructive'
         });
       }
@@ -115,10 +121,13 @@ export default function Users() {
         setDialogOpen(false);
         loadUsers();
         resetForm();
-      } catch (error: any) {
+      } catch (error: unknown) {
+        let message = 'Unknown error';
+        if (error instanceof Error) message = error.message;
+        else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
         toast({
           title: 'Error creating user',
-          description: error.message,
+          description: message,
           variant: 'destructive'
         });
       }
@@ -132,10 +141,13 @@ export default function Users() {
       await callUserFunction('delete', { id });
       toast({ title: 'User deleted successfully' });
       loadUsers();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      let message = 'Unknown error';
+      if (error instanceof Error) message = error.message;
+      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
       toast({
         title: 'Error deleting user',
-        description: error.message,
+        description: message,
         variant: 'destructive'
       });
     }
@@ -319,7 +331,7 @@ export default function Users() {
               <Label htmlFor="role">Role</Label>
               <Select
                 value={formData.role}
-                onValueChange={(value: any) => setFormData({ ...formData, role: value })}
+                onValueChange={(value) => setFormData({ ...formData, role: value as 'admin' | 'user' })}
               >
                 <SelectTrigger>
                   <SelectValue />

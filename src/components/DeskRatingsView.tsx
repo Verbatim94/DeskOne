@@ -52,10 +52,12 @@ export default function DeskRatingsView({ cellId, roomId }: DeskRatingsViewProps
 
       if (error) throw error;
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mappedRatings = (data || []).map((r: any) => ({
         ...r,
         from_user: r.from_user || { username: 'Unknown', full_name: 'Unknown User' }
       }));
+      // Note: explicit-any is disabled because r comes from Supabase query with join alias which is hard to type without manual interface matching the join structure exactly.
 
       setRatings(mappedRatings);
 
@@ -66,10 +68,13 @@ export default function DeskRatingsView({ cellId, roomId }: DeskRatingsViewProps
       } else {
         setAverageRating(0);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      let message = 'Unknown error';
+      if (error instanceof Error) message = error.message;
+      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
       toast({
         title: 'Error loading ratings',
-        description: error.message,
+        description: message,
         variant: 'destructive'
       });
     } finally {
@@ -83,9 +88,8 @@ export default function DeskRatingsView({ cellId, roomId }: DeskRatingsViewProps
         {[1, 2, 3, 4, 5].map((star) => (
           <Star
             key={star}
-            className={`h-4 w-4 ${
-              star <= stars ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'
-            }`}
+            className={`h-4 w-4 ${star <= stars ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'
+              }`}
           />
         ))}
       </div>

@@ -42,6 +42,24 @@ interface Reservation {
   date_end: string;
   time_segment: string;
   user: { id: string; username: string; full_name: string };
+  type: string;
+  room?: { id: string; name: string };
+  cell?: { id: string; label: string | null; type: string; x?: number; y?: number };
+  created_at: string;
+}
+
+interface FixedAssignment {
+  id: string;
+  cell_id: string;
+  assigned_to: string;
+  date_start: string;
+  date_end: string;
+  assigned_user: {
+    id: string;
+    username: string;
+    full_name: string;
+  } | null;
+  created_at?: string;
 }
 
 type DeskStatus = 'available' | 'reserved' | 'my-reservation';
@@ -80,12 +98,12 @@ export default function RoomViewer() {
   const [room, setRoom] = useState<Room | null>(null);
   const [cells, setCells] = useState<Cell[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [fixedAssignments, setFixedAssignments] = useState<any[]>([]);
+  const [fixedAssignments, setFixedAssignments] = useState<FixedAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [bookingDialogOpen, setBookingDialogOpen] = useState(false);
   const [reservationDetailsOpen, setReservationDetailsOpen] = useState(false);
   const [selectedCell, setSelectedCell] = useState<Cell | null>(null);
-  const [selectedReservation, setSelectedReservation] = useState<any | null>(null);
+  const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [isRoomAdmin, setIsRoomAdmin] = useState(false);
 
@@ -137,7 +155,7 @@ export default function RoomViewer() {
     }
   }, [selectedDate, room]);
 
-  const callRoomFunction = async (operation: string, data?: any) => {
+  const callRoomFunction = async (operation: string, data?: Record<string, unknown>) => {
     const session = authService.getSession();
     if (!session) throw new Error('No session');
 
@@ -152,7 +170,7 @@ export default function RoomViewer() {
     return response.data;
   };
 
-  const callReservationFunction = async (operation: string, data?: any) => {
+  const callReservationFunction = async (operation: string, data?: Record<string, unknown>) => {
     const session = authService.getSession();
     if (!session) throw new Error('No session');
 
@@ -195,10 +213,13 @@ export default function RoomViewer() {
         }
       }
       await loadReservations();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      let message = 'Unknown error';
+      if (error instanceof Error) message = error.message;
+      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
       toast({
         title: 'Error loading room',
-        description: error.message,
+        description: message,
         variant: 'destructive',
       });
       navigate('/rooms');
@@ -223,13 +244,21 @@ export default function RoomViewer() {
       const data = await callReservationFunction('list_room_reservations', {
         roomId,
       });
-      const mappedReservations = (data || []).map((r: any) => ({
-        ...r,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mappedReservations = (data || []).map((r: any): Reservation => ({
+        id: r.id,
+        cell_id: r.cell_id,
+        user_id: r.user_id,
+        status: r.status,
+        date_start: r.date_start,
+        date_end: r.date_end,
+        time_segment: r.time_segment,
         user: r.users,
-        cell: r.room_cells,
+        type: 'reservation',
+        created_at: r.created_at
       }));
       setReservations(mappedReservations);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error loading reservations:', error);
     }
   };
@@ -242,7 +271,8 @@ export default function RoomViewer() {
         roomId,
       });
       setFixedAssignments(data || []);
-    } catch (error: any) {
+      setFixedAssignments(data || []);
+    } catch (error: unknown) {
       console.error('Error loading fixed assignments:', error);
     }
   };
@@ -266,7 +296,7 @@ export default function RoomViewer() {
     if (activeAssignment) {
       const isMyAssignment = activeAssignment.assigned_to === user?.id;
       // Convert fixed assignment to reservation format for consistent handling
-      const assignmentAsReservation: any = {
+      const assignmentAsReservation: Reservation = {
         id: activeAssignment.id,
         cell_id: activeAssignment.cell_id,
         user_id: activeAssignment.assigned_to,
@@ -275,7 +305,8 @@ export default function RoomViewer() {
         date_end: activeAssignment.date_end,
         time_segment: 'FULL',
         type: 'fixed_assignment', // Mark as fixed assignment for proper deletion
-        user: activeAssignment.assigned_user || { id: activeAssignment.assigned_to, username: '', full_name: 'Unknown User' }
+        user: activeAssignment.assigned_user || { id: activeAssignment.assigned_to, username: '', full_name: 'Unknown User' },
+        created_at: activeAssignment.created_at || new Date().toISOString()
       };
       return {
         status: isMyAssignment ? 'my-reservation' : 'reserved',
@@ -782,13 +813,17 @@ export default function RoomViewer() {
           initialDate={selectedDate}
           onBookingComplete={(newReservation) => {
             if (newReservation && user) {
+              const nr = newReservation as unknown as Reservation;
               const optimisticReservation: Reservation = {
-                ...newReservation,
+                ...nr,
+                time_segment: nr.time_segment || 'FULL',
+                created_at: nr.created_at || new Date().toISOString(),
                 user: {
                   id: user.id,
                   username: user.username,
                   full_name: user.full_name
-                }
+                },
+                type: 'reservation'
               };
               setReservations(prev => [...prev, optimisticReservation]);
             }
@@ -804,7 +839,7 @@ export default function RoomViewer() {
           <ReservationDetailsDialog
             open={reservationDetailsOpen}
             onOpenChange={setReservationDetailsOpen}
-            reservation={selectedReservation}
+            reservation={selectedReservation as unknown as (Reservation & { room: { id: string; name: string }; cell: { id: string; label: string | null; type: string; x?: number; y?: number }; })}
             isAdmin={isRoomAdmin}
             onDelete={
               isRoomAdmin || (user && selectedReservation.user_id === user.id)
@@ -831,10 +866,14 @@ export default function RoomViewer() {
                     setSelectedReservation(null);
                     loadReservations();
                     loadFixedAssignments();
-                  } catch (error: any) {
+                    loadFixedAssignments();
+                  } catch (error: unknown) {
+                    let message = 'Unknown error';
+                    if (error instanceof Error) message = error.message;
+                    else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
                     toast({
                       title: 'Error',
-                      description: error.message,
+                      description: message,
                       variant: 'destructive'
                     });
                   }
