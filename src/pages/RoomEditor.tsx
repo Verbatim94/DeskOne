@@ -25,7 +25,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 
-type DeskType = 'desk' | 'entrance';
+type DeskType = 'desk';
 
 interface Cell {
   id: string;
@@ -53,17 +53,10 @@ const DESK_TYPES: {
 }[] = [
     {
       type: 'desk',
-      label: 'Standard Desk',
+      label: 'Desk',
       color: 'text-blue-600',
       bgColor: 'bg-blue-100 hover:bg-blue-200 border-blue-300',
       icon: Armchair
-    },
-    {
-      type: 'entrance',
-      label: 'Entrance',
-      color: 'text-green-600',
-      bgColor: 'bg-green-100 hover:bg-green-200 border-green-300',
-      icon: DoorOpen
     }
   ];
 
@@ -561,28 +554,7 @@ export default function RoomEditor() {
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-4 lg:flex-1 lg:overflow-hidden">
         <Card className="p-4 flex flex-col overflow-hidden">
-          <div className="mb-4 flex-shrink-0">
-            <h3 className="text-sm font-medium mb-2">Drag items to the grid</h3>
-            <div className="flex flex-wrap gap-2">
-              {DESK_TYPES.map(({ type, label, color, bgColor, icon: Icon }) => (
-                <div
-                  key={type}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, type, 'palette')}
-                  onClick={() => setSelectedType(type)}
-                  className={`flex items-center gap-2 px-4 py-3 rounded-lg border-2 transition-all cursor-grab active:cursor-grabbing ${selectedType === type
-                    ? `${bgColor} border-current shadow-md`
-                    : 'bg-background border-border hover:border-muted-foreground'
-                    }`}
-                >
-                  <Icon className={`h-5 w-5 ${selectedType === type ? color : 'text-muted-foreground'}`} />
-                  <span className={`font-medium ${selectedType === type ? color : 'text-muted-foreground'}`}>
-                    {label}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+
 
           <div className="border-2 border-border rounded-lg p-4 lg:flex-1 flex items-start justify-center" style={{ backgroundColor: 'rgba(66, 133, 244, 0.08)' }}>
             <div
@@ -614,8 +586,6 @@ export default function RoomEditor() {
 
                   if (wall.type === 'entrance') {
                     // Custom Entrance Drawing
-                    // Make it thicker and different color, maybe with "Entrance" label
-                    // We need to support rotation for the label based on orientation
                     const midX = x + width / 2;
                     const midY = y + height / 2;
 
@@ -762,13 +732,13 @@ export default function RoomEditor() {
               )}
             </div>
           </div>
-        </Card>
+        </Card >
 
         {/* Right Sidebar */}
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-4 flex flex-col lg:h-full lg:overflow-hidden">
+        < div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-4 flex flex-col lg:h-full lg:overflow-hidden" >
 
           {/* Tabs */}
-          <div className="flex p-1 bg-gray-100 rounded-xl mb-4 flex-shrink-0">
+          < div className="flex p-1 bg-gray-100 rounded-xl mb-4 flex-shrink-0" >
             <button
               className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'desks'
                 ? 'bg-white text-gray-900 shadow-sm'
@@ -787,7 +757,7 @@ export default function RoomEditor() {
             >
               Rooms
             </button>
-          </div>
+          </div >
 
           {activeTab === 'desks' ? (
             selectedCell ? (
@@ -820,7 +790,7 @@ export default function RoomEditor() {
                 <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
                   All Desks
                   <Badge variant="secondary" className="rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100">
-                    {cells.filter(c => c.type !== 'entrance').length}
+                    {cells.length}
                   </Badge>
                 </h3>
 
@@ -921,12 +891,13 @@ export default function RoomEditor() {
                 )}
               </div>
             </>
-          )}
-        </div>
-      </div>
+          )
+          }
+        </div >
+      </div >
 
       {/* Rename Dialog */}
-      <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>
+      < Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen} >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Rename Desk</DialogTitle>
@@ -972,7 +943,7 @@ export default function RoomEditor() {
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
-    </div>
+      </Dialog >
+    </div >
   );
 }

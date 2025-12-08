@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 import { format, parseISO, isWithinInterval } from 'date-fns';
 
 
-type DeskType = 'desk' | 'entrance';
+type DeskType = 'desk';
 
 interface Cell {
   id: string;
@@ -90,13 +90,6 @@ const DESK_TYPES: {
       color: 'text-blue-600',
       bgColor: 'bg-blue-100 hover:bg-blue-200 border-blue-300',
       icon: Armchair,
-    },
-    {
-      type: 'entrance',
-      label: 'Entrance',
-      color: 'text-green-600',
-      bgColor: 'bg-green-100 hover:bg-green-200 border-green-300',
-      icon: DoorOpen,
     },
   ];
 
@@ -359,44 +352,42 @@ export default function RoomViewer() {
   };
 
   const handleCellClick = (cell: Cell) => {
-    if (cell.type !== 'entrance') {
-      const { status, reservation, assignedTo } = getDeskStatus(cell.id);
+    const { status, reservation, assignedTo } = getDeskStatus(cell.id);
 
-      // Show reservation details for my own reservations
-      if (status === 'my-reservation' && reservation) {
-        setSelectedReservation({
-          ...reservation,
-          room: { id: roomId!, name: room?.name || '' },
-          cell: { id: cell.id, label: cell.label, type: cell.type, x: cell.x, y: cell.y }
-        });
-        setReservationDetailsOpen(true);
-        return;
-      }
-
-      // If admin clicks on reserved desk, show reservation details
-      if (status === 'reserved' && isRoomAdmin && reservation) {
-        setSelectedReservation({
-          ...reservation,
-          room: { id: roomId!, name: room?.name || '' },
-          cell: { id: cell.id, label: cell.label, type: cell.type, x: cell.x, y: cell.y }
-        });
-        setReservationDetailsOpen(true);
-        return;
-      }
-
-      // Only block non-admins from booking reserved desks
-      if (status === 'reserved' && user?.role !== 'admin') {
-        toast({
-          title: 'Desk unavailable',
-          description: `This desk is ${assignedTo ? `assigned to ${assignedTo}` : `reserved by ${reservation?.user.full_name}`}`,
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      setSelectedCell(cell);
-      setBookingDialogOpen(true);
+    // Show reservation details for my own reservations
+    if (status === 'my-reservation' && reservation) {
+      setSelectedReservation({
+        ...reservation,
+        room: { id: roomId!, name: room?.name || '' },
+        cell: { id: cell.id, label: cell.label, type: cell.type, x: cell.x, y: cell.y }
+      });
+      setReservationDetailsOpen(true);
+      return;
     }
+
+    // If admin clicks on reserved desk, show reservation details
+    if (status === 'reserved' && isRoomAdmin && reservation) {
+      setSelectedReservation({
+        ...reservation,
+        room: { id: roomId!, name: room?.name || '' },
+        cell: { id: cell.id, label: cell.label, type: cell.type, x: cell.x, y: cell.y }
+      });
+      setReservationDetailsOpen(true);
+      return;
+    }
+
+    // Only block non-admins from booking reserved desks
+    if (status === 'reserved' && user?.role !== 'admin') {
+      toast({
+        title: 'Desk unavailable',
+        description: `This desk is ${assignedTo ? `assigned to ${assignedTo}` : `reserved by ${reservation?.user.full_name}`}`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setSelectedCell(cell);
+    setBookingDialogOpen(true);
   };
 
   const handleDeskListClick = (cell: Cell) => {
@@ -607,7 +598,7 @@ export default function RoomViewer() {
                   const cell = getCellAt(x, y);
                   const deskInfo = DESK_TYPES.find((d) => d.type === cell?.type);
                   const Icon = deskInfo?.icon;
-                  const isBookable = cell && cell.type !== 'entrance';
+                  const isBookable = !!cell;
                   const { status, reservation, assignedTo } = cell
                     ? getDeskStatus(cell.id)
                     : ({ status: 'available' as DeskStatus } as { status: DeskStatus; reservation?: Reservation; assignedTo?: string });
@@ -629,10 +620,7 @@ export default function RoomViewer() {
                       iconColor = 'text-purple-500';
                     }
 
-                    if (cell.type === 'entrance') {
-                      bgClass = 'bg-green-50 border-2 border-green-100';
-                      iconColor = 'text-green-600';
-                    }
+
 
                     return (
                       <div
@@ -705,13 +693,12 @@ export default function RoomViewer() {
               <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2 flex-shrink-0">
                 Available Desks
                 <Badge variant="secondary" className="rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100">
-                  {cells.filter(c => getDeskStatus(c.id).status === 'available' && c.type !== 'entrance').length}
+                  {cells.filter(c => getDeskStatus(c.id).status === 'available').length}
                 </Badge>
               </h3>
 
               <div className="space-y-3 lg:overflow-y-auto lg:pr-2 custom-scrollbar lg:flex-1">
                 {cells
-                  .filter((cell) => cell.type === 'desk')
                   .sort((a, b) => {
                     const aLabel = a.label || `${a.x}-${a.y}`;
                     const bLabel = b.label || `${b.x}-${b.y}`;
