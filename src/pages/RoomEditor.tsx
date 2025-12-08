@@ -67,6 +67,18 @@ const DESK_TYPES: {
     }
   ];
 
+interface Wall {
+  id: string;
+  room_id: string;
+  start_row: number;
+  start_col: number;
+  end_row: number;
+  end_col: number;
+  orientation: 'horizontal' | 'vertical';
+  type: 'wall' | 'entrance';
+}
+
+
 export default function RoomEditor() {
   const { roomId } = useParams();
   const navigate = useNavigate();
@@ -85,19 +97,15 @@ export default function RoomEditor() {
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
   const [wallOperationInProgress, setWallOperationInProgress] = useState(false);
 
+  const [isWallMode, setIsWallMode] = useState(false);
+  const [walls, setWalls] = useState<Wall[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [activeTab, setActiveTab] = useState<'desks' | 'rooms'>('desks');
+
 
   const [wallType, setWallType] = useState<'wall' | 'entrance'>('wall');
 
-  interface Wall {
-    id: string;
-    room_id: string;
-    start_row: number;
-    start_col: number;
-    end_row: number;
-    end_col: number;
-    orientation: 'horizontal' | 'vertical';
-    type: 'wall' | 'entrance';
-  }
+
 
   useEffect(() => {
     loadRoom();
@@ -516,7 +524,7 @@ export default function RoomEditor() {
           {isWallMode && (
             <div className="flex items-center bg-gray-100 p-1 rounded-md mr-2">
               <Button
-                variant={wallType === 'wall' ? 'white' : 'ghost'}
+                variant={wallType === 'wall' ? 'secondary' : 'ghost'}
                 size="sm"
                 className={wallType === 'wall' ? 'shadow-sm' : 'text-gray-500'}
                 onClick={() => setWallType('wall')}
@@ -524,7 +532,7 @@ export default function RoomEditor() {
                 Wall
               </Button>
               <Button
-                variant={wallType === 'entrance' ? 'white' : 'ghost'}
+                variant={wallType === 'entrance' ? 'secondary' : 'ghost'}
                 size="sm"
                 className={wallType === 'entrance' ? 'shadow-sm text-blue-600' : 'text-gray-500'}
                 onClick={() => setWallType('entrance')}
