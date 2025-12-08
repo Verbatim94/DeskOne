@@ -543,34 +543,96 @@ export default function RoomViewer() {
                   const height = wall.orientation === 'horizontal' ? 4 : (wall.end_row - wall.start_row) * (CELL_SIZE + 8);
 
                   if (wall.type === 'entrance') {
-                    // Custom Entrance Drawing
-                    // Make it thicker and different color, maybe with "Entrance" label
-                    // We need to support rotation for the label based on orientation
+                    // Google-Style Entrance Drawing
                     const midX = x + width / 2;
                     const midY = y + height / 2;
+                    const isHorizontal = wall.orientation === 'horizontal';
+
+                    // Create unique gradient ID for this entrance
+                    const gradientId = `entrance-gradient-${wall.id}`;
+                    const patternId = `entrance-pattern-${wall.id}`;
 
                     return (
                       <g key={wall.id}>
+                        {/* Define gradient */}
+                        <defs>
+                          <linearGradient
+                            id={gradientId}
+                            x1="0%"
+                            y1="0%"
+                            x2={isHorizontal ? "100%" : "0%"}
+                            y2={isHorizontal ? "0%" : "100%"}
+                          >
+                            <stop offset="0%" style={{ stopColor: '#4285f4', stopOpacity: 0.9 }} />
+                            <stop offset="100%" style={{ stopColor: '#1967d2', stopOpacity: 0.9 }} />
+                          </linearGradient>
+
+                          {/* Diagonal stripe pattern for entrance effect */}
+                          <pattern
+                            id={patternId}
+                            patternUnits="userSpaceOnUse"
+                            width="8"
+                            height="8"
+                            patternTransform={`rotate(${isHorizontal ? 45 : -45})`}
+                          >
+                            <rect width="8" height="8" fill={`url(#${gradientId})`} />
+                            <line x1="0" y1="0" x2="0" y2="8" stroke="white" strokeWidth="1" opacity="0.3" />
+                          </pattern>
+                        </defs>
+
+                        {/* Shadow/Glow effect */}
+                        <rect
+                          x={x - 1}
+                          y={y - 1}
+                          width={width + 2}
+                          height={height + 2}
+                          fill="#4285f4"
+                          opacity="0.2"
+                          rx="4"
+                          ry="4"
+                        />
+
+                        {/* Main entrance rectangle with gradient */}
                         <rect
                           x={x}
                           y={y}
                           width={width}
                           height={height}
-                          fill="#93c5fd" // Light blue for entrance
-                          rx="2"
-                          ry="2"
+                          fill={`url(#${patternId})`}
+                          rx="3"
+                          ry="3"
                         />
-                        {/* Text Label */}
+
+                        {/* Border accent */}
+                        <rect
+                          x={x}
+                          y={y}
+                          width={width}
+                          height={height}
+                          fill="none"
+                          stroke="#1967d2"
+                          strokeWidth="0.5"
+                          rx="3"
+                          ry="3"
+                        />
+
+                        {/* Text Label with modern Google font style */}
                         <text
                           x={midX}
                           y={midY}
-                          fill="#1e3a8a"
-                          fontSize="10"
-                          fontWeight="bold"
+                          fill="white"
+                          fontSize="9"
+                          fontWeight="600"
+                          fontFamily="'Google Sans', 'Roboto', sans-serif"
                           textAnchor="middle"
                           alignmentBaseline="middle"
-                          transform={`rotate(${wall.orientation === 'horizontal' ? 0 : -90}, ${midX}, ${midY})`}
-                          style={{ pointerEvents: 'none', userSelect: 'none', letterSpacing: '1px' }}
+                          transform={`rotate(${isHorizontal ? 0 : -90}, ${midX}, ${midY})`}
+                          style={{
+                            pointerEvents: 'none',
+                            userSelect: 'none',
+                            letterSpacing: '0.5px',
+                            textShadow: '0 1px 2px rgba(0,0,0,0.2)'
+                          }}
                         >
                           ENTRANCE
                         </text>
