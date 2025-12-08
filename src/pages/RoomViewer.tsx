@@ -62,6 +62,17 @@ interface FixedAssignment {
   created_at?: string;
 }
 
+interface Wall {
+  id: string;
+  room_id: string;
+  start_row: number;
+  start_col: number;
+  end_row: number;
+  end_col: number;
+  orientation: 'horizontal' | 'vertical';
+  type: 'wall' | 'entrance';
+}
+
 type DeskStatus = 'available' | 'reserved' | 'my-reservation';
 
 const CELL_SIZE = 50;
@@ -112,16 +123,7 @@ export default function RoomViewer() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [activeTab, setActiveTab] = useState<'desks' | 'rooms'>('desks');
 
-  interface Wall {
-    id: string;
-    room_id: string;
-    start_row: number;
-    start_col: number;
-    end_row: number;
-    end_col: number;
-    orientation: 'horizontal' | 'vertical';
-    type: 'wall' | 'entrance';
-  }
+
 
   useEffect(() => {
     loadRoom();
