@@ -120,6 +120,7 @@ export default function RoomViewer() {
     end_row: number;
     end_col: number;
     orientation: 'horizontal' | 'vertical';
+    type: 'wall' | 'entrance';
   }
 
   useEffect(() => {
@@ -547,6 +548,42 @@ export default function RoomViewer() {
                     : (wall.start_row * (CELL_SIZE + 8));
                   const width = wall.orientation === 'vertical' ? 4 : (wall.end_col - wall.start_col) * (CELL_SIZE + 8);
                   const height = wall.orientation === 'horizontal' ? 4 : (wall.end_row - wall.start_row) * (CELL_SIZE + 8);
+
+                  if (wall.type === 'entrance') {
+                    // Custom Entrance Drawing
+                    // Make it thicker and different color, maybe with "Entrance" label
+                    // We need to support rotation for the label based on orientation
+                    const midX = x + width / 2;
+                    const midY = y + height / 2;
+
+                    return (
+                      <g key={wall.id}>
+                        <rect
+                          x={x}
+                          y={y}
+                          width={width}
+                          height={height}
+                          fill="#93c5fd" // Light blue for entrance
+                          rx="2"
+                          ry="2"
+                        />
+                        {/* Text Label */}
+                        <text
+                          x={midX}
+                          y={midY}
+                          fill="#1e3a8a"
+                          fontSize="10"
+                          fontWeight="bold"
+                          textAnchor="middle"
+                          alignmentBaseline="middle"
+                          transform={`rotate(${wall.orientation === 'horizontal' ? 0 : -90}, ${midX}, ${midY})`}
+                          style={{ pointerEvents: 'none', userSelect: 'none', letterSpacing: '1px' }}
+                        >
+                          ENTRANCE
+                        </text>
+                      </g>
+                    );
+                  }
 
                   return (
                     <rect

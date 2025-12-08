@@ -86,11 +86,7 @@ export default function RoomEditor() {
   const [wallOperationInProgress, setWallOperationInProgress] = useState(false);
 
 
-  const [isWallMode, setIsWallMode] = useState(false);
-
-  const [walls, setWalls] = useState<Wall[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [activeTab, setActiveTab] = useState<'desks' | 'rooms'>('desks');
+  const [wallType, setWallType] = useState<'wall' | 'entrance'>('wall');
 
   interface Wall {
     id: string;
@@ -100,6 +96,7 @@ export default function RoomEditor() {
     end_row: number;
     end_col: number;
     orientation: 'horizontal' | 'vertical';
+    type: 'wall' | 'entrance';
   }
 
   useEffect(() => {
@@ -405,10 +402,19 @@ export default function RoomEditor() {
     // Store previous state for rollback
     const previousWalls = [...walls];
 
-    // Optimistic update
+    // Optimistic update logic
     if (existingWall) {
-      setWalls(walls.filter(w => w.id !== existingWall.id));
+      // If wall exists, check if it's the same type
+      if (existingWall.type === wallType) {
+        // Same type, delete it
+        setWalls(walls.filter(w => w.id !== existingWall.id));
+      } else {
+        // Different type, update it (optimistically delete + create new local one for now)
+        // Ideally we'd map it to a new type, but since we treat ID as immutable usually, let's just swap properly
+        setWalls(prev => prev.map(w => w.id === existingWall.id ? { ...w, type: wallType } : w));
+      }
     } else {
+      // Create new wall
       const tempWall: Wall = {
         id: tempId,
         room_id: roomId!,
@@ -416,7 +422,8 @@ export default function RoomEditor() {
         start_col,
         end_row,
         end_col,
-        orientation
+        orientation,
+        type: wallType
       };
       setWalls([...walls, tempWall]);
     }
@@ -425,8 +432,26 @@ export default function RoomEditor() {
 
     try {
       if (existingWall) {
-        // Delete wall
-        await callRoomFunction('delete_wall', { wallId: existingWall.id });
+        if (existingWall.type === wallType) {
+          // Delete exactly
+          await callRoomFunction('delete_wall', { wallId: existingWall.id });
+        } else {
+          // Update type essentially means delete and recreate in this simple model if backend doesn't support update_wall
+          // Or we can delete old and create new. Let's assume delete then create.
+          await callRoomFunction('delete_wall', { wallId: existingWall.id });
+          const newWall = await callRoomFunction('create_wall', {
+            wall: {
+              room_id: roomId!,
+              start_row,
+              start_col,
+              end_row,
+              end_col,
+              orientation,
+              type: wallType
+            }
+          });
+          setWalls(prev => prev.map(w => w.id === existingWall.id ? newWall : w)); // Assuming we updated the local object in place previously
+        }
       } else {
         // Create wall
         const newWall = await callRoomFunction('create_wall', {
@@ -436,7 +461,8 @@ export default function RoomEditor() {
             start_col,
             end_row,
             end_col,
-            orientation
+            orientation,
+            type: wallType
           }
         });
         // Replace the specific temp wall with real one
@@ -487,6 +513,26 @@ export default function RoomEditor() {
           </div>
         </div>
         <div className="flex gap-2">
+          {isWallMode && (
+            <div className="flex items-center bg-gray-100 p-1 rounded-md mr-2">
+              <Button
+                variant={wallType === 'wall' ? 'white' : 'ghost'}
+                size="sm"
+                className={wallType === 'wall' ? 'shadow-sm' : 'text-gray-500'}
+                onClick={() => setWallType('wall')}
+              >
+                Wall
+              </Button>
+              <Button
+                variant={wallType === 'entrance' ? 'white' : 'ghost'}
+                size="sm"
+                className={wallType === 'entrance' ? 'shadow-sm text-blue-600' : 'text-gray-500'}
+                onClick={() => setWallType('entrance')}
+              >
+                Entrance
+              </Button>
+            </div>
+          )}
           <Button
             variant={isWallMode ? "default" : "outline"}
             onClick={() => {
@@ -545,6 +591,7 @@ export default function RoomEditor() {
                 style={{
                   width: room.grid_width * (CELL_SIZE + 4),
                   height: room.grid_height * (CELL_SIZE + 4),
+                  overflow: 'visible'
                 }}
               >
                 {walls.map(wall => {
@@ -556,6 +603,42 @@ export default function RoomEditor() {
                     : (wall.start_row * (CELL_SIZE + 4));
                   const width = wall.orientation === 'vertical' ? 4 : (wall.end_col - wall.start_col) * (CELL_SIZE + 4);
                   const height = wall.orientation === 'horizontal' ? 4 : (wall.end_row - wall.start_row) * (CELL_SIZE + 4);
+
+                  if (wall.type === 'entrance') {
+                    // Custom Entrance Drawing
+                    // Make it thicker and different color, maybe with "Entrance" label
+                    // We need to support rotation for the label based on orientation
+                    const midX = x + width / 2;
+                    const midY = y + height / 2;
+
+                    return (
+                      <g key={wall.id}>
+                        <rect
+                          x={x}
+                          y={y}
+                          width={width}
+                          height={height}
+                          fill="#93c5fd" // Light blue for entrance
+                          rx="2"
+                          ry="2"
+                        />
+                        {/* Text Label */}
+                        <text
+                          x={midX}
+                          y={midY}
+                          fill="#1e3a8a"
+                          fontSize="10"
+                          fontWeight="bold"
+                          textAnchor="middle"
+                          alignmentBaseline="middle"
+                          transform={`rotate(${wall.orientation === 'horizontal' ? 0 : -90}, ${midX}, ${midY})`}
+                          style={{ pointerEvents: 'none', userSelect: 'none', letterSpacing: '1px' }}
+                        >
+                          ENTRANCE
+                        </text>
+                      </g>
+                    );
+                  }
 
                   return (
                     <rect
