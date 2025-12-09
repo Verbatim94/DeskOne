@@ -15,10 +15,12 @@ export function Sidebar({ className }: { className?: string }) {
         ? [
             { name: 'Dashboard', href: '/', icon: LayoutGrid, roles: ['admin'] },
             { name: 'Manage Rooms', href: '/rooms', icon: Building2, roles: ['admin'] },
+            { name: 'Manage Offices', href: '/manage-offices', icon: Building2, roles: ['admin'] },
             { name: 'Users', href: '/users', icon: Users, roles: ['admin'] },
         ]
         : [
             { name: 'Dashboard', href: '/', icon: LayoutGrid, roles: ['user'] },
+            { name: 'Office', href: '/offices', icon: Building2, roles: ['user'] },
             { name: 'My Reservations', href: '/reservations', icon: BookCheck, roles: ['user'] },
         ];
 
