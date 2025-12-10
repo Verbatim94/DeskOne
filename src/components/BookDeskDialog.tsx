@@ -121,7 +121,11 @@ export default function BookDeskDialog({
       const errorData = response.error as { message?: string; error?: string };
       const errorMessage = errorData?.message || errorData?.error || JSON.stringify(errorData);
 
-      if (errorMessage.includes("That's two!") || errorMessage.includes('limit reservations to one')) {
+      // Check for "one desk per day" rule violation in both English and Italian
+      if (errorMessage.includes("That's two!") ||
+        errorMessage.includes('limit reservations to one') ||
+        errorMessage.includes('Non puoi prenotare più di una scrivania') ||
+        errorMessage.includes('Hai già una scrivania assegnata')) {
         throw new Error('ONE_PER_DAY:' + errorMessage);
       }
 
