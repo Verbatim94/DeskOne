@@ -117,19 +117,36 @@ export default function BookDeskDialog({
       }
     });
 
+    // Check for errors in both response.error and response.data
     if (response.error) {
-      const errorData = response.error as { message?: string; error?: string };
-      const errorMessage = errorData?.message || errorData?.error || JSON.stringify(errorData);
+      // Try to extract error message from various formats
+      let errorMessage = '';
+
+      if (typeof response.error === 'string') {
+        errorMessage = response.error;
+      } else if (response.error && typeof response.error === 'object') {
+        const errorData = response.error as { message?: string; error?: string; msg?: string };
+        errorMessage = errorData.message || errorData.error || errorData.msg || JSON.stringify(errorData);
+      }
+
+      // Also check if there's an error message in response.data
+      if (!errorMessage && response.data && typeof response.data === 'object') {
+        const dataError = response.data as { error?: string; message?: string };
+        errorMessage = dataError.error || dataError.message || '';
+      }
+
+      console.log('Error from backend:', errorMessage);
 
       // Check for "one desk per day" rule violation in both English and Italian
       if (errorMessage.includes("That's two!") ||
         errorMessage.includes('limit reservations to one') ||
         errorMessage.includes('Non puoi prenotare più di una scrivania') ||
-        errorMessage.includes('Hai già una scrivania assegnata')) {
+        errorMessage.includes('Hai già una scrivania assegnata') ||
+        errorMessage.includes('nello stesso periodo')) {
         throw new Error('ONE_PER_DAY:' + errorMessage);
       }
 
-      throw response.error;
+      throw new Error(errorMessage || 'Unknown error');
     }
     return response.data;
   };
