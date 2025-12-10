@@ -555,7 +555,7 @@ export default function BookDeskDialog({
       </DialogContent>
 
       <AlertDialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
-        <AlertDialogContent className="sm:max-w-[425px] text-center">
+        <AlertDialogContent className="sm:max-w-[425px] text-center top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%]">
           <div className="flex flex-col items-center gap-4 py-4">
             <div className="p-3 rounded-full bg-red-100 text-red-600">
               <AlertCircle className="h-8 w-8" />
