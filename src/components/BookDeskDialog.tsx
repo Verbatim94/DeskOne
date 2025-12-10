@@ -117,22 +117,24 @@ export default function BookDeskDialog({
       }
     });
 
-    // Check for errors in both response.error and response.data
+    // When Edge Functions return HTTP errors, the actual error message is in response.data
     if (response.error) {
-      // Try to extract error message from various formats
       let errorMessage = '';
 
-      if (typeof response.error === 'string') {
-        errorMessage = response.error;
-      } else if (response.error && typeof response.error === 'object') {
-        const errorData = response.error as { message?: string; error?: string; msg?: string };
-        errorMessage = errorData.message || errorData.error || errorData.msg || JSON.stringify(errorData);
-      }
-
-      // Also check if there's an error message in response.data
-      if (!errorMessage && response.data && typeof response.data === 'object') {
+      // FIRST: Check response.data for the actual backend error message (most common)
+      if (response.data && typeof response.data === 'object') {
         const dataError = response.data as { error?: string; message?: string };
         errorMessage = dataError.error || dataError.message || '';
+      }
+
+      // FALLBACK: Check response.error if nothing in response.data
+      if (!errorMessage) {
+        if (typeof response.error === 'string') {
+          errorMessage = response.error;
+        } else if (response.error && typeof response.error === 'object') {
+          const errorData = response.error as { message?: string; error?: string; msg?: string };
+          errorMessage = errorData.message || errorData.error || errorData.msg || JSON.stringify(errorData);
+        }
       }
 
       console.log('Error from backend:', errorMessage);
