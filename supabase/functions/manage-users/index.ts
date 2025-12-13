@@ -15,8 +15,13 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // DEBUG LOGS
+    console.log('Request headers:', Object.fromEntries(req.headers.entries()));
     const sessionToken = req.headers.get('x-session-token');
+    console.log('Received session token:', sessionToken ? 'YES (masked)' : 'NO');
+
     if (!sessionToken) {
+      console.log('Error: Missing session token');
       return new Response(
         JSON.stringify({ error: 'Missing session token' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
