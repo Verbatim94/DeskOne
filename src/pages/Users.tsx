@@ -108,6 +108,7 @@ export default function Users() {
         const { error } = await supabase
           .from('users')
           .insert({
+            id: crypto.randomUUID(),
             username: formData.username,
             password: formData.password,
             full_name: formData.full_name,
