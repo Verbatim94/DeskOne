@@ -81,9 +81,10 @@ Deno.serve(async (req) => {
           );
         }
 
-        // Validate date range (max 1 year)
         const startDate = new Date(data.date_start);
         const endDate = new Date(data.date_end);
+
+        // Validate date range (max 1 year)
         const oneYearLater = new Date(startDate);
         oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
 
@@ -102,65 +103,56 @@ Deno.serve(async (req) => {
           );
         }
 
-        // Check if the assigned user already has a reservation in this period (in any room)
-        const { data: assignedUserReservations } = await supabase
+        // Check for existing reservations for this user in this range
+        const { data: conflicts } = await supabase
           .from('reservations')
-          .select('id')
+          .select('date_start')
           .eq('user_id', data.assigned_to)
           .in('status', ['approved', 'pending'])
           .gte('date_end', data.date_start)
           .lte('date_start', data.date_end);
 
-        if (assignedUserReservations && assignedUserReservations.length > 0) {
+        if (conflicts && conflicts.length > 0) {
           return new Response(
-            JSON.stringify({ error: 'L\'utente ha già una prenotazione in questo periodo.' }),
+            JSON.stringify({ error: `User already has reservations on: ${conflicts.map((c: any) => c.date_start).join(', ')}` }),
             { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        // Check if the assigned user already has a fixed assignment in this period (in any room)
-        const { data: assignedUserFixedAssignments } = await supabase
-          .from('fixed_assignments')
-          .select('id')
-          .eq('assigned_to', data.assigned_to)
-          .gte('date_end', data.date_start)
-          .lte('date_start', data.date_end);
+        // Generate daily reservations
+        const reservationsToInsert = [];
+        const current = new Date(startDate);
 
-        if (assignedUserFixedAssignments && assignedUserFixedAssignments.length > 0) {
-          return new Response(
-            JSON.stringify({ error: 'L\'utente ha già una scrivania assegnata in questo periodo.' }),
-            { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        // Delete conflicting reservations
-        const { error: deleteError } = await supabase
-          .from('reservations')
-          .delete()
-          .eq('cell_id', data.cell_id)
-          .gte('date_end', data.date_start)
-          .lte('date_start', data.date_end)
-          .in('status', ['pending', 'approved']);
-
-        if (deleteError) {
-          console.error('Error deleting conflicting reservations:', deleteError);
-        }
-
-        // Create fixed assignment
-        result = await supabase
-          .from('fixed_assignments')
-          .insert({
-            cell_id: data.cell_id,
+        while (current <= endDate) {
+          const dateStr = current.toISOString().split('T')[0];
+          reservationsToInsert.push({
             room_id: data.room_id,
-            assigned_to: data.assigned_to,
-            date_start: data.date_start,
-            date_end: data.date_end,
-            created_by: user.id
-          })
-          .select()
-          .single();
+            cell_id: data.cell_id,
+            user_id: data.assigned_to,
+            date_start: dateStr,
+            date_end: dateStr,
+            time_segment: 'FULL',
+            status: 'approved',
+            type: 'day', // Treat as standard daily reservation
+            approved_by: user.id,
+            approved_at: new Date().toISOString()
+          });
+          current.setDate(current.getDate() + 1);
+        }
 
-        console.log('Fixed assignment created:', result.data?.id);
+        // Bulk insert
+        const { data: insertedData, error: insertError } = await supabase
+          .from('reservations')
+          .insert(reservationsToInsert)
+          .select();
+
+        if (insertError) {
+          console.error('Error batch inserting assignments:', insertError);
+          throw insertError;
+        }
+
+        result = { data: insertedData, error: null };
+        console.log(`Created ${insertedData?.length} daily reservations for user ${data.assigned_to}`);
         break;
       }
 
