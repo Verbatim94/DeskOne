@@ -676,8 +676,8 @@ export default function RoomViewer() {
                         bgClass = 'bg-blue-50 border-2 border-blue-100 hover:border-blue-300 hover:shadow-md';
                         iconColor = 'text-blue-500';
                       } else if (status === 'reserved') {
-                        bgClass = 'bg-gray-100 border-2 border-transparent opacity-60';
-                        iconColor = 'text-gray-400';
+                        bgClass = 'bg-red-50 border-2 border-red-200';
+                        iconColor = 'text-red-500';
                       } else if (status === 'my-reservation') {
                         bgClass = 'bg-purple-50 border-2 border-purple-200 shadow-sm';
                         iconColor = 'text-purple-500';
@@ -798,7 +798,7 @@ export default function RoomViewer() {
                           <div className="flex items-center gap-4">
                             <div className={`
                             p-3 rounded-xl 
-                            ${isAvailable ? 'bg-blue-50 text-blue-600' : isMyReservation ? 'bg-purple-100 text-purple-600' : 'bg-gray-200 text-gray-500'}
+                            ${isAvailable ? 'bg-blue-50 text-blue-600' : isMyReservation ? 'bg-purple-100 text-purple-600' : 'bg-red-100 text-red-600'}
                           `}>
                               {Icon && <Icon className="h-5 w-5" />}
                             </div>
