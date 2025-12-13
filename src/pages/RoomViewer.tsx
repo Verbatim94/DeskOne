@@ -514,463 +514,464 @@ export default function RoomViewer() {
           </div>
 
           {/* Room Grid Container */}
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-4 lg:flex-1 flex items-start justify-center">
-            <div
-              className="inline-block relative"
-              style={{
-                display: 'grid',
-                gridTemplateColumns: `repeat(${room.grid_width}, ${CELL_SIZE}px)`,
-                gap: '8px', // Increased gap for airy feel
-              }}
-            >
-              {/* Render Walls as SVG with Connected Paths and Rounded Corners */}
-              <svg
-                className="absolute top-0 left-0 pointer-events-none z-10"
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 lg:flex-1 flex flex-col relative overflow-hidden">
+            <div className="overflow-auto touch-pan-x touch-pan-y w-full h-[60vh] lg:h-full p-16 flex items-start justify-center">
+              <div
+                className="inline-block relative flex-shrink-0"
                 style={{
-                  width: room.grid_width * (CELL_SIZE + 8),
-                  height: room.grid_height * (CELL_SIZE + 8),
-                  overflow: 'visible',
+                  display: 'grid',
+                  gridTemplateColumns: `repeat(${room.grid_width}, ${CELL_SIZE}px)`,
+                  gap: '8px', // Increased gap for airy feel
                 }}
               >
-                {walls.map(wall => {
-                  const x = wall.orientation === 'vertical'
-                    ? (wall.start_col * (CELL_SIZE + 8)) - 2
-                    : (wall.start_col * (CELL_SIZE + 8));
-                  const y = wall.orientation === 'horizontal'
-                    ? (wall.start_row * (CELL_SIZE + 8)) - 2
-                    : (wall.start_row * (CELL_SIZE + 8));
-                  const width = wall.orientation === 'vertical' ? 4 : (wall.end_col - wall.start_col) * (CELL_SIZE + 8);
-                  const height = wall.orientation === 'horizontal' ? 4 : (wall.end_row - wall.start_row) * (CELL_SIZE + 8);
+                {/* Render Walls as SVG with Connected Paths and Rounded Corners */}
+                <svg
+                  className="absolute top-0 left-0 pointer-events-none z-10"
+                  style={{
+                    width: room.grid_width * (CELL_SIZE + 8),
+                    height: room.grid_height * (CELL_SIZE + 8),
+                    overflow: 'visible',
+                  }}
+                >
+                  {walls.map(wall => {
+                    const x = wall.orientation === 'vertical'
+                      ? (wall.start_col * (CELL_SIZE + 8)) - 2
+                      : (wall.start_col * (CELL_SIZE + 8));
+                    const y = wall.orientation === 'horizontal'
+                      ? (wall.start_row * (CELL_SIZE + 8)) - 2
+                      : (wall.start_row * (CELL_SIZE + 8));
+                    const width = wall.orientation === 'vertical' ? 4 : (wall.end_col - wall.start_col) * (CELL_SIZE + 8);
+                    const height = wall.orientation === 'horizontal' ? 4 : (wall.end_row - wall.start_row) * (CELL_SIZE + 8);
 
-                  if (wall.type === 'entrance') {
-                    // Google-Style Entrance Drawing
-                    const midX = x + width / 2;
-                    const midY = y + height / 2;
-                    const isHorizontal = wall.orientation === 'horizontal';
+                    if (wall.type === 'entrance') {
+                      // Google-Style Entrance Drawing
+                      const midX = x + width / 2;
+                      const midY = y + height / 2;
+                      const isHorizontal = wall.orientation === 'horizontal';
 
-                    // Create unique gradient ID for this entrance
-                    const gradientId = `entrance-gradient-${wall.id}`;
-                    const patternId = `entrance-pattern-${wall.id}`;
+                      // Create unique gradient ID for this entrance
+                      const gradientId = `entrance-gradient-${wall.id}`;
+                      const patternId = `entrance-pattern-${wall.id}`;
 
-                    return (
-                      <g key={wall.id}>
-                        {/* Define gradient */}
-                        <defs>
-                          <linearGradient
-                            id={gradientId}
-                            x1="0%"
-                            y1="0%"
-                            x2={isHorizontal ? "100%" : "0%"}
-                            y2={isHorizontal ? "0%" : "100%"}
+                      return (
+                        <g key={wall.id}>
+                          {/* Define gradient */}
+                          <defs>
+                            <linearGradient
+                              id={gradientId}
+                              x1="0%"
+                              y1="0%"
+                              x2={isHorizontal ? "100%" : "0%"}
+                              y2={isHorizontal ? "0%" : "100%"}
+                            >
+                              <stop offset="0%" style={{ stopColor: '#4285f4', stopOpacity: 0.9 }} />
+                              <stop offset="100%" style={{ stopColor: '#1967d2', stopOpacity: 0.9 }} />
+                            </linearGradient>
+
+                            {/* Diagonal stripe pattern for entrance effect */}
+                            <pattern
+                              id={patternId}
+                              patternUnits="userSpaceOnUse"
+                              width="8"
+                              height="8"
+                              patternTransform={`rotate(${isHorizontal ? 45 : -45})`}
+                            >
+                              <rect width="8" height="8" fill={`url(#${gradientId})`} />
+                              <line x1="0" y1="0" x2="0" y2="8" stroke="white" strokeWidth="1" opacity="0.3" />
+                            </pattern>
+                          </defs>
+
+                          {/* Shadow/Glow effect */}
+                          <rect
+                            x={x - 1}
+                            y={y - 1}
+                            width={width + 2}
+                            height={height + 2}
+                            fill="#4285f4"
+                            opacity="0.2"
+                            rx="4"
+                            ry="4"
+                          />
+
+                          {/* Main entrance rectangle with gradient */}
+                          <rect
+                            x={x}
+                            y={y}
+                            width={width}
+                            height={height}
+                            fill={`url(#${patternId})`}
+                            rx="3"
+                            ry="3"
+                          />
+
+                          {/* Border accent */}
+                          <rect
+                            x={x}
+                            y={y}
+                            width={width}
+                            height={height}
+                            fill="none"
+                            stroke="#1967d2"
+                            strokeWidth="0.5"
+                            rx="3"
+                            ry="3"
+                          />
+
+                          {/* Text Label with modern Google font style */}
+                          <text
+                            x={midX}
+                            y={midY}
+                            fill="white"
+                            fontSize="9"
+                            fontWeight="600"
+                            fontFamily="'Google Sans', 'Roboto', sans-serif"
+                            textAnchor="middle"
+                            alignmentBaseline="middle"
+                            transform={`rotate(${isHorizontal ? 0 : -90}, ${midX}, ${midY})`}
+                            style={{
+                              pointerEvents: 'none',
+                              userSelect: 'none',
+                              letterSpacing: '0.5px',
+                              textShadow: '0 1px 2px rgba(0,0,0,0.2)'
+                            }}
                           >
-                            <stop offset="0%" style={{ stopColor: '#4285f4', stopOpacity: 0.9 }} />
-                            <stop offset="100%" style={{ stopColor: '#1967d2', stopOpacity: 0.9 }} />
-                          </linearGradient>
-
-                          {/* Diagonal stripe pattern for entrance effect */}
-                          <pattern
-                            id={patternId}
-                            patternUnits="userSpaceOnUse"
-                            width="8"
-                            height="8"
-                            patternTransform={`rotate(${isHorizontal ? 45 : -45})`}
-                          >
-                            <rect width="8" height="8" fill={`url(#${gradientId})`} />
-                            <line x1="0" y1="0" x2="0" y2="8" stroke="white" strokeWidth="1" opacity="0.3" />
-                          </pattern>
-                        </defs>
-
-                        {/* Shadow/Glow effect */}
-                        <rect
-                          x={x - 1}
-                          y={y - 1}
-                          width={width + 2}
-                          height={height + 2}
-                          fill="#4285f4"
-                          opacity="0.2"
-                          rx="4"
-                          ry="4"
-                        />
-
-                        {/* Main entrance rectangle with gradient */}
-                        <rect
-                          x={x}
-                          y={y}
-                          width={width}
-                          height={height}
-                          fill={`url(#${patternId})`}
-                          rx="3"
-                          ry="3"
-                        />
-
-                        {/* Border accent */}
-                        <rect
-                          x={x}
-                          y={y}
-                          width={width}
-                          height={height}
-                          fill="none"
-                          stroke="#1967d2"
-                          strokeWidth="0.5"
-                          rx="3"
-                          ry="3"
-                        />
-
-                        {/* Text Label with modern Google font style */}
-                        <text
-                          x={midX}
-                          y={midY}
-                          fill="white"
-                          fontSize="9"
-                          fontWeight="600"
-                          fontFamily="'Google Sans', 'Roboto', sans-serif"
-                          textAnchor="middle"
-                          alignmentBaseline="middle"
-                          transform={`rotate(${isHorizontal ? 0 : -90}, ${midX}, ${midY})`}
-                          style={{
-                            pointerEvents: 'none',
-                            userSelect: 'none',
-                            letterSpacing: '0.5px',
-                            textShadow: '0 1px 2px rgba(0,0,0,0.2)'
-                          }}
-                        >
-                          ENTRANCE
-                        </text>
-                      </g>
-                    );
-                  }
-
-                  return (
-                    <rect
-                      key={wall.id}
-                      x={x}
-                      y={y}
-                      width={width}
-                      height={height}
-                      fill="#1e3a8a"
-                      rx="2"
-                      ry="2"
-                    />
-                  );
-                })}
-              </svg>
-
-              {Array.from({ length: room.grid_height }, (_, y) =>
-                Array.from({ length: room.grid_width }, (_, x) => {
-                  const cell = getCellAt(x, y);
-                  const deskInfo = DESK_TYPES.find((d) => d.type === cell?.type);
-                  const Icon = deskInfo?.icon;
-                  const isBookable = !!cell;
-                  const { status, reservation, assignedTo } = cell
-                    ? getDeskStatus(cell.id)
-                    : ({ status: 'available' as DeskStatus } as { status: DeskStatus; reservation?: Reservation; assignedTo?: string });
-
-                  if (cell) {
-
-                    // Custom Google-like styling
-                    let bgClass = 'bg-white border-2 border-gray-200';
-                    let iconColor = 'text-gray-400';
-
-                    if (status === 'available') {
-                      bgClass = 'bg-blue-50 border-2 border-blue-100 hover:border-blue-300 hover:shadow-md';
-                      iconColor = 'text-blue-500';
-                    } else if (status === 'reserved') {
-                      bgClass = 'bg-gray-100 border-2 border-transparent opacity-60';
-                      iconColor = 'text-gray-400';
-                    } else if (status === 'my-reservation') {
-                      bgClass = 'bg-purple-50 border-2 border-purple-200 shadow-sm';
-                      iconColor = 'text-purple-500';
+                            ENTRANCE
+                          </text>
+                        </g>
+                      );
                     }
 
-
-
                     return (
-                      <div
-                        key={`${x}-${y}`}
-                        className={`
+                      <rect
+                        key={wall.id}
+                        x={x}
+                        y={y}
+                        width={width}
+                        height={height}
+                        fill="#1e3a8a"
+                        rx="2"
+                        ry="2"
+                      />
+                    );
+                  })}
+                </svg>
+
+                {Array.from({ length: room.grid_height }, (_, y) =>
+                  Array.from({ length: room.grid_width }, (_, x) => {
+                    const cell = getCellAt(x, y);
+                    const deskInfo = DESK_TYPES.find((d) => d.type === cell?.type);
+                    const Icon = deskInfo?.icon;
+                    const isBookable = !!cell;
+                    const { status, reservation, assignedTo } = cell
+                      ? getDeskStatus(cell.id)
+                      : ({ status: 'available' as DeskStatus } as { status: DeskStatus; reservation?: Reservation; assignedTo?: string });
+
+                    if (cell) {
+
+                      // Custom Google-like styling
+                      let bgClass = 'bg-white border-2 border-gray-200';
+                      let iconColor = 'text-gray-400';
+
+                      if (status === 'available') {
+                        bgClass = 'bg-blue-50 border-2 border-blue-100 hover:border-blue-300 hover:shadow-md';
+                        iconColor = 'text-blue-500';
+                      } else if (status === 'reserved') {
+                        bgClass = 'bg-gray-100 border-2 border-transparent opacity-60';
+                        iconColor = 'text-gray-400';
+                      } else if (status === 'my-reservation') {
+                        bgClass = 'bg-purple-50 border-2 border-purple-200 shadow-sm';
+                        iconColor = 'text-purple-500';
+                      }
+
+
+
+                      return (
+                        <div
+                          key={`${x}-${y}`}
+                          className={`
                           relative rounded-2xl transition-all duration-300 ease-out
                           flex items-center justify-center
                           ${bgClass}
                           ${isBookable && status !== 'reserved' ? 'cursor-pointer hover:-translate-y-1' : ''}
                         `}
-                        style={{ width: CELL_SIZE, height: CELL_SIZE }}
-                        onClick={() => cell && isBookable && handleCellClick(cell)}
-                        title={cell.label || 'Desk'}
-                      >
-                        {cell && Icon && (
-                          <Icon className={`h-6 w-6 ${iconColor} transition-colors`} strokeWidth={2} />
-                        )}
-                        {/* Status Dot */}
-                        {isBookable && (
-                          <div className={`absolute top-2 right-2 w-2 h-2 rounded-full ${status === 'available' ? 'bg-blue-400' :
-                            status === 'my-reservation' ? 'bg-purple-400' : 'bg-red-300'
-                            }`} />
-                        )}
-                      </div>
-                    );
-                  } else {
-                    // Empty cell
-                    return (
-                      <div
-                        key={`${x}-${y}`}
-                        className="rounded-xl relative flex items-center justify-center transition-all duration-200"
-                        style={{ width: CELL_SIZE, height: CELL_SIZE }}
-                      >
-                      </div>
-                    );
-                  }
-                }),
-              )}
+                          style={{ width: CELL_SIZE, height: CELL_SIZE }}
+                          onClick={() => cell && isBookable && handleCellClick(cell)}
+                          title={cell.label || 'Desk'}
+                        >
+                          {cell && Icon && (
+                            <Icon className={`h-6 w-6 ${iconColor} transition-colors`} strokeWidth={2} />
+                          )}
+                          {/* Status Dot */}
+                          {isBookable && (
+                            <div className={`absolute top-2 right-2 w-2 h-2 rounded-full ${status === 'available' ? 'bg-blue-400' :
+                              status === 'my-reservation' ? 'bg-purple-400' : 'bg-red-300'
+                              }`} />
+                          )}
+                        </div>
+                      );
+                    } else {
+                      // Empty cell
+                      return (
+                        <div
+                          key={`${x}-${y}`}
+                          className="rounded-xl relative flex items-center justify-center transition-all duration-200"
+                          style={{ width: CELL_SIZE, height: CELL_SIZE }}
+                        >
+                        </div>
+                      );
+                    }
+                  }),
+                )}
 
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Right Sidebar: Available Desks */}
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-4 flex flex-col lg:h-full lg:overflow-hidden">
-          {/* Tabs */}
-          <div className="flex p-1 bg-gray-100 rounded-xl mb-4 flex-shrink-0">
-            <button
-              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'desks'
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
-                }`}
-              onClick={() => setActiveTab('desks')}
-            >
-              Desks
-            </button>
-            <button
-              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'rooms'
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
-                }`}
-              onClick={() => setActiveTab('rooms')}
-            >
-              Rooms
-            </button>
-          </div>
+          {/* Right Sidebar: Available Desks */}
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-4 flex flex-col lg:h-full lg:overflow-hidden">
+            {/* Tabs */}
+            <div className="flex p-1 bg-gray-100 rounded-xl mb-4 flex-shrink-0">
+              <button
+                className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'desks'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                onClick={() => setActiveTab('desks')}
+              >
+                Desks
+              </button>
+              <button
+                className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'rooms'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                onClick={() => setActiveTab('rooms')}
+              >
+                Rooms
+              </button>
+            </div>
 
-          {activeTab === 'desks' ? (
-            <>
-              <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2 flex-shrink-0">
-                Available Desks
-                <Badge variant="secondary" className="rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100">
-                  {cells.filter(c => getDeskStatus(c.id).status === 'available').length}
-                </Badge>
-              </h3>
+            {activeTab === 'desks' ? (
+              <>
+                <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2 flex-shrink-0">
+                  Available Desks
+                  <Badge variant="secondary" className="rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100">
+                    {cells.filter(c => getDeskStatus(c.id).status === 'available').length}
+                  </Badge>
+                </h3>
 
-              <div className="space-y-3 lg:overflow-y-auto lg:pr-2 custom-scrollbar lg:flex-1">
-                {cells
-                  .sort((a, b) => {
-                    const aLabel = a.label || `${a.x}-${a.y}`;
-                    const bLabel = b.label || `${b.x}-${b.y}`;
-                    return aLabel.localeCompare(bLabel);
-                  })
-                  .map((cell) => {
-                    const deskInfo = DESK_TYPES.find((d) => d.type === cell.type);
-                    const Icon = deskInfo?.icon;
-                    const { status, reservation, assignedTo } = getDeskStatus(cell.id);
-                    const isAvailable = status === 'available';
-                    const isMyReservation = status === 'my-reservation';
+                <div className="space-y-3 lg:overflow-y-auto lg:pr-2 custom-scrollbar lg:flex-1">
+                  {cells
+                    .sort((a, b) => {
+                      const aLabel = a.label || `${a.x}-${a.y}`;
+                      const bLabel = b.label || `${b.x}-${b.y}`;
+                      return aLabel.localeCompare(bLabel);
+                    })
+                    .map((cell) => {
+                      const deskInfo = DESK_TYPES.find((d) => d.type === cell.type);
+                      const Icon = deskInfo?.icon;
+                      const { status, reservation, assignedTo } = getDeskStatus(cell.id);
+                      const isAvailable = status === 'available';
+                      const isMyReservation = status === 'my-reservation';
 
-                    if (!isAvailable && !isMyReservation && !isRoomAdmin) return null; // Hide reserved desks for cleaner look
+                      if (!isAvailable && !isMyReservation && !isRoomAdmin) return null; // Hide reserved desks for cleaner look
 
-                    return (
-                      <div
-                        key={cell.id}
-                        className={`
+                      return (
+                        <div
+                          key={cell.id}
+                          className={`
                         group rounded-2xl p-4 transition-all duration-200 cursor-pointer border
                         ${isAvailable
-                            ? 'bg-white border-gray-100 hover:border-blue-200 hover:shadow-md'
-                            : isMyReservation
-                              ? 'bg-purple-50 border-purple-100'
-                              : 'bg-gray-50 border-transparent opacity-70'
-                          }
+                              ? 'bg-white border-gray-100 hover:border-blue-200 hover:shadow-md'
+                              : isMyReservation
+                                ? 'bg-purple-50 border-purple-100'
+                                : 'bg-gray-50 border-transparent opacity-70'
+                            }
                       `}
-                        onClick={() => handleDeskListClick(cell)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <div className={`
+                          onClick={() => handleDeskListClick(cell)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <div className={`
                             p-3 rounded-xl 
                             ${isAvailable ? 'bg-blue-50 text-blue-600' : isMyReservation ? 'bg-purple-100 text-purple-600' : 'bg-gray-200 text-gray-500'}
                           `}>
-                              {Icon && <Icon className="h-5 w-5" />}
+                                {Icon && <Icon className="h-5 w-5" />}
+                              </div>
+                              <div>
+                                <p className="font-semibold text-gray-900">
+                                  {cell.label || `Desk ${cell.x}-${cell.y}`}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                  {isAvailable ? 'Available all day' : isMyReservation ? 'Reserved by you' : 'Reserved'}
+                                </p>
+                              </div>
                             </div>
-                            <div>
-                              <p className="font-semibold text-gray-900">
-                                {cell.label || `Desk ${cell.x}-${cell.y}`}
-                              </p>
-                              <p className="text-xs text-gray-500 mt-0.5">
-                                {isAvailable ? 'Available all day' : isMyReservation ? 'Reserved by you' : 'Reserved'}
-                              </p>
-                            </div>
-                          </div>
 
-                          {(isAvailable || user?.role === 'admin') && (
-                            <Button
-                              size="sm"
-                              className={`
+                            {(isAvailable || user?.role === 'admin') && (
+                              <Button
+                                size="sm"
+                                className={`
                               rounded-full px-4 opacity-0 group-hover:opacity-100 transition-all
                               ${isAvailable ? 'bg-blue-600 hover:bg-blue-700' : ''}
                             `}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeskListClick(cell);
-                              }}
-                            >
-                              Book
-                            </Button>
-                          )}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeskListClick(cell);
+                                }}
+                              >
+                                Book
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
 
-                {cells.filter(c => getDeskStatus(c.id).status === 'available').length === 0 && (
-                  <div className="text-center py-10 text-gray-400">
-                    <Armchair className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                    <p>No desks available for this date.</p>
-                  </div>
-                )}
-              </div>
-            </>
-          ) : (
-            <>
-              <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
-                All Rooms
-                <Badge variant="secondary" className="rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100">
-                  {rooms.length}
-                </Badge>
-              </h3>
+                  {cells.filter(c => getDeskStatus(c.id).status === 'available').length === 0 && (
+                    <div className="text-center py-10 text-gray-400">
+                      <Armchair className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                      <p>No desks available for this date.</p>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                  All Rooms
+                  <Badge variant="secondary" className="rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100">
+                    {rooms.length}
+                  </Badge>
+                </h3>
 
-              <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar flex-1">
-                {rooms.map((r) => (
-                  <div
-                    key={r.id}
-                    className={`
+                <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar flex-1">
+                  {rooms.map((r) => (
+                    <div
+                      key={r.id}
+                      className={`
                       group rounded-2xl p-4 transition-all duration-200 cursor-pointer border 
                       ${r.id === roomId
-                        ? 'bg-blue-50 border-blue-200 shadow-sm'
-                        : 'bg-white border-gray-100 hover:border-blue-200 hover:shadow-md'
-                      }
+                          ? 'bg-blue-50 border-blue-200 shadow-sm'
+                          : 'bg-white border-gray-100 hover:border-blue-200 hover:shadow-md'
+                        }
                     `}
-                    onClick={() => navigate(`/rooms/${r.id}/view`)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className={`
+                      onClick={() => navigate(`/rooms/${r.id}/view`)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className={`
                           p-3 rounded-xl 
                           ${r.id === roomId ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}
                         `}>
-                          <Armchair className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <p className={`font-semibold ${r.id === roomId ? 'text-blue-900' : 'text-gray-900'}`}>
-                            {r.name}
-                          </p>
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            {r.grid_width} × {r.grid_height} Grid
-                          </p>
+                            <Armchair className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <p className={`font-semibold ${r.id === roomId ? 'text-blue-900' : 'text-gray-900'}`}>
+                              {r.name}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              {r.grid_width} × {r.grid_height} Grid
+                            </p>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
 
-                {rooms.length === 0 && (
-                  <div className="text-center py-10 text-gray-400">
-                    <Armchair className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                    <p>No rooms found.</p>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-      </div >
+                  {rooms.length === 0 && (
+                    <div className="text-center py-10 text-gray-400">
+                      <Armchair className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                      <p>No rooms found.</p>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div >
 
-      {selectedCell && room && (
-        <BookDeskDialog
-          open={bookingDialogOpen}
-          onOpenChange={setBookingDialogOpen}
-          roomId={room.id}
-          roomName={room.name}
-          cellId={selectedCell.id}
-          cellLabel={selectedCell.label}
-          initialDate={selectedDate}
-          onBookingComplete={(newReservation) => {
-            if (newReservation && user) {
-              const nr = newReservation as unknown as Reservation;
-              const optimisticReservation: Reservation = {
-                ...nr,
-                time_segment: nr.time_segment || 'FULL',
-                created_at: nr.created_at || new Date().toISOString(),
-                user: {
-                  id: user.id,
-                  username: user.username,
-                  full_name: user.full_name
-                },
-                type: 'reservation'
-              };
-              setReservations(prev => [...prev, optimisticReservation]);
-            }
-            loadReservations();
-            setBookingDialogOpen(false);
-          }}
-        />
-      )
-      }
-
-      {
-        selectedReservation && (
-          <ReservationDetailsDialog
-            open={reservationDetailsOpen}
-            onOpenChange={setReservationDetailsOpen}
-            reservation={selectedReservation as unknown as (Reservation & { room: { id: string; name: string }; cell: { id: string; label: string | null; type: string; x?: number; y?: number }; })}
-            isAdmin={isRoomAdmin}
-            onDelete={
-              isRoomAdmin || (user && selectedReservation.user_id === user.id)
-                ? async () => {
-                  try {
-                    if (selectedReservation.type === 'fixed_assignment') {
-                      await callReservationFunction('delete_fixed_assignment', {
-                        assignmentId: selectedReservation.id
-                      });
-                      toast({
-                        title: 'Assignment removed',
-                        description: 'Fixed assignment deleted successfully'
-                      });
-                    } else {
-                      await callReservationFunction('cancel', {
-                        reservationId: selectedReservation.id
-                      });
-                      toast({
-                        title: 'Reservation cancelled',
-                        description: 'Reservation cancelled successfully'
-                      });
-                    }
-                    setReservationDetailsOpen(false);
-                    setSelectedReservation(null);
-                    loadReservations();
-                    loadFixedAssignments();
-                    loadFixedAssignments();
-                  } catch (error: unknown) {
-                    let message = 'Unknown error';
-                    if (error instanceof Error) message = error.message;
-                    else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
-                    toast({
-                      title: 'Error',
-                      description: message,
-                      variant: 'destructive'
-                    });
-                  }
-                }
-                : undefined
-            }
+        {selectedCell && room && (
+          <BookDeskDialog
+            open={bookingDialogOpen}
+            onOpenChange={setBookingDialogOpen}
+            roomId={room.id}
+            roomName={room.name}
+            cellId={selectedCell.id}
+            cellLabel={selectedCell.label}
+            initialDate={selectedDate}
+            onBookingComplete={(newReservation) => {
+              if (newReservation && user) {
+                const nr = newReservation as unknown as Reservation;
+                const optimisticReservation: Reservation = {
+                  ...nr,
+                  time_segment: nr.time_segment || 'FULL',
+                  created_at: nr.created_at || new Date().toISOString(),
+                  user: {
+                    id: user.id,
+                    username: user.username,
+                    full_name: user.full_name
+                  },
+                  type: 'reservation'
+                };
+                setReservations(prev => [...prev, optimisticReservation]);
+              }
+              loadReservations();
+              setBookingDialogOpen(false);
+            }}
           />
         )
-      }
-    </div >
-  );
+        }
+
+        {
+          selectedReservation && (
+            <ReservationDetailsDialog
+              open={reservationDetailsOpen}
+              onOpenChange={setReservationDetailsOpen}
+              reservation={selectedReservation as unknown as (Reservation & { room: { id: string; name: string }; cell: { id: string; label: string | null; type: string; x?: number; y?: number }; })}
+              isAdmin={isRoomAdmin}
+              onDelete={
+                isRoomAdmin || (user && selectedReservation.user_id === user.id)
+                  ? async () => {
+                    try {
+                      if (selectedReservation.type === 'fixed_assignment') {
+                        await callReservationFunction('delete_fixed_assignment', {
+                          assignmentId: selectedReservation.id
+                        });
+                        toast({
+                          title: 'Assignment removed',
+                          description: 'Fixed assignment deleted successfully'
+                        });
+                      } else {
+                        await callReservationFunction('cancel', {
+                          reservationId: selectedReservation.id
+                        });
+                        toast({
+                          title: 'Reservation cancelled',
+                          description: 'Reservation cancelled successfully'
+                        });
+                      }
+                      setReservationDetailsOpen(false);
+                      setSelectedReservation(null);
+                      loadReservations();
+                      loadFixedAssignments();
+                      loadFixedAssignments();
+                    } catch (error: unknown) {
+                      let message = 'Unknown error';
+                      if (error instanceof Error) message = error.message;
+                      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
+                      toast({
+                        title: 'Error',
+                        description: message,
+                        variant: 'destructive'
+                      });
+                    }
+                  }
+                  : undefined
+              }
+            />
+          )
+        }
+      </div >
+      );
 }
