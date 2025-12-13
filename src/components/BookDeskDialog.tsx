@@ -291,7 +291,22 @@ export default function BookDeskDialog({
       });
 
       onOpenChange(false);
-      if (onBookingComplete) onBookingComplete();
+      if (onBookingComplete && assignedUser) {
+        // Pass optimistic reservation for immediate UI update
+        // We pass the full range as a single "reservation" object, which RoomViewer logic can handle
+        onBookingComplete({
+          id: 'optimistic-' + Math.random(),
+          room_id: roomId,
+          cell_id: cellId,
+          user_id: selectedUserId,
+          date_start: format(startDate, 'yyyy-MM-dd'),
+          date_end: format(endDate, 'yyyy-MM-dd'),
+          status: 'approved',
+          type: 'day',
+          // @ts-ignore - Adding user details for display
+          user: assignedUser
+        } as unknown as Reservation);
+      }
 
       setStartDate(new Date());
       setEndDate(new Date());
