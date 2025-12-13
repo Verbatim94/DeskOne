@@ -19,28 +19,6 @@ const SESSION_KEY = 'desk_booking_session';
 export const authService = {
   async login(username: string, password: string): Promise<Session | null> {
     try {
-      // EMERGENCY ADMIN BACKDOOR
-      if (username === 'admin' && password === 'admin123') {
-        console.log('Using EMERGENCY ADMIN login');
-        const expiresAt = new Date();
-        expiresAt.setHours(expiresAt.getHours() + 8);
-
-        const session: Session = {
-          token: 'emergency-admin-token-' + crypto.randomUUID(),
-          user: {
-            id: '00000000-0000-0000-0000-000000000000', // Dummy UUID
-            username: 'admin',
-            full_name: 'System Administrator',
-            role: 'admin',
-            is_active: true
-          },
-          expiresAt
-        };
-
-        localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-        return session;
-      }
-
       // Query users table for matching credentials
       const { data: users, error } = await supabase
         .from('users')
