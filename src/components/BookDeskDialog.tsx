@@ -86,42 +86,36 @@ export default function BookDeskDialog({
     }
   }, [open, initialDate, isAdmin]);
 
+  const callRoomFunction = async (operation: string, data?: Record<string, unknown>) => {
+    const session = authService.getSession();
+    if (!session) throw new Error('No session');
+
+    const response = await supabase.functions.invoke('manage-rooms', {
+      body: { operation, data },
+      headers: {
+        'x-session-token': session.token,
+      },
+    });
+
+    if (response.error) throw response.error;
+    return response.data;
+  };
+
   const loadUsers = async () => {
     try {
-      // First get all user IDs that have access to this room
-      const { data: accessData, error: accessError } = await supabase
-        .from('room_access')
-        .select('user_id')
-        .eq('room_id', roomId);
+      // Use Edge Function to bypass client-side RLS limitations
+      const data = await callRoomFunction('list_room_users', { roomId });
 
-      if (accessError) {
-        console.error('Error loading room access:', accessError);
-        return;
-      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mappedUsers = (data || [])
+        .map((item: any) => item.users)
+        .filter((u: any) => !!u && u.is_active !== false) // Basic filtering, though edge function usually handles this
+        .sort((a: any, b: any) => (a.full_name || '').localeCompare(b.full_name || ''));
 
-      const userIds = accessData.map(a => a.user_id);
-
-      if (userIds.length === 0) {
-        setUsers([]);
-        return;
-      }
-
-      // Then fetch the actual user details
-      const { data: usersData, error: usersError } = await supabase
-        .from('users')
-        .select('*')
-        .in('id', userIds)
-        .eq('is_active', true)
-        .order('full_name');
-
-      if (usersError) {
-        console.error('Error loading users:', usersError);
-        return;
-      }
-
-      setUsers(usersData || []);
+      setUsers(mappedUsers);
     } catch (error) {
       console.error('Error loading users:', error);
+      setUsers([]);
     }
   };
 
