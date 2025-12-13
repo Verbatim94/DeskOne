@@ -263,11 +263,41 @@ export default function RoomViewer() {
     if (!roomId) return;
 
     try {
+      // Try Edge Function first
       const data = await callReservationFunction('list_fixed_assignments', {
         roomId,
       });
-      setFixedAssignments(data || []);
-      setFixedAssignments(data || []);
+
+      if (data && data.length > 0) {
+        setFixedAssignments(data);
+        return;
+      }
+
+      console.log('Edge function returned no fixed assignments, trying direct query...');
+
+      // Fallback: Direct Supabase Query
+      // This bypasses potential Edge Function join errors or outdated logic
+      const { data: directData, error } = await supabase
+        .from('fixed_assignments')
+        .select('*')
+        .eq('room_id', roomId);
+
+      if (error) {
+        console.error('Direct query for fixed_assignments failed:', error);
+        return;
+      }
+
+      if (directData) {
+        // We lack the joined user details, but we can verify against known users or just show ID
+        // For visualization (Red/Purple), ID is enough.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const mapped: FixedAssignment[] = directData.map((a: any) => ({
+          ...a,
+          assigned_user: { id: a.assigned_to, full_name: 'Assigned User', username: 'user' }
+        }));
+        setFixedAssignments(mapped);
+      }
+
     } catch (error: unknown) {
       console.error('Error loading fixed assignments:', error);
     }
