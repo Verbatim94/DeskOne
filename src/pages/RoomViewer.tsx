@@ -690,7 +690,7 @@ export default function RoomViewer() {
                           key={`${x}-${y}`}
                           className={`
                           relative rounded-2xl transition-all duration-300 ease-out
-                          flex items-center justify-center
+                          flex flex-col items-center justify-center
                           ${bgClass}
                           ${isBookable && status !== 'reserved' ? 'cursor-pointer hover:-translate-y-1' : ''}
                         `}
@@ -699,11 +699,14 @@ export default function RoomViewer() {
                           title={cell.label || 'Desk'}
                         >
                           {cell && Icon && (
-                            <Icon className={`h-6 w-6 ${iconColor} transition-colors`} strokeWidth={2} />
+                            <Icon className={`h-5 w-5 ${iconColor} transition-colors mb-0.5`} strokeWidth={2} />
                           )}
+                          <span className={`text-[9px] font-bold truncate max-w-full px-1 ${status === 'reserved' ? 'text-gray-400' : 'text-gray-600'}`}>
+                            {cell.label}
+                          </span>
                           {/* Status Dot */}
                           {isBookable && (
-                            <div className={`absolute top-2 right-2 w-2 h-2 rounded-full ${status === 'available' ? 'bg-blue-400' :
+                            <div className={`absolute top-1 right-1 w-1.5 h-1.5 rounded-full ${status === 'available' ? 'bg-blue-400' :
                               status === 'my-reservation' ? 'bg-purple-400' : 'bg-red-300'
                               }`} />
                           )}
