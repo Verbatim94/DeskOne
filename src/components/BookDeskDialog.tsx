@@ -88,19 +88,18 @@ export default function BookDeskDialog({
 
   const loadUsers = async () => {
     try {
-      const session = authService.getSession();
-      if (!session) return;
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('is_active', true)
+        .order('full_name');
 
-      const response = await supabase.functions.invoke('manage-users', {
-        body: { operation: 'list' },
-        headers: {
-          'x-session-token': session.token
-        }
-      });
-
-      if (response.data) {
-        setUsers(response.data);
+      if (error) {
+        console.error('Error loading users:', error);
+        return;
       }
+
+      setUsers(data || []);
     } catch (error) {
       console.error('Error loading users:', error);
     }
