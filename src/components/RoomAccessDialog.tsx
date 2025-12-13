@@ -67,6 +67,11 @@ export default function RoomAccessDialog({ roomId, roomName, open, onOpenChange 
     setLoading(true);
     try {
       const data = await callRoomFunction('list_room_users', { roomId });
+      if (data) {
+        data.sort((a: RoomUser, b: RoomUser) =>
+          a.users.full_name.localeCompare(b.users.full_name)
+        );
+      }
       setRoomUsers(data || []);
     } catch (error: unknown) {
       let message = 'Unknown error';
@@ -84,6 +89,11 @@ export default function RoomAccessDialog({ roomId, roomName, open, onOpenChange 
   const loadAvailableUsers = async () => {
     try {
       const data = await callRoomFunction('list_available_users', { roomId });
+      if (data) {
+        data.sort((a: AvailableUser, b: AvailableUser) =>
+          a.full_name.localeCompare(b.full_name)
+        );
+      }
       setAvailableUsers(data || []);
     } catch (error: unknown) {
       console.error('Error loading available users:', error);
