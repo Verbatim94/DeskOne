@@ -515,9 +515,9 @@ export default function RoomViewer() {
 
           {/* Room Grid Container */}
           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 lg:flex-1 flex flex-col relative overflow-hidden">
-            <div className="overflow-auto touch-pan-x touch-pan-y w-full h-[60vh] lg:h-full p-16 flex items-start justify-center">
+            <div className="overflow-auto touch-pan-x touch-pan-y w-full h-[60vh] lg:h-full p-16 flex">
               <div
-                className="inline-block relative flex-shrink-0"
+                className="inline-block relative flex-shrink-0 m-auto"
                 style={{
                   display: 'grid',
                   gridTemplateColumns: `repeat(${room.grid_width}, ${CELL_SIZE}px)`,
