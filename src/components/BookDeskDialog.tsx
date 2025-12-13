@@ -425,11 +425,17 @@ export default function BookDeskDialog({
                         <SelectValue placeholder="Select a user" />
                       </SelectTrigger>
                       <SelectContent>
-                        {users.map((user) => (
-                          <SelectItem key={user.id} value={user.id}>
-                            {user.full_name} (@{user.username})
+                        {users.length > 0 ? (
+                          users.map((user) => (
+                            <SelectItem key={user.id} value={user.id}>
+                              {user.full_name} (@{user.username})
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="none" disabled>
+                            No users have access to this room
                           </SelectItem>
-                        ))}
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
