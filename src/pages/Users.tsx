@@ -44,25 +44,17 @@ export default function Users() {
     loadUsers();
   }, []);
 
-  const callUserFunction = async (operation: string, data?: Record<string, unknown>) => {
-    const session = authService.getSession();
-    if (!session) throw new Error('No session');
-
-    const response = await supabase.functions.invoke('manage-users', {
-      body: { operation, data },
-      headers: {
-        'x-session-token': session.token
-      }
-    });
-
-    if (response.error) throw response.error;
-    return response.data;
-  };
+  /* Removed callUserFunction - using direct DB access */
 
   const loadUsers = async () => {
     setLoading(true);
     try {
-      const data = await callUserFunction('list');
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
       setUsers(data || []);
     } catch (error: unknown) {
       let message = 'Unknown error';
@@ -83,16 +75,19 @@ export default function Users() {
     if (editingUser) {
       // Update user
       try {
-        await callUserFunction('update', {
-          id: editingUser.id,
-          updates: {
+        const { error } = await supabase
+          .from('users')
+          .update({
             username: formData.username,
             password: formData.password,
             full_name: formData.full_name,
             role: formData.role,
             is_active: formData.is_active
-          }
-        });
+          })
+          .eq('id', editingUser.id);
+
+        if (error) throw error;
+
         toast({ title: 'User updated successfully' });
         setDialogOpen(false);
         loadUsers();
@@ -110,13 +105,18 @@ export default function Users() {
     } else {
       // Create new user
       try {
-        await callUserFunction('create', {
-          username: formData.username,
-          password: formData.password,
-          full_name: formData.full_name,
-          role: formData.role,
-          is_active: formData.is_active
-        });
+        const { error } = await supabase
+          .from('users')
+          .insert({
+            username: formData.username,
+            password: formData.password,
+            full_name: formData.full_name,
+            role: formData.role,
+            is_active: formData.is_active
+          });
+
+        if (error) throw error;
+
         toast({ title: 'User created successfully' });
         setDialogOpen(false);
         loadUsers();
@@ -138,7 +138,13 @@ export default function Users() {
     if (!confirm('Are you sure you want to delete this user?')) return;
 
     try {
-      await callUserFunction('delete', { id });
+      const { error } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
       toast({ title: 'User deleted successfully' });
       loadUsers();
     } catch (error: unknown) {
