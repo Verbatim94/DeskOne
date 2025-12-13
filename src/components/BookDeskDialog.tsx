@@ -88,18 +88,38 @@ export default function BookDeskDialog({
 
   const loadUsers = async () => {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('is_active', true)
-        .order('full_name');
+      // First get all user IDs that have access to this room
+      const { data: accessData, error: accessError } = await supabase
+        .from('room_access')
+        .select('user_id')
+        .eq('room_id', roomId);
 
-      if (error) {
-        console.error('Error loading users:', error);
+      if (accessError) {
+        console.error('Error loading room access:', accessError);
         return;
       }
 
-      setUsers(data || []);
+      const userIds = accessData.map(a => a.user_id);
+
+      if (userIds.length === 0) {
+        setUsers([]);
+        return;
+      }
+
+      // Then fetch the actual user details
+      const { data: usersData, error: usersError } = await supabase
+        .from('users')
+        .select('*')
+        .in('id', userIds)
+        .eq('is_active', true)
+        .order('full_name');
+
+      if (usersError) {
+        console.error('Error loading users:', usersError);
+        return;
+      }
+
+      setUsers(usersData || []);
     } catch (error) {
       console.error('Error loading users:', error);
     }
