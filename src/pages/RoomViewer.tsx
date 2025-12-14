@@ -13,7 +13,7 @@ import ReservationDetailsDialog from '@/components/ReservationDetailsDialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import { format, parseISO, isWithinInterval } from 'date-fns';
+import { format, parseISO, isWithinInterval, addDays, isEqual } from 'date-fns';
 
 
 type DeskType = 'desk';
@@ -994,13 +994,61 @@ export default function RoomViewer() {
                 ? async () => {
                   try {
                     if (selectedReservation.type === 'fixed_assignment') {
-                      await callReservationFunction('delete_fixed_assignment', {
-                        assignmentId: selectedReservation.id
-                      });
-                      toast({
-                        title: 'Assignment removed',
-                        description: 'Fixed assignment deleted successfully'
-                      });
+                      // Smart Partial Cancellation Logic
+                      const assignment = fixedAssignments.find(a => a.id === selectedReservation.id);
+                      if (!assignment) throw new Error('Assignment not found locally');
+
+                      const targetDateStr = format(selectedDate, 'yyyy-MM-dd');
+                      const start = parseISO(assignment.date_start);
+                      const end = parseISO(assignment.date_end);
+                      const target = parseISO(targetDateStr);
+                      start.setHours(0, 0, 0, 0);
+                      end.setHours(0, 0, 0, 0);
+                      target.setHours(0, 0, 0, 0);
+
+                      if (isEqual(start, end)) {
+                        // Case 1: Single day -> Delete
+                        const { error } = await supabase.from('fixed_assignments').delete().eq('id', assignment.id);
+                        if (error) throw error;
+                      } else if (isEqual(target, start)) {
+                        // Case 2: First day -> Update Start
+                        const newStart = addDays(start, 1);
+                        const { error } = await supabase.from('fixed_assignments')
+                          .update({ date_start: format(newStart, 'yyyy-MM-dd') })
+                          .eq('id', assignment.id);
+                        if (error) throw error;
+                      } else if (isEqual(target, end)) {
+                        // Case 3: Last day -> Update End
+                        const newEnd = addDays(end, -1);
+                        const { error } = await supabase.from('fixed_assignments')
+                          .update({ date_end: format(newEnd, 'yyyy-MM-dd') })
+                          .eq('id', assignment.id);
+                        if (error) throw error;
+                      } else {
+                        // Case 4: Middle day -> Split
+                        const firstPartEnd = addDays(target, -1);
+                        const secondPartStart = addDays(target, 1);
+
+                        // Update first part
+                        const { error: updateError } = await supabase.from('fixed_assignments')
+                          .update({ date_end: format(firstPartEnd, 'yyyy-MM-dd') })
+                          .eq('id', assignment.id);
+                        if (updateError) throw updateError;
+
+                        // Insert second part
+                        const { error: insertError } = await supabase.from('fixed_assignments').insert({
+                          room_id: roomId,
+                          cell_id: assignment.cell_id,
+                          assigned_to: assignment.assigned_to,
+                          created_by: user?.id,
+                          date_start: format(secondPartStart, 'yyyy-MM-dd'),
+                          date_end: format(end, 'yyyy-MM-dd')
+                        });
+                        if (insertError) throw insertError;
+                      }
+
+                      toast({ title: 'Availability updated', description: 'Selected day removed from assignment.' });
+                      loadFixedAssignments();
                     } else {
                       await callReservationFunction('cancel', {
                         reservationId: selectedReservation.id
