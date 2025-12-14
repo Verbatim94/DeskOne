@@ -833,7 +833,7 @@ export default function RoomViewer() {
                     const isAvailable = status === 'available';
                     const isMyReservation = status === 'my-reservation';
 
-                    if (!isAvailable && !isMyReservation && !isRoomAdmin) return null; // Hide reserved desks for cleaner look
+                    // if (!isAvailable && !isMyReservation && !isRoomAdmin) return null; // Show all desks status
 
                     return (
                       <div
