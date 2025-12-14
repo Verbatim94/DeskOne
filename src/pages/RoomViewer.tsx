@@ -264,12 +264,10 @@ export default function RoomViewer() {
 
     try {
       // Try Edge Function first
-      const data = await callReservationFunction('list_fixed_assignments', {
-        roomId,
-      });
+      // 1. Force Client Side Load (Edge Function is bypassed)
+      const data = null;
 
-      if (data && data.length > 0) {
-        setFixedAssignments(data);
+      if (data) {
         return;
       }
 
@@ -287,15 +285,42 @@ export default function RoomViewer() {
         return;
       }
 
-      if (directData) {
-        // We lack the joined user details, but we can verify against known users or just show ID
-        // For visualization (Red/Purple), ID is enough.
+      if (directData && directData.length > 0) {
+        console.log('Direct query found assignments:', directData);
+
+        // Fetch user details manually
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const userIds = Array.from(new Set(directData.map((a: any) => a.assigned_to).filter(Boolean)));
+        let userMap: Record<string, { full_name: string; username: string }> = {};
+
+        if (userIds.length > 0) {
+          const { data: users } = await supabase
+            .from('users')
+            .select('id, full_name, username')
+            .in('id', userIds);
+
+          if (users) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            userMap = users.reduce((acc: any, u) => ({
+              ...acc,
+              [u.id]: { full_name: u.full_name, username: u.username }
+            }), {});
+          }
+        }
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const mapped: FixedAssignment[] = directData.map((a: any) => ({
           ...a,
-          assigned_user: { id: a.assigned_to, full_name: 'Assigned User', username: 'user' }
+          assigned_user: userMap[a.assigned_to] ? {
+            id: a.assigned_to,
+            full_name: userMap[a.assigned_to].full_name,
+            username: userMap[a.assigned_to].username
+          } : { id: a.assigned_to, full_name: 'Unknown User', username: 'unknown' }
         }));
         setFixedAssignments(mapped);
+      } else {
+        console.log('Direct query returned no result.');
+        setFixedAssignments([]);
       }
 
     } catch (error: unknown) {
