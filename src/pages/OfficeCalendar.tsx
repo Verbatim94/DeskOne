@@ -17,7 +17,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 
-const HOURS = Array.from({ length: 15 }, (_, i) => i + 6); // 6 AM to 8 PM
+const HOURS = Array.from({ length: 13 }, (_, i) => i + 8); // 8 AM to 8 PM
 const MINUTES = [0, 15, 30, 45];
 
 interface TimeSlot {
@@ -35,7 +35,7 @@ export default function OfficeCalendar() {
     const [office, setOffice] = useState<Office | null>(null);
     const [bookings, setBookings] = useState<OfficeBooking[]>([]);
     const [loading, setLoading] = useState(true);
-    const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+    const [selectedDate, setSelectedDate] = useState<Date>(startOfDay(new Date()));
     const [selectionStart, setSelectionStart] = useState<TimeSlot | null>(null);
     const [selectionEnd, setSelectionEnd] = useState<TimeSlot | null>(null);
     const [bookingDialogOpen, setBookingDialogOpen] = useState(false);
@@ -309,10 +309,10 @@ export default function OfficeCalendar() {
 
                     <Button
                         variant={selectedDate.toDateString() === new Date().toDateString() ? 'default' : 'ghost'}
-                        onClick={() => setSelectedDate(new Date())}
+                        onClick={() => setSelectedDate(startOfDay(new Date()))}
                         className={`rounded-full px-6 ${selectedDate.toDateString() === new Date().toDateString()
-                                ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-200'
-                                : 'text-gray-600 hover:bg-gray-100'
+                            ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-200'
+                            : 'text-gray-600 hover:bg-gray-100'
                             }`}
                     >
                         Today
