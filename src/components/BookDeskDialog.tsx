@@ -276,13 +276,25 @@ export default function BookDeskDialog({
 
     setSubmitting(true);
     try {
-      await callReservationFunction('create_fixed_assignment', {
-        room_id: roomId,
-        cell_id: cellId,
-        assigned_to: selectedUserId,
-        date_start: format(startDate, 'yyyy-MM-dd'),
-        date_end: format(endDate, 'yyyy-MM-dd')
-      });
+      const session = authService.getSession();
+      if (!session) throw new Error('No session');
+
+      // Use direct client-side insertion to ensure reliability
+      // This bypasses potentially outdated Edge Function logic
+      const { data: newAssignment, error } = await supabase
+        .from('fixed_assignments')
+        .insert({
+          room_id: roomId,
+          cell_id: cellId,
+          assigned_to: selectedUserId,
+          created_by: session.user.id,
+          date_start: format(startDate, 'yyyy-MM-dd'),
+          date_end: format(endDate, 'yyyy-MM-dd')
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
 
       const assignedUser = users.find(u => u.id === selectedUserId);
       toast({
@@ -291,19 +303,18 @@ export default function BookDeskDialog({
       });
 
       onOpenChange(false);
+      // Pass optimistic update
       if (onBookingComplete && assignedUser) {
-        // Pass optimistic reservation for immediate UI update
-        // We pass the full range as a single "reservation" object, which RoomViewer logic can handle
         onBookingComplete({
-          id: 'optimistic-' + Math.random(),
+          id: newAssignment.id,
           room_id: roomId,
           cell_id: cellId,
           user_id: selectedUserId,
           date_start: format(startDate, 'yyyy-MM-dd'),
           date_end: format(endDate, 'yyyy-MM-dd'),
           status: 'approved',
-          type: 'day',
-          // @ts-ignore - Adding user details for display
+          type: 'fixed_assignment', // Use explicit type expected by viewer
+          // @ts-ignore
           user: assignedUser
         } as unknown as Reservation);
       }
