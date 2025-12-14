@@ -140,6 +140,32 @@ export default function Users() {
     if (!confirm('Are you sure you want to delete this user?')) return;
 
     try {
+      // Manual cleanup of related records (Belt & Suspenders approach)
+
+      // 1. Try to delete from fixed_assignments (Legacy table)
+      try {
+        await supabase.from('fixed_assignments').delete().eq('assigned_to', id);
+      } catch (e) {
+        console.warn('Could not clean fixed_assignments (table might not exist)', e);
+      }
+
+      // 2. Delete reservations
+      const { error: resError } = await supabase
+        .from('reservations')
+        .delete()
+        .eq('user_id', id);
+
+      if (resError) console.warn('Error cleaning reservations:', resError);
+
+      // 3. Delete room access
+      const { error: accessError } = await supabase
+        .from('room_access')
+        .delete()
+        .eq('user_id', id);
+
+      if (accessError) console.warn('Error cleaning room access:', accessError);
+
+      // 4. Delete the user
       const { error } = await supabase
         .from('users')
         .delete()
@@ -147,7 +173,7 @@ export default function Users() {
 
       if (error) throw error;
 
-      toast({ title: 'User deleted successfully' });
+      toast({ title: 'User and all associated data deleted successfully' });
       loadUsers();
     } catch (error: unknown) {
       let message = 'Unknown error';
