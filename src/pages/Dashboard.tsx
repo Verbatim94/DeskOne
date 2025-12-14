@@ -147,60 +147,85 @@ export default function Dashboard() {
       const startDateStr = format(daysToCheck[0], 'yyyy-MM-dd');
       const endDateStr = format(daysToCheck[daysToCheck.length - 1], 'yyyy-MM-dd');
 
-      // Fetch ALL reservations for the date range in one query
-      const { data: allReservations } = await supabase
-        .from('reservations')
-        .select('room_id, date_start, date_end')
-        .in('room_id', roomIds)
-        .lte('date_start', endDateStr)
-        .gte('date_end', startDateStr)
-        .neq('status', 'cancelled')
-        .neq('status', 'rejected');
+      // Fetch ALL reservations and assignments in parallel
+      const [reservationsRes, assignmentsRes] = await Promise.all([
+        supabase
+          .from('reservations')
+          .select('room_id, date_start, date_end')
+          .in('room_id', roomIds)
+          .lte('date_start', endDateStr)
+          .gte('date_end', startDateStr)
+          .neq('status', 'cancelled')
+          .neq('status', 'rejected'),
+        supabase
+          .from('fixed_assignments')
+          .select('room_id, date_start, date_end')
+          .in('room_id', roomIds)
+          .lte('date_start', endDateStr)
+          .gte('date_end', startDateStr)
+      ]);
 
-      // Fetch ALL fixed assignments for the date range in one query
-      const { data: allAssignments } = await supabase
-        .from('fixed_assignments')
-        .select('room_id, date_start, date_end')
-        .in('room_id', roomIds)
-        .lte('date_start', endDateStr)
-        .gte('date_end', startDateStr);
+      const allReservations = reservationsRes.data || [];
+      const allAssignments = assignmentsRes.data || [];
 
-      // For each day, check if there are available desks
+      // OPTIMIZATION: Build a Lookup Map for Occupancy
+      // Key: `${roomId}-${dateStr}` -> Value: Number of occupied desks
+      const occupancyMap = new Map<string, number>();
+
+      // 1. Process Reservations
+      allReservations.forEach((r: { room_id: string; date_start: string; date_end: string }) => {
+        const start = new Date(r.date_start);
+        const end = new Date(r.date_end);
+        // Clamp dates to our check range to avoid unnecessary iterations
+        const effectiveStart = start < startDate ? startDate : start;
+        const effectiveEnd = end > endDate ? endDate : end;
+
+        if (effectiveStart > effectiveEnd) return;
+
+        const interval = eachDayOfInterval({ start: effectiveStart, end: effectiveEnd });
+        interval.forEach(date => {
+          const key = `${r.room_id}-${format(date, 'yyyy-MM-dd')}`;
+          occupancyMap.set(key, (occupancyMap.get(key) || 0) + 1);
+        });
+      });
+
+      // 2. Process Fixed Assignments
+      allAssignments.forEach((a: { room_id: string; date_start: string; date_end: string }) => {
+        const start = new Date(a.date_start);
+        const end = new Date(a.date_end);
+        const effectiveStart = start < startDate ? startDate : start;
+        const effectiveEnd = end > endDate ? endDate : end;
+
+        if (effectiveStart > effectiveEnd) return;
+
+        const interval = eachDayOfInterval({ start: effectiveStart, end: effectiveEnd });
+        interval.forEach(date => {
+          const key = `${a.room_id}-${format(date, 'yyyy-MM-dd')}`;
+          occupancyMap.set(key, (occupancyMap.get(key) || 0) + 1);
+        });
+      });
+
+      // 3. Check Availability using the Map (O(1) lookup per room per day)
+      // Pre-calculate user booked dates string set for O(1) lookup
+      const userBookedDatesSet = new Set(bookedDates.map(d => format(d, 'yyyy-MM-dd')));
+
       for (const day of daysToCheck) {
         const dayStr = format(day, 'yyyy-MM-dd');
 
-        // Skip if user already has a reservation on this day
-        const hasUserReservation = bookedDates.some(
-          bookedDate => format(bookedDate, 'yyyy-MM-dd') === dayStr
-        );
-        if (hasUserReservation) continue;
+        // Skip if user already has a reservation
+        if (userBookedDatesSet.has(dayStr)) continue;
 
-        // Check availability across all user's rooms
         let hasAvailableDesk = false;
 
         for (const room of userRooms) {
           const totalDesks = room.totalDesks || 0;
           if (totalDesks === 0) continue;
 
-          // Count reservations for this room on this day (from cached data)
-          const reservedCount = (allReservations || []).filter((r: { room_id: string; date_start: string; date_end: string }) =>
-            r.room_id === room.id &&
-            r.date_start <= dayStr &&
-            r.date_end >= dayStr
-          ).length;
+          const occupiedCount = occupancyMap.get(`${room.id}-${dayStr}`) || 0;
 
-          // Count fixed assignments for this room on this day (from cached data)
-          const assignedCount = (allAssignments || []).filter((a: { room_id: string; date_start: string; date_end: string }) =>
-            a.room_id === room.id &&
-            a.date_start <= dayStr &&
-            a.date_end >= dayStr
-          ).length;
-
-          const totalOccupied = reservedCount + assignedCount;
-
-          if (totalOccupied < totalDesks) {
+          if (occupiedCount < totalDesks) {
             hasAvailableDesk = true;
-            break;
+            break; // Found one available room, no need to check others for this day
           }
         }
 
