@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Eye, EyeOff, Loader2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface User {
@@ -30,6 +30,7 @@ export default function Users() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [showPasswords, setShowPasswords] = useState<{ [key: string]: boolean }>({});
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortConfig, setSortConfig] = useState<{ key: keyof User; direction: 'asc' | 'desc' } | null>(null);
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
 
@@ -70,12 +71,30 @@ export default function Users() {
     setLoading(false);
   };
 
+  const handleSort = (key: keyof User) => {
+    setSortConfig(current => {
+      if (current?.key === key) {
+        return { key, direction: current.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      return { key, direction: 'asc' };
+    });
+  };
+
   const filteredUsers = users
     .filter(user =>
       user.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.username.toLowerCase().includes(searchTerm.toLowerCase())
     )
-    .sort((a, b) => a.full_name.localeCompare(b.full_name));
+    .sort((a, b) => {
+      if (!sortConfig) return 0;
+
+      const aValue = String(a[sortConfig.key]).toLowerCase();
+      const bValue = String(b[sortConfig.key]).toLowerCase();
+
+      if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -268,9 +287,31 @@ export default function Users() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Username</TableHead>
-                  <TableHead className="cursor-pointer hover:bg-muted/50 transition-colors" title="Sorted alphabetically by default">
-                    Full Name (A-Z)
+                  <TableHead
+                    className="cursor-pointer hover:bg-muted/50 transition-colors select-none"
+                    onClick={() => handleSort('username')}
+                  >
+                    <div className="flex items-center gap-2">
+                      Username
+                      {sortConfig?.key === 'username' ? (
+                        sortConfig.direction === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                      ) : (
+                        <ArrowUpDown className="h-4 w-4 opacity-50" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer hover:bg-muted/50 transition-colors select-none"
+                    onClick={() => handleSort('full_name')}
+                  >
+                    <div className="flex items-center gap-2">
+                      Full Name
+                      {sortConfig?.key === 'full_name' ? (
+                        sortConfig.direction === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                      ) : (
+                        <ArrowUpDown className="h-4 w-4 opacity-50" />
+                      )}
+                    </div>
                   </TableHead>
                   <TableHead>Password</TableHead>
                   <TableHead>Role</TableHead>
