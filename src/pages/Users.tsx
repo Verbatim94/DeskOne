@@ -29,6 +29,7 @@ export default function Users() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [showPasswords, setShowPasswords] = useState<{ [key: string]: boolean }>({});
+  const [searchTerm, setSearchTerm] = useState('');
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
 
@@ -52,8 +53,7 @@ export default function Users() {
       const { data, error } = await supabase
         .from('users')
         .select('*')
-        .select('*')
-        .order('full_name', { ascending: true });
+        .order('full_name', { ascending: true }); // Default DB sort
 
       if (error) throw error;
       setUsers(data || []);
@@ -69,6 +69,13 @@ export default function Users() {
     }
     setLoading(false);
   };
+
+  const filteredUsers = users
+    .filter(user =>
+      user.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.username.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => a.full_name.localeCompare(b.full_name));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -243,6 +250,14 @@ export default function Users() {
         <CardHeader className="flex-shrink-0">
           <CardTitle>All Users</CardTitle>
           <CardDescription>Manage user accounts and permissions</CardDescription>
+          <div className="pt-4">
+            <Input
+              placeholder="Search users by name or username..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="max-w-md"
+            />
+          </div>
         </CardHeader>
         <CardContent className="flex-1 overflow-y-auto">
           {loading ? (
@@ -254,7 +269,9 @@ export default function Users() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Username</TableHead>
-                  <TableHead>Full Name</TableHead>
+                  <TableHead className="cursor-pointer hover:bg-muted/50 transition-colors" title="Sorted alphabetically by default">
+                    Full Name (A-Z)
+                  </TableHead>
                   <TableHead>Password</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Status</TableHead>
@@ -262,7 +279,7 @@ export default function Users() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.map((user) => (
+                {filteredUsers.map((user) => (
                   <TableRow key={user.id}>
                     <TableCell className="font-mono text-sm">{user.username}</TableCell>
                     <TableCell>{user.full_name}</TableCell>
