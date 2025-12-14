@@ -862,7 +862,7 @@ export default function RoomViewer() {
                                 {cell.label || `Desk ${cell.x}-${cell.y}`}
                               </p>
                               <p className="text-xs text-gray-500 mt-0.5">
-                                {isAvailable ? 'Available all day' : isMyReservation ? 'Reserved by you' : 'Reserved'}
+                                {isAvailable ? 'Available all day' : isMyReservation ? 'Reserved by you' : `Reserved by ${assignedTo}`}
                               </p>
                             </div>
                           </div>
