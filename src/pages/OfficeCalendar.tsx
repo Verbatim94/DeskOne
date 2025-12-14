@@ -328,7 +328,7 @@ export default function OfficeCalendar() {
                         <div key={hour} className="flex border-b border-gray-100 last:border-b-0">
                             {/* Hour label */}
                             <div className="w-20 flex-shrink-0 py-2 text-sm font-medium text-gray-600">
-                                {format(setHours(new Date(), hour), 'h:mm a')}
+                                {format(setMinutes(setHours(new Date(), hour), 0), 'h:mm a')}
                             </div>
 
                             {/* 15-minute slots */}
