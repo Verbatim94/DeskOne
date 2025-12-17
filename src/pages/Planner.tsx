@@ -214,8 +214,8 @@ export default function Planner() {
                                 {filteredRooms.map(room => (
                                     <div key={room.id} className="contents">
                                         {/* Room Header Row */}
-                                        <div className="flex bg-muted/20 hover:bg-muted/30 transition-colors">
-                                            <div className="sticky left-0 z-30 w-64 bg-muted/20 border-r border-border/50 p-2 px-4 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.1)]">
+                                        <div className="flex bg-muted transition-colors">
+                                            <div className="sticky left-0 z-30 w-64 bg-muted border-r border-border/50 p-2 px-4 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.1)]">
                                                 <TooltipProvider>
                                                     <Tooltip>
                                                         <TooltipTrigger asChild>
