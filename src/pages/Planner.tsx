@@ -58,9 +58,55 @@ export default function Planner() {
     const [selectedRoomIds, setSelectedRoomIds] = useState<string[]>([]);
     const { toast } = useToast();
 
-    // ... (loadData effect)
+    useEffect(() => {
+        loadData();
+    }, [date]);
 
-    // ... (loadData function)
+    const loadData = async () => {
+        setLoading(true);
+        try {
+            const session = authService.getSession();
+            if (!session) throw new Error('No session');
+
+            // 1. Fetch Structure (Rooms + Desks)
+            const roomsResponse = await supabase.functions.invoke('manage-rooms', {
+                body: { operation: 'list_all_desks' },
+                headers: { 'x-session-token': session.token }
+            });
+            if (roomsResponse.error) throw roomsResponse.error;
+
+            const fetchedRooms = roomsResponse.data || [];
+            console.log('Planner rooms structure:', fetchedRooms);
+            setRooms(fetchedRooms);
+            // Select all rooms by default
+            setSelectedRoomIds(fetchedRooms.map((r: any) => r.id));
+
+            // 2. Fetch Reservations for the month
+            const start = format(startOfMonth(date), 'yyyy-MM-dd');
+            const end = format(endOfMonth(date), 'yyyy-MM-dd');
+
+            const resResponse = await supabase.functions.invoke('manage-reservations', {
+                body: {
+                    operation: 'list_all_reservations',
+                    data: { date_start: start, date_end: end }
+                },
+                headers: { 'x-session-token': session.token }
+            });
+
+            if (resResponse.error) throw resResponse.error;
+            console.log('Planner reservations:', resResponse.data);
+            setReservations(resResponse.data || []);
+
+        } catch (error: any) {
+            console.error(error);
+            toast({
+                title: 'Error loading planner',
+                description: error.message || 'Failed to load data',
+                variant: 'destructive'
+            });
+        }
+        setLoading(false);
+    };
 
     const daysInMonth = eachDayOfInterval({
         start: startOfMonth(date),
@@ -75,9 +121,10 @@ export default function Planner() {
         );
     };
 
-    const filteredRooms = selectedRoomIds.length > 0
-        ? rooms.filter(room => selectedRoomIds.includes(room.id))
-        : rooms;
+    // If we have selected rooms, show only them. If usage clears all, show none or all? 
+    // User requested "Show all by default". If they uncheck all, it should probably show none or all.
+    // Let's strictly follow "checked = visible".
+    const filteredRooms = rooms.filter(room => selectedRoomIds.includes(room.id));
 
     const roomOptions = rooms.map(room => ({ label: room.name, value: room.id }));
 

@@ -40,6 +40,16 @@ export function MultiSelectRoomFilter({
         }
     }
 
+    const isAllSelected = options.length > 0 && selected.length === options.length;
+
+    const toggleAll = () => {
+        if (isAllSelected) {
+            onChange([]);
+        } else {
+            onChange(options.map(o => o.value));
+        }
+    };
+
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
@@ -62,6 +72,24 @@ export function MultiSelectRoomFilter({
                     <CommandInput placeholder="Search rooms..." />
                     <CommandList>
                         <CommandEmpty>No room found.</CommandEmpty>
+                        <CommandGroup>
+                            <CommandItem
+                                onSelect={toggleAll}
+                                className="font-medium border-b"
+                            >
+                                <div
+                                    className={cn(
+                                        "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
+                                        isAllSelected
+                                            ? "bg-primary text-primary-foreground"
+                                            : "opacity-50 [&_svg]:invisible"
+                                    )}
+                                >
+                                    <Check className={cn("h-3 w-3")} />
+                                </div>
+                                {isAllSelected ? "Deselect All" : "Select All"}
+                            </CommandItem>
+                        </CommandGroup>
                         <CommandGroup className="max-h-64 overflow-auto">
                             {options.map((option) => (
                                 <CommandItem
