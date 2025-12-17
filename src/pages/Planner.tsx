@@ -45,61 +45,22 @@ interface Reservation {
     };
 }
 
+import { MultiSelectRoomFilter } from '@/components/MultiSelectRoomFilter';
+
+// ... (existing interfaces)
+
 export default function Planner() {
     const [date, setDate] = useState(new Date());
     const [rooms, setRooms] = useState<RoomWithDesks[]>([]);
     const [reservations, setReservations] = useState<Reservation[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
+    const [selectedRoomIds, setSelectedRoomIds] = useState<string[]>([]);
     const { toast } = useToast();
 
-    useEffect(() => {
-        loadData();
-    }, [date]);
+    // ... (loadData effect)
 
-    const loadData = async () => {
-        setLoading(true);
-        try {
-            const session = authService.getSession();
-            if (!session) throw new Error('No session');
-
-            // 1. Fetch Structure (Rooms + Desks)
-            // Ideally we'd cache this if it doesn't change often, but for now fetch every time or rely on a separate effect
-            // Actually, let's fetch structure once or if date changes (structure rarely changes but keeping it simple)
-            const roomsResponse = await supabase.functions.invoke('manage-rooms', {
-                body: { operation: 'list_all_desks' },
-                headers: { 'x-session-token': session.token }
-            });
-            if (roomsResponse.error) throw roomsResponse.error;
-            console.log('Planner rooms structure:', roomsResponse.data);
-            setRooms(roomsResponse.data || []);
-
-            // 2. Fetch Reservations for the month
-            const start = format(startOfMonth(date), 'yyyy-MM-dd');
-            const end = format(endOfMonth(date), 'yyyy-MM-dd');
-
-            const resResponse = await supabase.functions.invoke('manage-reservations', {
-                body: {
-                    operation: 'list_all_reservations',
-                    data: { date_start: start, date_end: end }
-                },
-                headers: { 'x-session-token': session.token }
-            });
-
-            if (resResponse.error) throw resResponse.error;
-            console.log('Planner reservations:', resResponse.data);
-            setReservations(resResponse.data || []);
-
-        } catch (error: any) {
-            console.error(error);
-            toast({
-                title: 'Error loading planner',
-                description: error.message || 'Failed to load data',
-                variant: 'destructive'
-            });
-        }
-        setLoading(false);
-    };
+    // ... (loadData function)
 
     const daysInMonth = eachDayOfInterval({
         start: startOfMonth(date),
@@ -114,12 +75,27 @@ export default function Planner() {
         );
     };
 
+    const filteredRooms = selectedRoomIds.length > 0
+        ? rooms.filter(room => selectedRoomIds.includes(room.id))
+        : rooms;
+
+    const roomOptions = rooms.map(room => ({ label: room.name, value: room.id }));
+
     return (
         <div className="h-full flex flex-col space-y-4 overflow-hidden">
             <div className="flex items-center justify-between flex-shrink-0">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Access Planner</h1>
-                    <p className="text-muted-foreground text-sm">Overview of all desk reservations</p>
+                <div className="flex items-center gap-4">
+                    <div>
+                        <h1 className="text-2xl font-bold tracking-tight">Access Planner</h1>
+                        <p className="text-muted-foreground text-sm">Overview of all desk reservations</p>
+                    </div>
+                    <div className="hidden md:block h-8 w-[1px] bg-border" />
+                    <MultiSelectRoomFilter
+                        options={roomOptions}
+                        selected={selectedRoomIds}
+                        onChange={setSelectedRoomIds}
+                        placeholder="Filter rooms..."
+                    />
                 </div>
                 <div className="flex items-center gap-2">
                     <Button variant="outline" size="icon" onClick={() => setDate(subMonths(date, 1))}>
@@ -159,7 +135,7 @@ export default function Planner() {
 
                             {/* Body */}
                             <div className="divide-y divide-border/50">
-                                {rooms.map(room => (
+                                {filteredRooms.map(room => (
                                     <div key={room.id} className="contents">
                                         {/* Room Header Row */}
                                         <div className="flex bg-muted/20 hover:bg-muted/30 transition-colors">
