@@ -70,6 +70,7 @@ export default function Planner() {
                 headers: { 'x-session-token': session.token }
             });
             if (roomsResponse.error) throw roomsResponse.error;
+            console.log('Planner rooms structure:', roomsResponse.data);
             setRooms(roomsResponse.data || []);
 
             // 2. Fetch Reservations for the month
@@ -85,6 +86,7 @@ export default function Planner() {
             });
 
             if (resResponse.error) throw resResponse.error;
+            console.log('Planner reservations:', resResponse.data);
             setReservations(resResponse.data || []);
 
         } catch (error: any) {
@@ -156,16 +158,25 @@ export default function Planner() {
                             <div className="divide-y">
                                 {rooms.map(room => (
                                     <div key={room.id}>
-                                        {/* Room Header Row (Optional, maybe just group desks) */}
+                                        {/* Room Header Row */}
                                         <div className="bg-muted/30 sticky left-0 z-10">
-                                            <div className="p-2 px-4 font-semibold text-xs text-muted-foreground bg-muted/30 w-[max-content]">
-                                                {room.name}
-                                            </div>
+                                            <TooltipProvider>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <div className="p-2 px-4 font-semibold text-xs text-muted-foreground bg-muted/30 w-64 truncate cursor-help border-r">
+                                                            {room.name}
+                                                        </div>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        <p>{room.name}</p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
                                         </div>
 
                                         {room.desks.map(desk => (
-                                            <div key={desk.id} className="flex hover:bg-muted/5">
-                                                <div className="sticky left-0 z-10 w-64 bg-card border-r p-3 text-sm flex items-center font-medium shadow-[1px_0_0_0_#e5e7eb]">
+                                            <div key={desk.id} className="flex hover:bg-muted/5 group/row">
+                                                <div className="sticky left-0 z-10 w-64 bg-card border-r p-3 pl-8 text-sm flex items-center font-medium shadow-[1px_0_0_0_#e5e7eb] truncate group-hover/row:bg-muted/5 transition-colors">
                                                     {desk.label}
                                                 </div>
                                                 {daysInMonth.map(day => {
