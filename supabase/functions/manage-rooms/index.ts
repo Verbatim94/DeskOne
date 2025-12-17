@@ -547,40 +547,8 @@ Deno.serve(async (req) => {
 
         result = { data: roomsWithDesks, error: null };
         break;
-      case 'list_all_desks': {
-        // Only global admin can view all desks structure
-        if (user.role !== 'admin' && user.role !== 'super_admin') {
-          return new Response(
-            JSON.stringify({ error: 'Only admins can view all desks' }),
-            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        // Fetch all rooms
-        const { data: rooms, error: roomsError } = await supabase
-          .from('rooms')
-          .select('id, name')
-          .order('name');
-
-        if (roomsError) throw roomsError;
-
-        // Fetch all desk cells
-        const { data: desks, error: desksError } = await supabase
-          .from('room_cells')
-          .select('id, room_id, label, type')
-          .eq('type', 'desk');
-
-        if (desksError) throw desksError;
-
-        // Combine
-        const roomsWithDesks = rooms.map(room => ({
-          ...room,
-          desks: desks.filter(d => d.room_id === room.id).sort((a, b) => a.label.localeCompare(b.label))
-        }));
-
-        result = { data: roomsWithDesks, error: null };
-        break;
       }
+
 
       default:
         return new Response(
