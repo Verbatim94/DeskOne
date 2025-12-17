@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { authService } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 import {
     Tooltip,
     TooltipContent,
@@ -133,8 +134,8 @@ export default function Planner() {
                 </div>
             </div>
 
-            <Card className="flex-1 min-h-0 overflow-hidden">
-                <CardContent className="p-0 h-full overflow-auto">
+            <Card className="flex-1 min-h-0 overflow-hidden border-0 shadow-none sm:border sm:shadow-sm sm:rounded-lg">
+                <CardContent className="p-0 h-full overflow-auto relative">
                     {loading ? (
                         <div className="flex items-center justify-center h-full">
                             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -142,71 +143,91 @@ export default function Planner() {
                     ) : (
                         <div className="relative min-w-[max-content]">
                             {/* Header Row */}
-                            <div className="flex sticky top-0 z-20 bg-card border-b">
-                                <div className="sticky left-0 z-30 w-64 bg-card border-r p-4 font-semibold text-sm flex items-center shadow-[1px_0_0_0_#e5e7eb]">
+                            <div className="flex sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b shadow-sm">
+                                <div className="sticky left-0 z-50 w-64 bg-background border-r p-4 font-medium text-sm text-foreground flex items-center shadow-[4px_0_12px_-4px_rgba(0,0,0,0.1)]">
                                     Room / Desk
                                 </div>
                                 {daysInMonth.map(day => (
-                                    <div key={day.toString()} className="w-12 flex-shrink-0 border-r p-2 text-center text-xs">
-                                        <div className="font-medium">{format(day, 'd')}</div>
-                                        <div className="text-muted-foreground">{format(day, 'EEEEE')}</div>
+                                    <div key={day.toString()} className="w-12 flex-shrink-0 border-r border-border/50 last:border-0 p-2 text-center text-xs group hover:bg-muted/50 transition-colors">
+                                        <div className={cn("font-medium", isSameDay(day, new Date()) ? "text-primary" : "text-foreground")}>
+                                            {format(day, 'd')}
+                                        </div>
+                                        <div className="text-[10px] text-muted-foreground uppercase tracking-widest">{format(day, 'EEEEE')}</div>
                                     </div>
                                 ))}
                             </div>
 
                             {/* Body */}
-                            <div className="divide-y">
+                            <div className="divide-y divide-border/50">
                                 {rooms.map(room => (
-                                    <div key={room.id}>
+                                    <div key={room.id} className="contents">
                                         {/* Room Header Row */}
-                                        <div className="bg-muted/30 sticky left-0 z-10">
-                                            <TooltipProvider>
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <div className="p-2 px-4 font-semibold text-xs text-muted-foreground bg-muted/30 w-64 truncate cursor-help border-r">
-                                                            {room.name}
-                                                        </div>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>
-                                                        <p>{room.name}</p>
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                            </TooltipProvider>
+                                        <div className="flex bg-muted/20 hover:bg-muted/30 transition-colors">
+                                            <div className="sticky left-0 z-30 w-64 bg-muted/20 border-r border-border/50 p-2 px-4 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.1)]">
+                                                <TooltipProvider>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <div className="font-semibold text-xs text-foreground/70 truncate cursor-help">
+                                                                {room.name}
+                                                            </div>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            <p>{room.name}</p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </TooltipProvider>
+                                            </div>
+                                            {daysInMonth.map(day => (
+                                                <div key={`room-${room.id}-${day}`} className="w-12 flex-shrink-0 border-r border-border/50 last:border-0" />
+                                            ))}
                                         </div>
 
+                                        {/* Desks */}
                                         {room.desks.map(desk => (
-                                            <div key={desk.id} className="flex hover:bg-muted/5 group/row">
-                                                <div className="sticky left-0 z-10 w-64 bg-background border-r p-3 pl-8 text-sm flex items-center font-medium text-foreground shadow-[1px_0_0_0_#e5e7eb] truncate group-hover/row:bg-muted/5 transition-colors">
-                                                    {desk.label || '(No Label)'}
+                                            <div key={desk.id} className="flex hover:bg-muted/5 group/row transition-colors">
+                                                <div className="sticky left-0 z-30 w-64 bg-background border-r border-border/50 p-3 pl-8 text-sm flex items-center shadow-[4px_0_12px_-4px_rgba(0,0,0,0.1)] group-hover/row:bg-muted/5 transition-colors">
+                                                    <span className={cn("truncate font-medium", !desk.label ? "text-muted-foreground italic text-xs" : "text-foreground")}>
+                                                        {desk.label || '(No Label)'}
+                                                    </span>
                                                 </div>
                                                 {daysInMonth.map(day => {
                                                     const res = getReservation(desk.id, day);
                                                     return (
                                                         <div
                                                             key={day.toString()}
-                                                            className="w-12 flex-shrink-0 border-r p-0.5 text-center relative group"
+                                                            className={cn(
+                                                                "w-12 flex-shrink-0 border-r border-border/50 last:border-0 p-0.5 text-center relative transition-colors",
+                                                                isSameDay(day, new Date()) && "bg-muted/10"
+                                                            )}
                                                         >
                                                             {res ? (
                                                                 <TooltipProvider>
                                                                     <Tooltip>
                                                                         <TooltipTrigger asChild>
                                                                             <button
-                                                                                className="w-full h-full bg-blue-100 hover:bg-blue-200 text-blue-700 text-[10px] rounded flex items-center justify-center font-medium truncate px-0.5 cursor-pointer transition-colors"
+                                                                                className={cn(
+                                                                                    "w-full h-full text-[10px] rounded flex items-center justify-center font-medium truncate px-0.5 cursor-pointer transition-all shadow-sm",
+                                                                                    res.status === 'pending' ? "bg-amber-100 text-amber-700 hover:bg-amber-200" : "bg-primary/15 text-primary hover:bg-primary/25"
+                                                                                )}
                                                                                 onClick={() => setSelectedReservation(res)}
                                                                             >
                                                                                 {res.users.full_name.split(' ')[0]}
                                                                             </button>
                                                                         </TooltipTrigger>
-                                                                        <TooltipContent side="top">
-                                                                            <p className="font-semibold">{res.users.full_name}</p>
-                                                                            <p className="text-xs text-muted-foreground">
-                                                                                {format(new Date(res.date_start), 'MMM d')} - {format(new Date(res.date_end), 'MMM d')}
-                                                                            </p>
+                                                                        <TooltipContent side="top" className="z-50">
+                                                                            <div className="flex flex-col gap-1">
+                                                                                <p className="font-semibold">{res.users.full_name}</p>
+                                                                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                                                    <span className="capitalize">{res.status}</span>
+                                                                                    <span>•</span>
+                                                                                    <span>{format(new Date(res.date_start), 'MMM d')} - {format(new Date(res.date_end), 'MMM d')}</span>
+                                                                                </div>
+                                                                            </div>
                                                                         </TooltipContent>
                                                                     </Tooltip>
                                                                 </TooltipProvider>
                                                             ) : (
-                                                                <div className="w-full h-full" />
+                                                                <div className="w-full h-full hover:bg-muted/10 transition-colors" />
                                                             )}
                                                         </div>
                                                     );
