@@ -214,12 +214,12 @@ export default function Planner() {
                                 {filteredRooms.map(room => (
                                     <div key={room.id} className="contents">
                                         {/* Room Header Row */}
-                                        <div className="flex bg-muted transition-colors">
-                                            <div className="sticky left-0 z-30 w-64 bg-muted border-r border-border/50 p-2 px-4 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.1)]">
+                                        <div className="flex bg-blue-100 transition-colors">
+                                            <div className="sticky left-0 z-30 w-64 bg-blue-100 border-r border-blue-200 p-2 px-4 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.1)]">
                                                 <TooltipProvider>
                                                     <Tooltip>
                                                         <TooltipTrigger asChild>
-                                                            <div className="font-semibold text-xs text-foreground/70 truncate cursor-help">
+                                                            <div className="font-semibold text-xs text-blue-900 truncate cursor-help">
                                                                 {room.name}
                                                             </div>
                                                         </TooltipTrigger>
@@ -233,8 +233,8 @@ export default function Planner() {
                                                 <div
                                                     key={`room-${room.id}-${day}`}
                                                     className={cn(
-                                                        "w-12 flex-shrink-0 border-r border-border/50 last:border-0",
-                                                        isWeekend(day) && "bg-muted/10"
+                                                        "w-12 flex-shrink-0 border-r border-blue-200 last:border-0",
+                                                        isWeekend(day) && "bg-black/5"
                                                     )}
                                                 />
                                             ))}
