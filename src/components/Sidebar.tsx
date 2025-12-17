@@ -48,10 +48,12 @@ export function Sidebar({ className }: { className?: string }) {
                     return (
                         <Link key={item.name} to={item.href}>
                             <Button
-                                variant={isActive ? 'secondary' : 'ghost'}
+                                variant="ghost"
                                 className={cn(
-                                    'w-full justify-start gap-3 mb-1',
-                                    isActive && 'bg-secondary'
+                                    'w-full justify-start gap-3 mb-1 transition-colors',
+                                    isActive
+                                        ? 'bg-blue-600 text-white hover:bg-blue-700 hover:text-white'
+                                        : 'text-muted-foreground hover:bg-blue-50 hover:text-blue-700'
                                 )}
                             >
                                 <Icon className="h-4 w-4" />
