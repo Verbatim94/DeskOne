@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Pencil, Trash2, Grid3x3, Loader2, Users, Settings } from 'lucide-react';
 import RoomAccessDialog from '@/components/RoomAccessDialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface Room {
   id: string;
@@ -249,9 +250,18 @@ export default function Rooms() {
           {rooms.map((room) => (
             <Card key={room.id} className="hover:shadow-lg transition-shadow">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Grid3x3 className="h-5 w-5" />
-                  {room.name}
+                <CardTitle className="flex items-center gap-2 overflow-hidden">
+                  <Grid3x3 className="h-5 w-5 flex-shrink-0" />
+                  <TooltipProvider>
+                    <Tooltip delayDuration={300}>
+                      <TooltipTrigger asChild>
+                        <span className="truncate text-lg cursor-default">{room.name}</span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{room.name}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </CardTitle>
                 {room.description && (
                   <CardDescription>{room.description}</CardDescription>
