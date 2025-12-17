@@ -176,8 +176,8 @@ export default function Planner() {
 
                                         {room.desks.map(desk => (
                                             <div key={desk.id} className="flex hover:bg-muted/5 group/row">
-                                                <div className="sticky left-0 z-10 w-64 bg-card border-r p-3 pl-8 text-sm flex items-center font-medium shadow-[1px_0_0_0_#e5e7eb] truncate group-hover/row:bg-muted/5 transition-colors">
-                                                    {desk.label}
+                                                <div className="sticky left-0 z-10 w-64 bg-background border-r p-3 pl-8 text-sm flex items-center font-medium text-foreground shadow-[1px_0_0_0_#e5e7eb] truncate group-hover/row:bg-muted/5 transition-colors">
+                                                    {desk.label || '(No Label)'}
                                                 </div>
                                                 {daysInMonth.map(day => {
                                                     const res = getReservation(desk.id, day);
