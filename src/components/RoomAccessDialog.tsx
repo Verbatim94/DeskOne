@@ -229,7 +229,7 @@ export default function RoomAccessDialog({ roomId, roomName, open, onOpenChange 
                 No users have access yet
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
                 {roomUsers.map((roomUser) => (
                   <div
                     key={roomUser.id}
