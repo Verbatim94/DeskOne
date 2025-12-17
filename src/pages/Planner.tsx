@@ -198,7 +198,7 @@ export default function Planner() {
                                         key={day.toString()}
                                         className={cn(
                                             "w-12 flex-shrink-0 border-r border-border/50 last:border-0 p-2 text-center text-xs group hover:bg-muted/50 transition-colors",
-                                            isWeekend(day) && "bg-blue-50/50"
+                                            isWeekend(day) && "bg-muted/30"
                                         )}
                                     >
                                         <div className={cn("font-medium", isSameDay(day, new Date()) ? "text-primary" : "text-foreground")}>
@@ -234,7 +234,7 @@ export default function Planner() {
                                                     key={`room-${room.id}-${day}`}
                                                     className={cn(
                                                         "w-12 flex-shrink-0 border-r border-border/50 last:border-0",
-                                                        isWeekend(day) && "bg-blue-50/50"
+                                                        isWeekend(day) && "bg-muted/30"
                                                     )}
                                                 />
                                             ))}
@@ -255,7 +255,7 @@ export default function Planner() {
                                                             key={day.toString()}
                                                             className={cn(
                                                                 "w-12 flex-shrink-0 border-r border-border/50 last:border-0 p-0.5 text-center relative transition-colors",
-                                                                isWeekend(day) && "bg-blue-50/50",
+                                                                isWeekend(day) && "bg-muted/30",
                                                                 isSameDay(day, new Date()) && "bg-muted/10", // Keep Today highlight logic, maybe needs adjustment precedence?
                                                             )}
                                                         >
