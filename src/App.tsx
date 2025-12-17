@@ -25,6 +25,7 @@ import Offices from "./pages/Offices";
 import OfficeCalendar from "./pages/OfficeCalendar";
 import OfficeAdminCalendar from "./pages/OfficeAdminCalendar";
 import SharedRooms from "./pages/SharedRooms";
+import Planner from "./pages/Planner";
 
 const App = () => {
   console.log("App Version: 1.1 - Deployment Check");
@@ -124,6 +125,16 @@ const App = () => {
                   <ProtectedRoute requiredRole="admin">
                     <Layout>
                       <PendingApprovals />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/planner"
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <Layout>
+                      <Planner />
                     </Layout>
                   </ProtectedRoute>
                 }
