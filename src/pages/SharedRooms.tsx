@@ -8,8 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Grid3x3, ArrowRight, Loader2, Calendar as CalendarIcon, Users } from 'lucide-react';
-import { format } from 'date-fns';
+import { Grid3x3, ArrowRight, Loader2, Calendar as CalendarIcon, Users, ChevronLeft, ChevronRight } from 'lucide-react';
+import { format, addDays, subDays } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
@@ -90,28 +90,44 @@ export default function SharedRooms() {
 
                 <div className="flex items-center gap-2">
                     <Label className="font-medium mr-2">Check Availability for:</Label>
-                    <Popover>
-                        <PopoverTrigger asChild>
-                            <Button
-                                variant={"outline"}
-                                className={cn(
-                                    "w-[240px] justify-start text-left font-normal",
-                                    !date && "text-muted-foreground"
-                                )}
-                            >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {date ? format(date, "PPP") : <span>Pick a date</span>}
-                            </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="end">
-                            <Calendar
-                                mode="single"
-                                selected={date}
-                                onSelect={(d) => d && setDate(d)}
-                                initialFocus
-                            />
-                        </PopoverContent>
-                    </Popover>
+                    <div className="flex items-center gap-1">
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setDate(subDays(date, 1))}
+                        >
+                            <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant={"outline"}
+                                    className={cn(
+                                        "w-[240px] justify-start text-left font-normal",
+                                        !date && "text-muted-foreground"
+                                    )}
+                                >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {date ? format(date, "PPP") : <span>Pick a date</span>}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="end">
+                                <Calendar
+                                    mode="single"
+                                    selected={date}
+                                    onSelect={(d) => d && setDate(d)}
+                                    initialFocus
+                                />
+                            </PopoverContent>
+                        </Popover>
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setDate(addDays(date, 1))}
+                        >
+                            <ChevronRight className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </div>
             </div>
 
@@ -153,10 +169,7 @@ export default function SharedRooms() {
                                             </CardHeader>
                                             <CardContent className="flex-1 flex flex-col justify-between gap-4">
                                                 <div className="space-y-3">
-                                                    <div className="flex items-center justify-between text-sm">
-                                                        <span className="text-muted-foreground">Grid Size</span>
-                                                        <span className="font-medium">{room.grid_width} × {room.grid_height}</span>
-                                                    </div>
+
 
                                                     <div className="space-y-1">
                                                         <div className="flex items-center justify-between text-sm">
