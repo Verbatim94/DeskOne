@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from 'date-fns';
+import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isWeekend } from 'date-fns';
 import { ChevronLeft, ChevronRight, Loader2, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -194,7 +194,13 @@ export default function Planner() {
                                     Room / Desk
                                 </div>
                                 {daysInMonth.map(day => (
-                                    <div key={day.toString()} className="w-12 flex-shrink-0 border-r border-border/50 last:border-0 p-2 text-center text-xs group hover:bg-muted/50 transition-colors">
+                                    <div
+                                        key={day.toString()}
+                                        className={cn(
+                                            "w-12 flex-shrink-0 border-r border-border/50 last:border-0 p-2 text-center text-xs group hover:bg-muted/50 transition-colors",
+                                            isWeekend(day) && "bg-blue-50/50"
+                                        )}
+                                    >
                                         <div className={cn("font-medium", isSameDay(day, new Date()) ? "text-primary" : "text-foreground")}>
                                             {format(day, 'd')}
                                         </div>
@@ -224,7 +230,13 @@ export default function Planner() {
                                                 </TooltipProvider>
                                             </div>
                                             {daysInMonth.map(day => (
-                                                <div key={`room-${room.id}-${day}`} className="w-12 flex-shrink-0 border-r border-border/50 last:border-0" />
+                                                <div
+                                                    key={`room-${room.id}-${day}`}
+                                                    className={cn(
+                                                        "w-12 flex-shrink-0 border-r border-border/50 last:border-0",
+                                                        isWeekend(day) && "bg-blue-50/50"
+                                                    )}
+                                                />
                                             ))}
                                         </div>
 
@@ -243,7 +255,8 @@ export default function Planner() {
                                                             key={day.toString()}
                                                             className={cn(
                                                                 "w-12 flex-shrink-0 border-r border-border/50 last:border-0 p-0.5 text-center relative transition-colors",
-                                                                isSameDay(day, new Date()) && "bg-muted/10"
+                                                                isWeekend(day) && "bg-blue-50/50",
+                                                                isSameDay(day, new Date()) && "bg-muted/10", // Keep Today highlight logic, maybe needs adjustment precedence?
                                                             )}
                                                         >
                                                             {res ? (
