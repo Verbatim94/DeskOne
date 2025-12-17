@@ -12,7 +12,8 @@ import { Grid3x3, ArrowRight, Loader2, Calendar as CalendarIcon, Users } from 'l
 import { format } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { cn } from '@/lib/utils'; // Assuming this exists, based on other files
+import { cn } from '@/lib/utils';
+import { YourActivitySidebar } from '@/components/rooms/YourActivitySidebar';
 
 interface Room {
     id: string;
@@ -114,81 +115,91 @@ export default function SharedRooms() {
                 </div>
             </div>
 
-            {loading ? (
-                <div className="flex justify-center py-12 flex-1">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-            ) : rooms.length === 0 ? (
-                <Card>
-                    <CardContent className="flex flex-col items-center justify-center py-12">
-                        <Grid3x3 className="h-12 w-12 text-muted-foreground mb-4" />
-                        <h3 className="text-lg font-semibold mb-2">No shared rooms</h3>
-                        <p className="text-muted-foreground text-center mb-4">
-                            You don't have access to any shared rooms yet.
-                        </p>
-                    </CardContent>
-                </Card>
-            ) : (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 overflow-y-auto pr-2 pb-10">
-                    {rooms.map((room) => {
-                        const availableDesks = room.totalDesks - room.activeReservations;
-                        const percentage = room.totalDesks > 0
-                            ? Math.round((availableDesks / room.totalDesks) * 100)
-                            : 0;
-
-                        return (
-                            <Card key={room.id} className="hover:shadow-lg transition-shadow flex flex-col">
-                                <CardHeader className="pb-3">
-                                    <CardTitle className="flex items-center gap-2 text-xl">
-                                        <Grid3x3 className="h-5 w-5 text-primary" />
-                                        {room.name}
-                                    </CardTitle>
-                                    {room.description && (
-                                        <CardDescription className="line-clamp-2">{room.description}</CardDescription>
-                                    )}
-                                </CardHeader>
-                                <CardContent className="flex-1 flex flex-col justify-between gap-4">
-                                    <div className="space-y-3">
-                                        <div className="flex items-center justify-between text-sm">
-                                            <span className="text-muted-foreground">Grid Size</span>
-                                            <span className="font-medium">{room.grid_width} × {room.grid_height}</span>
-                                        </div>
-
-                                        <div className="space-y-1">
-                                            <div className="flex items-center justify-between text-sm">
-                                                <span className="text-muted-foreground">Availability</span>
-                                                <span className={cn("font-bold", getAvailabilityColor(percentage))}>
-                                                    {percentage}% Free
-                                                </span>
-                                            </div>
-                                            <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
-                                                <div
-                                                    className={cn("h-full transition-all duration-500",
-                                                        percentage >= 70 ? 'bg-green-500' :
-                                                            percentage >= 30 ? 'bg-yellow-500' : 'bg-red-500'
-                                                    )}
-                                                    style={{ width: `${percentage}%` }}
-                                                />
-                                            </div>
-                                            <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                                                <span>{availableDesks} desks free</span>
-                                                <span>{room.totalDesks} total</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <Button
-                                        className="w-full mt-2"
-                                        onClick={() => navigate(`/rooms/${room.id}/view`)}
-                                    >
-                                        View & Book <ArrowRight className="ml-2 h-4 w-4" />
-                                    </Button>
+            <div className="flex-1 min-h-0 container mx-auto p-0">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 h-full">
+                    <div className="md:col-span-3 h-full overflow-y-auto pr-2 pb-10">
+                        {loading ? (
+                            <div className="flex justify-center py-12">
+                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                            </div>
+                        ) : rooms.length === 0 ? (
+                            <Card>
+                                <CardContent className="flex flex-col items-center justify-center py-12">
+                                    <Grid3x3 className="h-12 w-12 text-muted-foreground mb-4" />
+                                    <h3 className="text-lg font-semibold mb-2">No shared rooms</h3>
+                                    <p className="text-muted-foreground text-center mb-4">
+                                        You don't have access to any shared rooms yet.
+                                    </p>
                                 </CardContent>
                             </Card>
-                        );
-                    })}
+                        ) : (
+                            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
+                                {rooms.map((room) => {
+                                    const availableDesks = room.totalDesks - room.activeReservations;
+                                    const percentage = room.totalDesks > 0
+                                        ? Math.round((availableDesks / room.totalDesks) * 100)
+                                        : 0;
+
+                                    return (
+                                        <Card key={room.id} className="hover:shadow-lg transition-shadow flex flex-col">
+                                            <CardHeader className="pb-3">
+                                                <CardTitle className="flex items-center gap-2 text-xl">
+                                                    <Grid3x3 className="h-5 w-5 text-primary" />
+                                                    {room.name}
+                                                </CardTitle>
+                                                {room.description && (
+                                                    <CardDescription className="line-clamp-2">{room.description}</CardDescription>
+                                                )}
+                                            </CardHeader>
+                                            <CardContent className="flex-1 flex flex-col justify-between gap-4">
+                                                <div className="space-y-3">
+                                                    <div className="flex items-center justify-between text-sm">
+                                                        <span className="text-muted-foreground">Grid Size</span>
+                                                        <span className="font-medium">{room.grid_width} × {room.grid_height}</span>
+                                                    </div>
+
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center justify-between text-sm">
+                                                            <span className="text-muted-foreground">Availability</span>
+                                                            <span className={cn("font-bold", getAvailabilityColor(percentage))}>
+                                                                {percentage}% Free
+                                                            </span>
+                                                        </div>
+                                                        <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
+                                                            <div
+                                                                className={cn("h-full transition-all duration-500",
+                                                                    percentage >= 70 ? 'bg-green-500' :
+                                                                        percentage >= 30 ? 'bg-yellow-500' : 'bg-red-500'
+                                                                )}
+                                                                style={{ width: `${percentage}%` }}
+                                                            />
+                                                        </div>
+                                                        <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                                                            <span>{availableDesks} desks free</span>
+                                                            <span>{room.totalDesks} total</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <Button
+                                                    className="w-full mt-2"
+                                                    onClick={() => navigate(`/rooms/${room.id}/view`)}
+                                                >
+                                                    View & Book <ArrowRight className="ml-2 h-4 w-4" />
+                                                </Button>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="hidden md:block md:col-span-1 border-l pl-6">
+                        <YourActivitySidebar />
+                    </div>
                 </div>
-            )}
+            </div>
         </div>
     );
 }
