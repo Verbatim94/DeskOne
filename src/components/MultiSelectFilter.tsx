@@ -17,19 +17,19 @@ import {
 } from "@/components/ui/popover"
 import { Badge } from "@/components/ui/badge"
 
-interface MultiSelectRoomFilterProps {
+interface MultiSelectFilterProps {
     options: { label: string; value: string }[]
     selected: string[]
     onChange: (values: string[]) => void
     placeholder?: string
 }
 
-export function MultiSelectRoomFilter({
+export function MultiSelectFilter({
     options,
     selected,
     onChange,
-    placeholder = "Filter rooms...",
-}: MultiSelectRoomFilterProps) {
+    placeholder = "Filter...",
+}: MultiSelectFilterProps) {
     const [open, setOpen] = React.useState(false)
 
     const handleSelect = (value: string) => {

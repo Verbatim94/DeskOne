@@ -34,6 +34,7 @@ interface Reservation {
     status: string;
     room_id: string;
     cell_id: string;
+    user_id: string;
     users: {
         full_name: string;
     };
@@ -45,7 +46,7 @@ interface Reservation {
     };
 }
 
-import { MultiSelectRoomFilter } from '@/components/MultiSelectRoomFilter';
+import { MultiSelectFilter } from '@/components/MultiSelectFilter';
 
 // ... (existing interfaces)
 
@@ -56,11 +57,19 @@ export default function Planner() {
     const [loading, setLoading] = useState(true);
     const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
     const [selectedRoomIds, setSelectedRoomIds] = useState<string[]>([]);
+    const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
     const { toast } = useToast();
 
     useEffect(() => {
         loadData();
     }, [date]);
+
+    // Compute unique users from reservations for the filter options
+    const uniqueUsers = Array.from(new Set(
+        reservations
+            .filter(r => r.users && r.user_id)
+            .map(r => JSON.stringify({ id: r.user_id, name: r.users.full_name }))
+    )).map(s => JSON.parse(s));
 
     const loadData = async () => {
         setLoading(true);
@@ -95,7 +104,12 @@ export default function Planner() {
 
             if (resResponse.error) throw resResponse.error;
             console.log('Planner reservations:', resResponse.data);
-            setReservations(resResponse.data || []);
+            const fetchedReservations = resResponse.data || [];
+            setReservations(fetchedReservations);
+
+            // Select all users by default
+            const allUserIds = Array.from(new Set(fetchedReservations.filter((r: any) => r.user_id).map((r: any) => r.user_id))) as string[];
+            setSelectedUserIds(allUserIds);
 
         } catch (error: any) {
             console.error(error);
@@ -117,7 +131,8 @@ export default function Planner() {
         return reservations.find(r =>
             r.cell_id === deskId &&
             r.date_start <= format(day, 'yyyy-MM-dd') &&
-            r.date_end >= format(day, 'yyyy-MM-dd')
+            r.date_end >= format(day, 'yyyy-MM-dd') &&
+            selectedUserIds.includes(r.user_id)
         );
     };
 
@@ -127,6 +142,7 @@ export default function Planner() {
     const filteredRooms = rooms.filter(room => selectedRoomIds.includes(room.id));
 
     const roomOptions = rooms.map(room => ({ label: room.name, value: room.id }));
+    const userOptions = uniqueUsers.map((u: any) => ({ label: u.name, value: u.id }));
 
     return (
         <div className="h-full flex flex-col space-y-4 overflow-hidden">
@@ -137,13 +153,20 @@ export default function Planner() {
                         <p className="text-muted-foreground text-sm">Overview of all desk reservations</p>
                     </div>
                     <div className="hidden md:block h-8 w-[1px] bg-border" />
-                    <MultiSelectRoomFilter
+                    <MultiSelectFilter
                         options={roomOptions}
                         selected={selectedRoomIds}
                         onChange={setSelectedRoomIds}
                         placeholder="Filter rooms..."
                     />
+                    <MultiSelectFilter
+                        options={userOptions}
+                        selected={selectedUserIds}
+                        onChange={setSelectedUserIds}
+                        placeholder="Filter users..."
+                    />
                 </div>
+
                 <div className="flex items-center gap-2">
                     <Button variant="outline" size="icon" onClick={() => setDate(subMonths(date, 1))}>
                         <ChevronLeft className="h-4 w-4" />
@@ -312,6 +335,6 @@ export default function Planner() {
                     )}
                 </DialogContent>
             </Dialog>
-        </div>
+        </div >
     );
 }
