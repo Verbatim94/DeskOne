@@ -20,6 +20,7 @@ export function Sidebar({ className }: { className?: string }) {
         ]
         : [
             { name: 'Dashboard', href: '/', icon: LayoutGrid, roles: ['user'] },
+            { name: 'Rooms', href: '/shared-rooms', icon: Building2, roles: ['user'] },
             { name: 'Office', href: '/offices', icon: Building2, roles: ['user'] },
             { name: 'My Reservations', href: '/reservations', icon: BookCheck, roles: ['user'] },
         ];

@@ -191,8 +191,9 @@ Deno.serve(async (req) => {
             break;
           }
 
-          // Get desk counts and active reservations for each room
-          const today = new Date().toISOString().split('T')[0];
+          // Get desk counts and active reservations for the specified date
+          const dateToCheck = data?.date ? data.date : new Date().toISOString().split('T')[0];
+
           const roomsWithDesks = await Promise.all(
             (allRooms || []).map(async (room) => {
               // Get total desks
@@ -202,13 +203,13 @@ Deno.serve(async (req) => {
                 .eq('room_id', room.id)
                 .in('type', ['desk']);
 
-              // Get active reservations for today
+              // Get active reservations for the date
               const { count: activeReservations } = await supabase
                 .from('reservations')
                 .select('*', { count: 'exact', head: true })
                 .eq('room_id', room.id)
-                .lte('date_start', today)
-                .gte('date_end', today)
+                .lte('date_start', dateToCheck)
+                .gte('date_end', dateToCheck)
                 .neq('status', 'cancelled')
                 .neq('status', 'rejected');
 
@@ -236,7 +237,8 @@ Deno.serve(async (req) => {
           const rooms = (accessibleRooms as unknown as RoomAccessWithRoom[])?.map((a) => a.rooms).filter((r): r is Room => !!r) || [];
 
           // Get desk counts and active reservations for each room
-          const today = new Date().toISOString().split('T')[0];
+          const dateToCheck = data?.date ? data.date : new Date().toISOString().split('T')[0];
+
           const roomsWithDesks = await Promise.all(
             rooms.map(async (room) => {
               // Get total desks
@@ -246,13 +248,13 @@ Deno.serve(async (req) => {
                 .eq('room_id', room.id)
                 .in('type', ['desk']);
 
-              // Get active reservations for today
+              // Get active reservations for the date
               const { count: activeReservations } = await supabase
                 .from('reservations')
                 .select('*', { count: 'exact', head: true })
                 .eq('room_id', room.id)
-                .lte('date_start', today)
-                .gte('date_end', today)
+                .lte('date_start', dateToCheck)
+                .gte('date_end', dateToCheck)
                 .neq('status', 'cancelled')
                 .neq('status', 'rejected');
 
