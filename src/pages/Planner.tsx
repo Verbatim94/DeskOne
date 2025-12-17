@@ -189,22 +189,22 @@ export default function Planner() {
                     ) : (
                         <div className="relative min-w-[max-content]">
                             {/* Header Row */}
-                            <div className="flex sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b shadow-sm">
-                                <div className="sticky left-0 z-50 w-64 bg-background border-r p-4 font-medium text-sm text-foreground flex items-center shadow-[4px_0_12px_-4px_rgba(0,0,0,0.1)]">
+                            <div className="flex sticky top-0 z-40 bg-blue-600 text-white shadow-sm">
+                                <div className="sticky left-0 z-50 w-64 bg-blue-600 border-r border-blue-500 p-4 font-medium text-sm flex items-center shadow-[4px_0_12px_-4px_rgba(0,0,0,0.2)]">
                                     Room / Desk
                                 </div>
                                 {daysInMonth.map(day => (
                                     <div
                                         key={day.toString()}
                                         className={cn(
-                                            "w-12 flex-shrink-0 border-r border-border/50 last:border-0 p-2 text-center text-xs group hover:bg-muted/50 transition-colors",
-                                            isWeekend(day) && "bg-muted/30"
+                                            "w-12 flex-shrink-0 border-r border-blue-500 last:border-0 p-2 text-center text-xs group hover:bg-blue-500 transition-colors",
+                                            isWeekend(day) && "bg-black/5"
                                         )}
                                     >
-                                        <div className={cn("font-medium", isSameDay(day, new Date()) ? "text-primary" : "text-foreground")}>
+                                        <div className={cn("font-medium", isSameDay(day, new Date()) ? "bg-white text-blue-600 rounded-full w-6 h-6 flex items-center justify-center mx-auto" : "")}>
                                             {format(day, 'd')}
                                         </div>
-                                        <div className="text-[10px] text-muted-foreground uppercase tracking-widest">{format(day, 'EEEEE')}</div>
+                                        <div className="text-[10px] text-blue-100 uppercase tracking-widest mt-0.5">{format(day, 'EEEEE')}</div>
                                     </div>
                                 ))}
                             </div>
