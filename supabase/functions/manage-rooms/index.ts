@@ -540,9 +540,9 @@ Deno.serve(async (req) => {
         if (desksError) throw desksError;
 
         // Combine
-        const roomsWithDesks = rooms.map(room => ({
+        const roomsWithDesks = (rooms || []).map(room => ({
           ...room,
-          desks: desks.filter(d => d.room_id === room.id).sort((a, b) => a.label.localeCompare(b.label))
+          desks: (desks || []).filter(d => d.room_id === room.id).sort((a, b) => a.label.localeCompare(b.label))
         }));
 
         result = { data: roomsWithDesks, error: null };

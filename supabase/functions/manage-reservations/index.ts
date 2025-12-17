@@ -250,6 +250,38 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case 'list_all_reservations': {
+        // Only admin/super_admin
+        if (user.role !== 'admin' && user.role !== 'super_admin') {
+          return new Response(
+            JSON.stringify({ error: 'Only admins can view all reservations' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { data: allReservations, error: allResError } = await supabase
+          .from('reservations')
+          .select(`
+            *,
+            rooms!inner(id, name),
+            users!reservations_user_id_fkey(id, username, full_name),
+            room_cells!inner(id, label, type)
+          `)
+          .gte('date_end', data.date_start)
+          .lte('date_start', data.date_end)
+          .neq('status', 'cancelled')
+          .neq('status', 'rejected')
+          .order('date_start', { ascending: false });
+
+        if (allResError) {
+          console.error('Error fetching all reservations:', allResError);
+          throw allResError;
+        }
+
+        result = { data: allReservations || [], error: null };
+        break;
+      }
+
       case 'list_room_reservations': {
         // Check if user has access to the room
         if (!(await isRoomAdmin(data.roomId)) && user.role !== 'admin') {
