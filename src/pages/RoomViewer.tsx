@@ -17,6 +17,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
+  TooltipProvider,
 } from "@/components/ui/tooltip";
 import { format, parseISO, isWithinInterval, addDays, isEqual } from 'date-fns';
 
@@ -341,12 +342,17 @@ export default function RoomViewer() {
     const activeAssignment = fixedAssignments.find((a) => {
       if (a.cell_id !== cellId) return false;
 
-      const startDate = parseISO(a.date_start);
-      const endDate = parseISO(a.date_end);
-      startDate.setHours(0, 0, 0, 0);
-      endDate.setHours(0, 0, 0, 0);
+      try {
+        const startDate = parseISO(a.date_start);
+        const endDate = parseISO(a.date_end);
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setHours(0, 0, 0, 0);
 
-      return isWithinInterval(today, { start: startDate, end: endDate });
+        return isWithinInterval(today, { start: startDate, end: endDate });
+      } catch (e) {
+        console.error('Error parsing date for assignment:', a, e);
+        return false;
+      }
     });
 
     if (activeAssignment) {
@@ -376,12 +382,17 @@ export default function RoomViewer() {
       if (r.cell_id !== cellId) return false;
       if (r.status === 'cancelled' || r.status === 'rejected') return false;
 
-      const startDate = parseISO(r.date_start);
-      const endDate = parseISO(r.date_end);
-      startDate.setHours(0, 0, 0, 0);
-      endDate.setHours(0, 0, 0, 0);
+      try {
+        const startDate = parseISO(r.date_start);
+        const endDate = parseISO(r.date_end);
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setHours(0, 0, 0, 0);
 
-      return isWithinInterval(today, { start: startDate, end: endDate });
+        return isWithinInterval(today, { start: startDate, end: endDate });
+      } catch (e) {
+        console.error('Error parsing date for reservation:', r, e);
+        return false;
+      }
     });
 
     const activeReservation = activeReservations[0];
