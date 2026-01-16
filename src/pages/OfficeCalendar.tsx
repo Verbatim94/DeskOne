@@ -184,7 +184,8 @@ export default function OfficeCalendar() {
         actualEndTime.setMinutes(actualEndTime.getMinutes() + 15);
 
         try {
-            await callBookingFunction('create', {
+            // Store the result from the server
+            const newBooking = await callBookingFunction('create', {
                 officeId,
                 startTime: startTime.toISOString(),
                 endTime: actualEndTime.toISOString()
@@ -194,6 +195,14 @@ export default function OfficeCalendar() {
             setBookingDialogOpen(false);
             setSelectionStart(null);
             setSelectionEnd(null);
+
+            // IMMEDIATE UPDATE: Update local state with the confirmed booking from server
+            // This ensures the UI turns purple even if the subsequent loadBookings fails
+            if (newBooking) {
+                setBookings(prev => [...prev, newBooking as OfficeBooking]);
+            }
+
+            // Background refresh to stay in sync with other users
             loadBookings();
         } catch (error: unknown) {
             let message = 'Unknown error';
@@ -216,7 +225,13 @@ export default function OfficeCalendar() {
             });
 
             toast({ title: 'Booking cancelled successfully' });
+
+            // IMMEDIATE UPDATE: Remove the booking from local state
+            setBookings(prev => prev.filter(b => b.id !== selectedBooking.id));
+
             setSelectedBooking(null);
+
+            // Background refresh
             loadBookings();
         } catch (error: unknown) {
             let message = 'Unknown error';
