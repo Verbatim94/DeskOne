@@ -470,6 +470,26 @@ export default function RoomViewer() {
 
   if (!room) return null;
 
+  // Safety check for grid dimensions
+  if (typeof room.grid_width !== 'number' || typeof room.grid_height !== 'number') {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="p-8 text-center bg-white rounded-lg shadow-sm border">
+          <h2 className="text-lg font-semibold text-destructive mb-2">Error: Invalid Room Configuration</h2>
+          <p className="text-muted-foreground mb-4">The room data is incomplete (missing grid dimensions).</p>
+          <Button variant="outline" onClick={() => navigate('/rooms')}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Rooms
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Safety checks for arrays
+  const safeWalls = Array.isArray(walls) ? walls : [];
+  const safeCells = Array.isArray(cells) ? cells : [];
+
   return (
     <TooltipProvider>
       <div className="lg:h-full min-h-screen bg-gray-50/50 p-4 flex flex-col space-y-4 lg:overflow-hidden">
@@ -594,7 +614,8 @@ export default function RoomViewer() {
                       overflow: 'visible',
                     }}
                   >
-                    {walls.map(wall => {
+                    {safeWalls.map(wall => {
+                      if (!wall) return null;
                       const x = wall.orientation === 'vertical'
                         ? (wall.start_col * (CELL_SIZE + 8)) - 2
                         : (wall.start_col * (CELL_SIZE + 8));

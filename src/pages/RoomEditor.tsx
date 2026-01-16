@@ -498,6 +498,24 @@ export default function RoomEditor() {
 
   if (!room) return null;
 
+  // Safety check for grid dimensions
+  if (typeof room.grid_width !== 'number' || typeof room.grid_height !== 'number') {
+    return (
+      <div className="p-8 text-center">
+        <h2 className="text-lg font-semibold text-destructive">Error: Invalid Room Configuration</h2>
+        <p className="text-muted-foreground">The room data is incomplete (missing grid dimensions).</p>
+        <Button variant="outline" className="mt-4" onClick={() => navigate('/rooms')}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Rooms
+        </Button>
+      </div>
+    );
+  }
+
+  // Safety checks for arrays
+  const safeWalls = Array.isArray(walls) ? walls : [];
+  const safeCells = Array.isArray(cells) ? cells : [];
+
   return (
     <div className="h-full flex flex-col space-y-4">
       <div className="flex items-center justify-between flex-shrink-0">
@@ -574,7 +592,8 @@ export default function RoomEditor() {
                   overflow: 'visible'
                 }}
               >
-                {walls.map(wall => {
+                {safeWalls.map(wall => {
+                  if (!wall) return null;
                   const x = wall.orientation === 'vertical'
                     ? (wall.start_col * (CELL_SIZE + 4)) - 2
                     : (wall.start_col * (CELL_SIZE + 4));
@@ -735,8 +754,8 @@ export default function RoomEditor() {
 
               {Array.from({ length: room.grid_height }, (_, y) =>
                 Array.from({ length: room.grid_width }, (_, x) => {
-                  const cell = getCellAt(x, y);
-                  const deskInfo = DESK_TYPES.find(d => d.type === cell?.type);
+                  const cell = safeCells.find(c => c && c.x === x && c.y === y);
+                  const deskInfo = cell ? DESK_TYPES.find(d => d.type === cell.type) : undefined;
                   const Icon = deskInfo?.icon;
                   const isSelected = selectedCell?.x === x && selectedCell?.y === y;
 
