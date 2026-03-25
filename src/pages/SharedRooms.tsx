@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { authService } from '@/lib/auth';
@@ -36,14 +36,59 @@ export default function SharedRooms() {
     const [rooms, setRooms] = useState<Room[]>([]);
     const [loading, setLoading] = useState(true);
     const [date, setDate] = useState<Date>(new Date());
+    const [refreshingColors, setRefreshingColors] = useState(false);
     const { toast } = useToast();
     const navigate = useNavigate();
+    const latestRequestRef = useRef(0);
+    const session = authService.getSession();
+    const isAdmin = session?.user.role === 'admin' || session?.user.role === 'super_admin';
 
     useEffect(() => {
         loadRooms();
     }, [date]);
 
+    useEffect(() => {
+        const dateStr = format(date, 'yyyy-MM-dd');
+        const reloadForActiveDate = () => {
+            if (format(date, 'yyyy-MM-dd') === dateStr) {
+                loadRooms();
+            }
+        };
+
+        const reservationsChannel = supabase
+            .channel(`shared-rooms-reservations-${dateStr}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'reservations',
+                },
+                reloadForActiveDate
+            )
+            .subscribe();
+
+        const assignmentsChannel = supabase
+            .channel(`shared-rooms-assignments-${dateStr}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'fixed_assignments',
+                },
+                reloadForActiveDate
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(reservationsChannel);
+            supabase.removeChannel(assignmentsChannel);
+        };
+    }, [date]);
+
     const loadRooms = async () => {
+        const requestId = ++latestRequestRef.current;
         setLoading(true);
         try {
             const session = authService.getSession();
@@ -62,17 +107,48 @@ export default function SharedRooms() {
             });
 
             if (response.error) throw response.error;
-            setRooms(response.data || []);
+            if (requestId === latestRequestRef.current) {
+                setRooms(response.data || []);
+            }
 
         } catch (error: unknown) {
             console.error(error);
+            if (requestId === latestRequestRef.current) {
+                toast({
+                    title: 'Error loading rooms',
+                    description: 'Failed to load shared rooms availability',
+                    variant: 'destructive'
+                });
+            }
+        }
+        if (requestId === latestRequestRef.current) {
+            setLoading(false);
+        }
+    };
+
+    const handleAdminRefresh = async () => {
+        setRefreshingColors(true);
+
+        try {
+            await loadRooms();
             toast({
-                title: 'Error loading rooms',
-                description: 'Failed to load shared rooms availability',
+                title: 'Colors refreshed',
+                description: 'Shared room availability was synchronized successfully.',
+            });
+        } catch (error: unknown) {
+            let message = 'Unable to refresh shared room availability.';
+            if (error instanceof Error && error.message) {
+                message = error.message;
+            }
+
+            toast({
+                title: 'Refresh failed',
+                description: message,
                 variant: 'destructive'
             });
+        } finally {
+            setRefreshingColors(false);
         }
-        setLoading(false);
     };
 
     const getAvailabilityColor = (percentage: number) => {
@@ -96,7 +172,7 @@ export default function SharedRooms() {
                         <p className="text-muted-foreground text-sm">Check availability and book desks in shared spaces</p>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         <Label className="font-medium mr-2">Check Availability for:</Label>
                         <div className="flex items-center gap-1">
                             <Button
@@ -136,6 +212,18 @@ export default function SharedRooms() {
                                 <ChevronRight className="h-4 w-4" />
                             </Button>
                         </div>
+                        {isAdmin && (
+                            <Button
+                                variant="outline"
+                                onClick={handleAdminRefresh}
+                                disabled={refreshingColors}
+                            >
+                                {refreshingColors ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : null}
+                                Refresh Colors
+                            </Button>
+                        )}
                     </div>
                 </div>
 

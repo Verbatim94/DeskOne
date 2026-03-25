@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { authService } from '@/lib/auth';
@@ -80,6 +80,7 @@ interface Wall {
 }
 
 type DeskStatus = 'available' | 'reserved' | 'my-reservation';
+type DeskStatusDetails = { status: DeskStatus; reservation?: Reservation; assignedTo?: string };
 
 const CELL_SIZE = 50;
 
@@ -121,6 +122,9 @@ export default function RoomViewer() {
   const [walls, setWalls] = useState<Wall[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [activeTab, setActiveTab] = useState<'desks' | 'rooms'>('desks');
+  const [refreshingColors, setRefreshingColors] = useState(false);
+  const latestReservationsRequestRef = useRef(0);
+  const latestAssignmentsRequestRef = useRef(0);
 
 
 
@@ -141,6 +145,19 @@ export default function RoomViewer() {
         () => {
           console.log('Reservation changed, reloading...');
           loadReservations();
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'fixed_assignments',
+          filter: `room_id=eq.${roomId}`,
+        },
+        () => {
+          console.log('Fixed assignment changed, reloading...');
+          loadFixedAssignments();
         },
       )
       .subscribe();
@@ -241,6 +258,7 @@ export default function RoomViewer() {
 
   const loadReservations = async () => {
     if (!roomId) return;
+    const requestId = ++latestReservationsRequestRef.current;
 
     try {
       const data = await callReservationFunction('list_room_reservations', {
@@ -259,14 +277,50 @@ export default function RoomViewer() {
         type: 'reservation',
         created_at: r.created_at
       }));
-      setReservations(mappedReservations);
+      if (requestId === latestReservationsRequestRef.current) {
+        setReservations(mappedReservations);
+      }
     } catch (error: unknown) {
-      console.error('Error loading reservations:', error);
+      if (requestId === latestReservationsRequestRef.current) {
+        console.error('Error loading reservations:', error);
+      }
+    }
+  };
+
+  const handleAdminRefresh = async () => {
+    setRefreshingColors(true);
+
+    try {
+      await Promise.all([
+        loadRoom(),
+        loadRooms(),
+        loadReservations(),
+        loadFixedAssignments(),
+      ]);
+
+      toast({
+        title: 'Colors refreshed',
+        description: 'Room availability was synchronized successfully.',
+      });
+    } catch (error: unknown) {
+      let message = 'Unable to refresh room availability.';
+      if (error instanceof Error && error.message) {
+        message = error.message;
+      }
+
+      toast({
+        title: 'Refresh failed',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setRefreshingColors(false);
     }
   };
 
   const loadFixedAssignments = async () => {
     if (!roomId) return;
+    const requestId = ++latestAssignmentsRequestRef.current;
 
     try {
       // Try Edge Function first
@@ -323,21 +377,24 @@ export default function RoomViewer() {
             username: userMap[a.assigned_to].username
           } : { id: a.assigned_to, full_name: 'Unknown User', username: 'unknown' }
         }));
-        setFixedAssignments(mapped);
+        if (requestId === latestAssignmentsRequestRef.current) {
+          setFixedAssignments(mapped);
+        }
       } else {
         console.log('Direct query returned no result.');
-        setFixedAssignments([]);
+        if (requestId === latestAssignmentsRequestRef.current) {
+          setFixedAssignments([]);
+        }
       }
 
     } catch (error: unknown) {
-      console.error('Error loading fixed assignments:', error);
+      if (requestId === latestAssignmentsRequestRef.current) {
+        console.error('Error loading fixed assignments:', error);
+      }
     }
   };
 
-  const getDeskStatus = (cellId: string): { status: DeskStatus; reservation?: Reservation; assignedTo?: string } => {
-    const today = new Date(selectedDate);
-    today.setHours(0, 0, 0, 0);
-
+  const buildDeskStatus = (cellId: string, dayToCheck: Date): DeskStatusDetails => {
     // Check for fixed assignments first
     const activeAssignment = fixedAssignments.find((a) => {
       if (a.cell_id !== cellId) return false;
@@ -348,7 +405,7 @@ export default function RoomViewer() {
         startDate.setHours(0, 0, 0, 0);
         endDate.setHours(0, 0, 0, 0);
 
-        return isWithinInterval(today, { start: startDate, end: endDate });
+        return isWithinInterval(dayToCheck, { start: startDate, end: endDate });
       } catch (e) {
         console.error('Error parsing date for assignment:', a, e);
         return false;
@@ -388,7 +445,7 @@ export default function RoomViewer() {
         startDate.setHours(0, 0, 0, 0);
         endDate.setHours(0, 0, 0, 0);
 
-        return isWithinInterval(today, { start: startDate, end: endDate });
+        return isWithinInterval(dayToCheck, { start: startDate, end: endDate });
       } catch (e) {
         console.error('Error parsing date for reservation:', r, e);
         return false;
@@ -500,6 +557,25 @@ export default function RoomViewer() {
   // Safety checks for arrays
   const safeWalls = Array.isArray(walls) ? walls : [];
   const safeCells = Array.isArray(cells) ? cells : [];
+  const dayToCheck = new Date(selectedDate);
+  dayToCheck.setHours(0, 0, 0, 0);
+
+  const deskStatuses = safeCells.reduce<Record<string, DeskStatusDetails>>((acc, cell) => {
+    acc[cell.id] = buildDeskStatus(cell.id, dayToCheck);
+    return acc;
+  }, {});
+
+  const getDeskStatus = (cellId: string): DeskStatusDetails => deskStatuses[cellId] || { status: 'available' };
+
+  const sortedCells = [...safeCells].sort((a, b) => {
+    const aLabel = a.label || `${a.x}-${a.y}`;
+    const bLabel = b.label || `${b.x}-${b.y}`;
+    return aLabel.localeCompare(bLabel);
+  });
+
+  const availableDeskCount = sortedCells.reduce((count, cell) => {
+    return count + (getDeskStatus(cell.id).status === 'available' ? 1 : 0);
+  }, 0);
 
   return (
     <TooltipProvider>
@@ -583,6 +659,19 @@ export default function RoomViewer() {
             >
               Today
             </Button>
+            {isRoomAdmin && (
+              <Button
+                variant="outline"
+                onClick={handleAdminRefresh}
+                disabled={refreshingColors}
+                className="rounded-full px-4 w-full sm:w-auto"
+              >
+                {refreshingColors ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
+                Refresh Colors
+              </Button>
+            )}
           </div>
         </div>
 
@@ -853,18 +942,12 @@ export default function RoomViewer() {
                 <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2 flex-shrink-0">
                   Available Desks
                   <Badge variant="secondary" className="rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100">
-                    {cells.filter(c => getDeskStatus(c.id).status === 'available').length}
+                    {availableDeskCount}
                   </Badge>
                 </h3>
 
                 <div className="space-y-3 lg:overflow-y-auto lg:pr-2 custom-scrollbar lg:flex-1">
-                  {cells
-                    .sort((a, b) => {
-                      const aLabel = a.label || `${a.x}-${a.y}`;
-                      const bLabel = b.label || `${b.x}-${b.y}`;
-                      return aLabel.localeCompare(bLabel);
-                    })
-                    .map((cell) => {
+                  {sortedCells.map((cell) => {
                       const deskInfo = DESK_TYPES.find((d) => d.type === cell.type);
                       const Icon = deskInfo?.icon;
                       const { status, reservation, assignedTo } = getDeskStatus(cell.id);
@@ -925,7 +1008,7 @@ export default function RoomViewer() {
                       );
                     })}
 
-                  {cells.filter(c => getDeskStatus(c.id).status === 'available').length === 0 && (
+                  {availableDeskCount === 0 && (
                     <div className="text-center py-10 text-gray-400">
                       <Armchair className="h-12 w-12 mx-auto mb-3 opacity-20" />
                       <p>No desks available for this date.</p>

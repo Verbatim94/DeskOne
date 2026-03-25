@@ -20,6 +20,11 @@ interface RoomAccessWithRoom {
   rooms: Room | null;
 }
 
+const buildDateRangeFilter = (dateToCheck: string) => ({
+  startsBeforeOrOn: dateToCheck,
+  endsAfterOrOn: dateToCheck,
+});
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -102,6 +107,29 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       return !!access;
+    };
+
+    const getRoomOccupancy = async (roomId: string, dateToCheck: string): Promise<number> => {
+      const dateFilter = buildDateRangeFilter(dateToCheck);
+
+      const [{ count: activeReservations }, { count: activeAssignments }] = await Promise.all([
+        supabase
+          .from('reservations')
+          .select('*', { count: 'exact', head: true })
+          .eq('room_id', roomId)
+          .lte('date_start', dateFilter.startsBeforeOrOn)
+          .gte('date_end', dateFilter.endsAfterOrOn)
+          .neq('status', 'cancelled')
+          .neq('status', 'rejected'),
+        supabase
+          .from('fixed_assignments')
+          .select('*', { count: 'exact', head: true })
+          .eq('room_id', roomId)
+          .lte('date_start', dateFilter.startsBeforeOrOn)
+          .gte('date_end', dateFilter.endsAfterOrOn),
+      ]);
+
+      return (activeReservations || 0) + (activeAssignments || 0);
     };
 
     let result;
@@ -203,20 +231,12 @@ Deno.serve(async (req) => {
                 .eq('room_id', room.id)
                 .in('type', ['desk']);
 
-              // Get active reservations for the date
-              const { count: activeReservations } = await supabase
-                .from('reservations')
-                .select('*', { count: 'exact', head: true })
-                .eq('room_id', room.id)
-                .lte('date_start', dateToCheck)
-                .gte('date_end', dateToCheck)
-                .neq('status', 'cancelled')
-                .neq('status', 'rejected');
+              const activeReservations = await getRoomOccupancy(room.id, dateToCheck);
 
               return {
                 ...room,
                 totalDesks: cells?.length || 0,
-                activeReservations: activeReservations || 0
+                activeReservations
               };
             })
           );
@@ -248,20 +268,12 @@ Deno.serve(async (req) => {
                 .eq('room_id', room.id)
                 .in('type', ['desk']);
 
-              // Get active reservations for the date
-              const { count: activeReservations } = await supabase
-                .from('reservations')
-                .select('*', { count: 'exact', head: true })
-                .eq('room_id', room.id)
-                .lte('date_start', dateToCheck)
-                .gte('date_end', dateToCheck)
-                .neq('status', 'cancelled')
-                .neq('status', 'rejected');
+              const activeReservations = await getRoomOccupancy(room.id, dateToCheck);
 
               return {
                 ...room,
                 totalDesks: cells?.length || 0,
-                activeReservations: activeReservations || 0
+                activeReservations
               };
             })
           );

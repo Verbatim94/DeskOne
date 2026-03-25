@@ -1,9 +1,73 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.84.0';
+import { z } from 'https://esm.sh/zod@3.25.76';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-session-token',
 };
+
+const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected date in YYYY-MM-DD format');
+const timeSegmentSchema = z.enum(['AM', 'PM', 'FULL']);
+const uuidSchema = z.string().uuid();
+const emptyDataSchema = z
+  .object({})
+  .passthrough()
+  .optional()
+  .transform(() => ({}));
+
+const operationSchema = z.enum([
+  'create',
+  'list_my_reservations',
+  'list_all_reservations',
+  'list_room_reservations',
+  'list_pending_approvals',
+  'approve',
+  'reject',
+  'cancel',
+  'check_availability',
+]);
+
+const operationDataSchemas = {
+  create: z.object({
+    room_id: uuidSchema,
+    cell_id: uuidSchema,
+    date_start: isoDateSchema,
+    date_end: isoDateSchema,
+    time_segment: timeSegmentSchema.default('FULL'),
+  }).refine((value) => value.date_end >= value.date_start, {
+    message: 'date_end must be on or after date_start',
+    path: ['date_end'],
+  }),
+  list_my_reservations: emptyDataSchema,
+  list_all_reservations: z.object({
+    date_start: isoDateSchema,
+    date_end: isoDateSchema,
+  }).refine((value) => value.date_end >= value.date_start, {
+    message: 'date_end must be on or after date_start',
+    path: ['date_end'],
+  }),
+  list_room_reservations: z.object({
+    roomId: uuidSchema,
+  }),
+  list_pending_approvals: emptyDataSchema,
+  approve: z.object({
+    reservationId: uuidSchema,
+  }),
+  reject: z.object({
+    reservationId: uuidSchema,
+  }),
+  cancel: z.object({
+    reservationId: uuidSchema,
+  }),
+  check_availability: z.object({
+    cellId: uuidSchema,
+    date_start: isoDateSchema,
+    date_end: isoDateSchema,
+  }).refine((value) => value.date_end >= value.date_start, {
+    message: 'date_end must be on or after date_start',
+    path: ['date_end'],
+  }),
+} as const;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -53,12 +117,15 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { operation, data } = await req.json();
+    const requestBody = await req.json();
+    const operation = operationSchema.parse(requestBody?.operation);
+    const data = operationDataSchemas[operation].parse(requestBody?.data);
     console.log(`User ${user.id} (${user.role}) performing operation: ${operation}`);
+    const isGlobalAdmin = user.role === 'admin' || user.role === 'super_admin';
 
     // Helper function to check room admin access
     const isRoomAdmin = async (roomId: string): Promise<boolean> => {
-      if (user.role === 'admin') return true;
+      if (isGlobalAdmin) return true;
 
       const { data: access } = await supabase
         .from('room_access')
@@ -87,7 +154,7 @@ Deno.serve(async (req) => {
           .eq('user_id', user.id)
           .maybeSingle();
 
-        if (!hasAccess && user.role !== 'admin') {
+        if (!hasAccess && !isGlobalAdmin) {
           return new Response(
             JSON.stringify({ error: 'You do not have access to this room' }),
             { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -154,18 +221,9 @@ Deno.serve(async (req) => {
           .gte('date_end', data.date_start)
           .lte('date_start', data.date_end);
 
-        console.log('Checking conflicts for:', {
-          cell_id: data.cell_id,
-          date_start: data.date_start,
-          date_end: data.date_end,
-          time_segment: data.time_segment,
-          found: conflictingReservations?.length || 0
-        });
-
         if (conflictingReservations && conflictingReservations.length > 0) {
           // Check if there's a real conflict based on time segments
           const hasConflict = conflictingReservations.some(existing => {
-            console.log('Checking existing reservation:', existing);
             // If either reservation is FULL day, there's always a conflict
             if (existing.time_segment === 'FULL' || data.time_segment === 'FULL') {
               return true;
@@ -252,7 +310,7 @@ Deno.serve(async (req) => {
 
       case 'list_all_reservations': {
         // Only admin/super_admin
-        if (user.role !== 'admin' && user.role !== 'super_admin') {
+        if (!isGlobalAdmin) {
           return new Response(
             JSON.stringify({ error: 'Only admins can view all reservations' }),
             { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -284,7 +342,7 @@ Deno.serve(async (req) => {
 
       case 'list_room_reservations': {
         // Check if user has access to the room
-        if (!(await isRoomAdmin(data.roomId)) && user.role !== 'admin') {
+        if (!(await isRoomAdmin(data.roomId)) && !isGlobalAdmin) {
           // Check if regular member has access
           const { data: memberAccess } = await supabase
             .from('room_access')
@@ -322,7 +380,7 @@ Deno.serve(async (req) => {
 
       case 'list_pending_approvals': {
         // Only room admins can see pending approvals
-        if (user.role === 'admin') {
+        if (isGlobalAdmin) {
           const { data: pendingReservations, error: reservationsError } = await supabase
             .from('reservations')
             .select(`
@@ -525,6 +583,13 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid request payload', details: error.flatten() }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Error in manage-reservations function:', errorMessage);
     return new Response(
