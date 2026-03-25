@@ -19,7 +19,7 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from "@/components/ui/tooltip";
-import { format, parseISO, isWithinInterval, addDays, isEqual } from 'date-fns';
+import { format, parseISO, isWithinInterval, addDays, isEqual, startOfMonth, endOfMonth } from 'date-fns';
 
 
 type DeskType = 'desk';
@@ -261,9 +261,16 @@ export default function RoomViewer() {
     const requestId = ++latestReservationsRequestRef.current;
 
     try {
-      const data = await callReservationFunction('list_room_reservations', {
-        roomId,
-      });
+      const reservationData = user?.role === 'admin' || user?.role === 'super_admin'
+        ? await callReservationFunction('list_all_reservations', {
+            date_start: format(startOfMonth(selectedDate), 'yyyy-MM-dd'),
+            date_end: format(endOfMonth(selectedDate), 'yyyy-MM-dd'),
+          })
+        : await callReservationFunction('list_room_reservations', {
+            roomId,
+          });
+
+      const data = (reservationData || []).filter((reservation: { room_id?: string }) => reservation.room_id === roomId);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mappedReservations = (data || []).map((r: any): Reservation => ({
         id: r.id,
