@@ -25,3 +25,7 @@ dist-ssr
 
 # Environment variables
 .env
+
+# Supabase local temp files
+supabase/.temp/
+supabase/backups/
