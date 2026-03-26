@@ -143,6 +143,10 @@ export default function Planner() {
 
     const roomOptions = rooms.map(room => ({ label: room.name, value: room.id }));
     const userOptions = uniqueUsers.map((u: any) => ({ label: u.name, value: u.id }));
+    const visibleDeskCount = filteredRooms.reduce((count, room) => count + room.desks.length, 0);
+    const visibleReservationCount = reservations.filter((reservation) =>
+        selectedRoomIds.includes(reservation.room_id) && selectedUserIds.includes(reservation.user_id)
+    ).length;
 
     return (
         <div className="h-full flex flex-col space-y-4 overflow-hidden">
@@ -178,6 +182,30 @@ export default function Planner() {
                         <ChevronRight className="h-4 w-4" />
                     </Button>
                 </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 flex-shrink-0">
+                <Card className="border-blue-100 bg-blue-50/70 shadow-sm">
+                    <CardContent className="p-4">
+                        <p className="text-xs font-medium uppercase tracking-wide text-blue-700">Visible Rooms</p>
+                        <p className="mt-1 text-2xl font-semibold text-blue-900">{filteredRooms.length}</p>
+                        <p className="text-xs text-blue-700">Filtered from {rooms.length} total rooms</p>
+                    </CardContent>
+                </Card>
+                <Card className="border-emerald-100 bg-emerald-50/70 shadow-sm">
+                    <CardContent className="p-4">
+                        <p className="text-xs font-medium uppercase tracking-wide text-emerald-700">Visible Desks</p>
+                        <p className="mt-1 text-2xl font-semibold text-emerald-900">{visibleDeskCount}</p>
+                        <p className="text-xs text-emerald-700">Across the current room selection</p>
+                    </CardContent>
+                </Card>
+                <Card className="border-violet-100 bg-violet-50/70 shadow-sm">
+                    <CardContent className="p-4">
+                        <p className="text-xs font-medium uppercase tracking-wide text-violet-700">Reservations in View</p>
+                        <p className="mt-1 text-2xl font-semibold text-violet-900">{visibleReservationCount}</p>
+                        <p className="text-xs text-violet-700">For {format(date, 'MMMM yyyy')}</p>
+                    </CardContent>
+                </Card>
             </div>
 
             <Card className="flex-1 min-h-0 overflow-hidden border-0 shadow-none sm:border sm:shadow-sm sm:rounded-lg">

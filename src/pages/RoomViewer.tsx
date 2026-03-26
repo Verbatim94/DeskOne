@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Loader2, Armchair, Crown, DoorOpen, ChevronLeft, ChevronRight } from 'lucide-react';
 import BookDeskDialog from '@/components/BookDeskDialog';
@@ -123,6 +124,9 @@ export default function RoomViewer() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [activeTab, setActiveTab] = useState<'desks' | 'rooms'>('desks');
   const [refreshingColors, setRefreshingColors] = useState(false);
+  const [deskSearch, setDeskSearch] = useState('');
+  const [deskFilter, setDeskFilter] = useState<'all' | 'available' | 'reserved' | 'mine'>('all');
+  const [selectedDeskId, setSelectedDeskId] = useState<string | null>(null);
   const latestReservationsRequestRef = useRef(0);
   const latestAssignmentsRequestRef = useRef(0);
 
@@ -173,6 +177,12 @@ export default function RoomViewer() {
       loadFixedAssignments();
     }
   }, [selectedDate, room]);
+
+  useEffect(() => {
+    if (!selectedDeskId && cells.length > 0) {
+      setSelectedDeskId(cells[0].id);
+    }
+  }, [cells, selectedDeskId]);
 
   const callRoomFunction = async (operation: string, data?: Record<string, unknown>) => {
     const session = authService.getSession();
@@ -495,7 +505,9 @@ export default function RoomViewer() {
   };
 
   const handleCellClick = (cell: Cell) => {
+    setSelectedDeskId(cell.id);
     const { status, reservation, assignedTo } = getDeskStatus(cell.id);
+    const canManageReservedDesk = user?.role === 'admin' || user?.role === 'super_admin';
 
     // Show reservation details for my own reservations
     if (status === 'my-reservation' && reservation) {
@@ -520,7 +532,7 @@ export default function RoomViewer() {
     }
 
     // Only block non-admins from booking reserved desks
-    if (status === 'reserved' && user?.role !== 'admin') {
+    if (status === 'reserved' && !canManageReservedDesk) {
       toast({
         title: 'Desk unavailable',
         description: `This desk is ${assignedTo ? `assigned to ${assignedTo}` : `reserved by ${getReservationDisplayName(reservation, assignedTo)}`}`,
@@ -534,8 +546,10 @@ export default function RoomViewer() {
   };
 
   const handleDeskListClick = (cell: Cell) => {
+    setSelectedDeskId(cell.id);
+    const canManageReservedDesk = user?.role === 'admin' || user?.role === 'super_admin';
     const { status } = getDeskStatus(cell.id);
-    if (status === 'available' || user?.role === 'admin') {
+    if (status === 'available' || canManageReservedDesk) {
       setSelectedCell(cell);
       setBookingDialogOpen(true);
     }
@@ -598,6 +612,21 @@ export default function RoomViewer() {
     return count + (getDeskStatus(cell.id).status === 'my-reservation' ? 1 : 0);
   }, 0);
   const selectedDateLabel = format(selectedDate, 'EEEE, MMMM d, yyyy');
+  const selectedDesk = sortedCells.find((cell) => cell.id === selectedDeskId) || null;
+  const selectedDeskStatus = selectedDesk ? getDeskStatus(selectedDesk.id) : null;
+  const normalizedDeskSearch = deskSearch.trim().toLowerCase();
+  const visibleCells = sortedCells.filter((cell) => {
+    const matchesSearch = !normalizedDeskSearch
+      || (cell.label || `Desk ${cell.x}-${cell.y}`).toLowerCase().includes(normalizedDeskSearch);
+    if (!matchesSearch) return false;
+
+    const status = getDeskStatus(cell.id).status;
+    if (deskFilter === 'all') return true;
+    if (deskFilter === 'available') return status === 'available';
+    if (deskFilter === 'reserved') return status === 'reserved';
+    return status === 'my-reservation';
+  });
+  const visibleDeskCount = visibleCells.length;
 
   return (
     <TooltipProvider>
@@ -892,6 +921,7 @@ export default function RoomViewer() {
                         : ({ status: 'available' as DeskStatus } as { status: DeskStatus; reservation?: Reservation; assignedTo?: string });
 
                       if (cell) {
+                        const isSelected = selectedDeskId === cell.id;
 
                         // Custom Google-like styling
                         let bgClass = 'bg-white border-2 border-gray-200';
@@ -917,6 +947,7 @@ export default function RoomViewer() {
                           relative rounded-2xl transition-all duration-300 ease-out
                           flex flex-col items-center justify-center
                           ${bgClass}
+                          ${isSelected ? 'ring-2 ring-offset-2 ring-blue-500 scale-105 shadow-lg' : ''}
                           ${isBookable && status !== 'reserved' ? 'cursor-pointer hover:-translate-y-1' : ''}
                         `}
                             style={{ width: CELL_SIZE, height: CELL_SIZE }}
@@ -982,28 +1013,95 @@ export default function RoomViewer() {
 
             {activeTab === 'desks' ? (
               <>
-                <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2 flex-shrink-0">
-                  Available Desks
-                  <Badge variant="secondary" className="rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100">
-                    {availableDeskCount}
-                  </Badge>
-                </h3>
+                <div className="space-y-4 flex-shrink-0">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                      Desk Directory
+                      <Badge variant="secondary" className="rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100">
+                        {visibleDeskCount}
+                      </Badge>
+                    </h3>
+                    <p className="text-xs text-gray-500">for {format(selectedDate, 'MMM d')}</p>
+                  </div>
+
+                  <Input
+                    value={deskSearch}
+                    onChange={(e) => setDeskSearch(e.target.value)}
+                    placeholder="Search desk label..."
+                    className="rounded-xl border-gray-200"
+                  />
+
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { value: 'all', label: 'All' },
+                      { value: 'available', label: 'Available' },
+                      { value: 'reserved', label: 'Reserved' },
+                      { value: 'mine', label: 'Mine' },
+                    ].map((filter) => (
+                      <Button
+                        key={filter.value}
+                        type="button"
+                        variant={deskFilter === filter.value ? 'default' : 'outline'}
+                        size="sm"
+                        className="rounded-full"
+                        onClick={() => setDeskFilter(filter.value as 'all' | 'available' | 'reserved' | 'mine')}
+                      >
+                        {filter.label}
+                      </Button>
+                    ))}
+                  </div>
+
+                  {selectedDesk && selectedDeskStatus && (
+                    <Card className="rounded-2xl border-gray-100 bg-gray-50/80 p-4 shadow-none">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Selected Desk</p>
+                          <p className="mt-1 text-lg font-semibold text-gray-900">
+                            {selectedDesk.label || `Desk ${selectedDesk.x}-${selectedDesk.y}`}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {selectedDeskStatus.status === 'available'
+                              ? `Available on ${selectedDateLabel}`
+                              : selectedDeskStatus.status === 'my-reservation'
+                                ? 'Booked by you for this date'
+                                : `Reserved by ${getReservationDisplayName(selectedDeskStatus.reservation, selectedDeskStatus.assignedTo)}`}
+                          </p>
+                        </div>
+                        <Badge
+                          variant="secondary"
+                          className={cn(
+                            'rounded-full',
+                            selectedDeskStatus.status === 'available' && 'bg-blue-50 text-blue-700',
+                            selectedDeskStatus.status === 'reserved' && 'bg-red-50 text-red-700',
+                            selectedDeskStatus.status === 'my-reservation' && 'bg-purple-50 text-purple-700',
+                          )}
+                        >
+                          {selectedDeskStatus.status === 'my-reservation'
+                            ? 'Your Spot'
+                            : selectedDeskStatus.status === 'reserved'
+                              ? 'Reserved'
+                              : 'Available'}
+                        </Badge>
+                      </div>
+                    </Card>
+                  )}
+                </div>
 
                 <div className="space-y-3 lg:overflow-y-auto lg:pr-2 custom-scrollbar lg:flex-1">
-                  {sortedCells.map((cell) => {
+                  {visibleCells.map((cell) => {
                       const deskInfo = DESK_TYPES.find((d) => d.type === cell.type);
                       const Icon = deskInfo?.icon;
                       const { status, reservation, assignedTo } = getDeskStatus(cell.id);
                       const isAvailable = status === 'available';
                       const isMyReservation = status === 'my-reservation';
-
-                      // if (!isAvailable && !isMyReservation && !isRoomAdmin) return null; // Show all desks status
+                      const isSelected = selectedDeskId === cell.id;
 
                       return (
                         <div
                           key={cell.id}
                           className={`
                         group rounded-2xl p-4 transition-all duration-200 cursor-pointer border
+                        ${isSelected ? 'ring-2 ring-blue-500 border-blue-200 shadow-md' : ''}
                         ${isAvailable
                               ? 'bg-white border-gray-100 hover:border-blue-200 hover:shadow-md'
                               : isMyReservation
@@ -1011,7 +1109,12 @@ export default function RoomViewer() {
                                 : 'bg-gray-50 border-transparent opacity-70'
                             }
                       `}
-                          onClick={() => handleDeskListClick(cell)}
+                          onClick={() => {
+                            setSelectedDeskId(cell.id);
+                            if (status !== 'reserved' || user?.role === 'admin' || user?.role === 'super_admin') {
+                              handleDeskListClick(cell);
+                            }
+                          }}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
@@ -1035,7 +1138,7 @@ export default function RoomViewer() {
                               </div>
                             </div>
 
-                            {(isAvailable || user?.role === 'admin') && (
+                            {(isAvailable || user?.role === 'admin' || user?.role === 'super_admin') && (
                               <Button
                                 size="sm"
                                 className={`
@@ -1044,10 +1147,11 @@ export default function RoomViewer() {
                             `}
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  setSelectedDeskId(cell.id);
                                   handleDeskListClick(cell);
                                 }}
                               >
-                                Book
+                                {isAvailable ? 'Book' : 'View'}
                               </Button>
                             )}
                           </div>
@@ -1055,10 +1159,10 @@ export default function RoomViewer() {
                       );
                     })}
 
-                  {availableDeskCount === 0 && (
+                  {visibleDeskCount === 0 && (
                     <div className="text-center py-10 text-gray-400">
                       <Armchair className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                      <p>No desks available for this date.</p>
+                      <p>No desks match the current filters.</p>
                     </div>
                   )}
                 </div>
