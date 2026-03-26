@@ -20,10 +20,6 @@ import RoomViewer from "./pages/RoomViewer";
 import MyReservations from "./pages/MyReservations";
 import PendingApprovals from "./pages/PendingApprovals";
 import ReservationsCalendar from "./pages/ReservationsCalendar";
-import ManageOffices from "./pages/ManageOffices";
-import Offices from "./pages/Offices";
-import OfficeCalendar from "./pages/OfficeCalendar";
-import OfficeAdminCalendar from "./pages/OfficeAdminCalendar";
 import SharedRooms from "./pages/SharedRooms";
 import Planner from "./pages/Planner";
 
@@ -145,46 +141,6 @@ const App = () => {
                   <ProtectedRoute requiredRole="admin">
                     <Layout>
                       <Users />
-                    </Layout>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/manage-offices"
-                element={
-                  <ProtectedRoute requiredRole="admin">
-                    <Layout>
-                      <ManageOffices />
-                    </Layout>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/manage-offices/:officeId/calendar"
-                element={
-                  <ProtectedRoute requiredRole="admin">
-                    <Layout>
-                      <OfficeAdminCalendar />
-                    </Layout>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/offices"
-                element={
-                  <ProtectedRoute requiredRole="user">
-                    <Layout>
-                      <Offices />
-                    </Layout>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/offices/:officeId/book"
-                element={
-                  <ProtectedRoute requiredRole="user">
-                    <Layout>
-                      <OfficeCalendar />
                     </Layout>
                   </ProtectedRoute>
                 }
