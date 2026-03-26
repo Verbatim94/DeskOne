@@ -8,6 +8,7 @@ const corsHeaders = {
 
 const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected date in YYYY-MM-DD format');
 const timeSegmentSchema = z.enum(['AM', 'PM', 'FULL']);
+const reservationTypeSchema = z.enum(['half_day', 'day', 'week', 'month', 'quarter', 'semester', 'meeting']);
 const uuidSchema = z.string().uuid();
 const emptyDataSchema = z
   .object({})
@@ -34,6 +35,7 @@ const operationDataSchemas = {
     date_start: isoDateSchema,
     date_end: isoDateSchema,
     time_segment: timeSegmentSchema.default('FULL'),
+    type: reservationTypeSchema.default('day'),
   }).refine((value) => value.date_end >= value.date_start, {
     message: 'date_end must be on or after date_start',
     path: ['date_end'],
@@ -251,6 +253,10 @@ Deno.serve(async (req) => {
           })
           .select()
           .single();
+
+        if (result.error) {
+          console.error('Error creating reservation:', result.error);
+        }
         break;
       }
 
