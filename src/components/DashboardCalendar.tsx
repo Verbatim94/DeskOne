@@ -12,16 +12,19 @@ export function DashboardCalendar({ bookedDates, availableDates = [], unavailabl
     const [date, setDate] = useState<Date | undefined>(new Date());
 
     return (
-        <Card className="border-none shadow-sm">
-            <CardHeader>
-                <CardTitle>Calendar</CardTitle>
+        <Card className="border-slate-100 bg-white shadow-sm">
+            <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Calendar</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                    Track your reservations and room availability at a glance.
+                </p>
             </CardHeader>
             <CardContent className="flex flex-col items-center">
                 <Calendar
                     mode="single"
                     selected={date}
                     onSelect={setDate}
-                    className="rounded-md border shadow-sm"
+                    className="rounded-2xl border border-slate-100 bg-slate-50/50 p-3 shadow-sm"
                     modifiers={{
                         hasReservation: bookedDates,
                         hasAvailability: availableDates,
@@ -35,7 +38,7 @@ export function DashboardCalendar({ bookedDates, availableDates = [], unavailabl
                 />
 
                 {/* Legend */}
-                <div className="mt-4 w-full flex items-center justify-center gap-4 text-xs">
+                <div className="mt-4 flex w-full flex-wrap items-center justify-center gap-4 text-xs">
                     <div className="flex items-center gap-1.5">
                         <div className="w-3 h-3 rounded-full bg-purple-500"></div>
                         <span className="text-muted-foreground">Reserved</span>

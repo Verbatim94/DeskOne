@@ -7,9 +7,12 @@ interface DashboardChartProps {
 
 export function DashboardChart({ data }: DashboardChartProps) {
     return (
-        <Card className="col-span-4 border-none shadow-sm">
-            <CardHeader>
-                <CardTitle>Booking Activity</CardTitle>
+        <Card className="col-span-4 border-slate-100 bg-white shadow-sm">
+            <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Booking Activity</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                    Reservation trend over the last six months.
+                </p>
             </CardHeader>
             <CardContent className="pl-2">
                 <div className="h-[200px] w-full">
@@ -35,9 +38,9 @@ export function DashboardChart({ data }: DashboardChartProps) {
                             <Line
                                 type="monotone"
                                 dataKey="bookings"
-                                stroke="#f97316"
-                                strokeWidth={2}
-                                dot={{ r: 4, fill: "#f97316", strokeWidth: 2, stroke: "#fff" }}
+                                stroke="#2563eb"
+                                strokeWidth={3}
+                                dot={{ r: 4, fill: "#2563eb", strokeWidth: 2, stroke: "#fff" }}
                                 activeDot={{ r: 6, strokeWidth: 0 }}
                             />
                         </LineChart>
