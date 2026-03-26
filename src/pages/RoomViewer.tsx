@@ -401,6 +401,14 @@ export default function RoomViewer() {
     }
   };
 
+  const getReservationDisplayName = (reservation?: Reservation | null, assignedTo?: string) => {
+    const fullName = reservation?.user?.full_name?.trim();
+    const username = reservation?.user?.username?.trim();
+    const assignedName = assignedTo?.trim();
+
+    return fullName || username || assignedName || 'another user';
+  };
+
   const buildDeskStatus = (cellId: string, dayToCheck: Date): DeskStatusDetails => {
     // Check for fixed assignments first
     const activeAssignment = fixedAssignments.find((a) => {
@@ -515,7 +523,7 @@ export default function RoomViewer() {
     if (status === 'reserved' && user?.role !== 'admin') {
       toast({
         title: 'Desk unavailable',
-        description: `This desk is ${assignedTo ? `assigned to ${assignedTo}` : `reserved by ${reservation?.user.full_name}`}`,
+        description: `This desk is ${assignedTo ? `assigned to ${assignedTo}` : `reserved by ${getReservationDisplayName(reservation, assignedTo)}`}`,
         variant: 'destructive',
       });
       return;
@@ -583,6 +591,13 @@ export default function RoomViewer() {
   const availableDeskCount = sortedCells.reduce((count, cell) => {
     return count + (getDeskStatus(cell.id).status === 'available' ? 1 : 0);
   }, 0);
+  const reservedDeskCount = sortedCells.reduce((count, cell) => {
+    return count + (getDeskStatus(cell.id).status === 'reserved' ? 1 : 0);
+  }, 0);
+  const myDeskCount = sortedCells.reduce((count, cell) => {
+    return count + (getDeskStatus(cell.id).status === 'my-reservation' ? 1 : 0);
+  }, 0);
+  const selectedDateLabel = format(selectedDate, 'EEEE, MMMM d, yyyy');
 
   return (
     <TooltipProvider>
@@ -602,6 +617,9 @@ export default function RoomViewer() {
               <h1 className="text-lg font-semibold text-gray-900">{room.name}</h1>
               <p className="text-xs text-gray-500">
                 {format(selectedDate, 'MMMM d, yyyy')}
+              </p>
+              <p className="text-xs text-gray-400">
+                Showing availability for {selectedDateLabel}
               </p>
             </div>
           </div>
@@ -676,7 +694,7 @@ export default function RoomViewer() {
                 {refreshingColors ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : null}
-                Refresh Colors
+                Sync Availability
               </Button>
             )}
           </div>
@@ -685,6 +703,24 @@ export default function RoomViewer() {
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-4 lg:flex-1 lg:overflow-hidden">
           {/* Main Content: Grid */}
           <div className="flex flex-col space-y-3 lg:overflow-hidden">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-shrink-0">
+              <Card className="rounded-2xl border-blue-100 bg-blue-50/70 px-4 py-3 shadow-sm">
+                <p className="text-xs font-medium uppercase tracking-wide text-blue-700">Available</p>
+                <p className="mt-1 text-2xl font-semibold text-blue-900">{availableDeskCount}</p>
+                <p className="text-xs text-blue-700">Open for {selectedDateLabel}</p>
+              </Card>
+              <Card className="rounded-2xl border-red-100 bg-red-50/70 px-4 py-3 shadow-sm">
+                <p className="text-xs font-medium uppercase tracking-wide text-red-700">Reserved</p>
+                <p className="mt-1 text-2xl font-semibold text-red-900">{reservedDeskCount}</p>
+                <p className="text-xs text-red-700">Booked or assigned to others</p>
+              </Card>
+              <Card className="rounded-2xl border-purple-100 bg-purple-50/70 px-4 py-3 shadow-sm">
+                <p className="text-xs font-medium uppercase tracking-wide text-purple-700">Your Spot</p>
+                <p className="mt-1 text-2xl font-semibold text-purple-900">{myDeskCount}</p>
+                <p className="text-xs text-purple-700">Desks held by you on this date</p>
+              </Card>
+            </div>
+
             {/* Floating Legend */}
             <div className="bg-white px-4 py-2 rounded-full shadow-sm border border-gray-100 inline-flex items-center gap-6 text-sm flex-shrink-0">
               <div className="flex items-center gap-2">
@@ -990,7 +1026,11 @@ export default function RoomViewer() {
                                   {cell.label || `Desk ${cell.x}-${cell.y}`}
                                 </p>
                                 <p className="text-xs text-gray-500 mt-0.5">
-                                  {isAvailable ? 'Available all day' : isMyReservation ? 'Reserved by you' : `Reserved by ${assignedTo}`}
+                                  {isAvailable
+                                    ? `Available on ${format(selectedDate, 'MMM d')}`
+                                    : isMyReservation
+                                      ? 'Booked by you for this date'
+                                      : `Reserved by ${getReservationDisplayName(reservation, assignedTo)}`}
                                 </p>
                               </div>
                             </div>

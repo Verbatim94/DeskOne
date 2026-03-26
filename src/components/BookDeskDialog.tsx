@@ -191,7 +191,7 @@ export default function BookDeskDialog({
 
       toast({
         title: 'Desk booked',
-        description: 'Your desk reservation is confirmed'
+        description: `${cellLabel || 'Desk'} booked for ${format(selectedDate, 'EEEE, MMMM d, yyyy')}.`
       });
 
       onOpenChange(false);
@@ -209,7 +209,7 @@ export default function BookDeskDialog({
       }
 
       if (message.startsWith('ONE_PER_DAY:')) {
-        setErrorDialogMessage("You cannot book more than one desk per day.");
+        setErrorDialogMessage('You already have a desk for this date. Cancel the existing booking before reserving another one.');
         setShowErrorDialog(true);
         onOpenChange(false);
         return;
@@ -218,14 +218,14 @@ export default function BookDeskDialog({
       if (message.includes('already reserved') || message.includes('fixed assignment')) {
         toast({
           title: 'Desk unavailable',
-          description: message,
+          description: message || 'This desk is no longer available for the selected date.',
           variant: 'destructive',
         });
         if (onBookingComplete) onBookingComplete();
       } else {
         toast({
           title: 'Booking failed',
-          description: message,
+          description: message || 'We could not complete the booking. Please try again.',
           variant: 'destructive',
         });
       }
@@ -360,6 +360,9 @@ export default function BookDeskDialog({
             </TabsList>
 
             <TabsContent value="booking" className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Create a one-day booking for this desk on the selected date.
+              </p>
               <form onSubmit={handleBooking} className="space-y-6">
                 <div className="flex flex-col items-center gap-4">
                   <div className="flex items-center justify-center gap-4">
@@ -436,6 +439,9 @@ export default function BookDeskDialog({
             </TabsContent>
 
             <TabsContent value="assignment" className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Reserve this desk for one user across a date range.
+              </p>
               <form onSubmit={handleAssignment} className="space-y-6">
                 <div className="space-y-4">
                   <div className="space-y-2">
@@ -550,6 +556,9 @@ export default function BookDeskDialog({
           </Tabs>
         ) : (
           <form onSubmit={handleBooking} className="space-y-6">
+            <p className="text-sm text-muted-foreground">
+              This booking reserves the desk for the full selected day.
+            </p>
             <div className="flex flex-col items-center gap-4">
               <div className="flex items-center justify-center gap-4">
                 <Button
