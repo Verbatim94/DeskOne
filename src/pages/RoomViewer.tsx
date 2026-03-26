@@ -630,9 +630,9 @@ export default function RoomViewer() {
 
   return (
     <TooltipProvider>
-      <div className="lg:h-full min-h-screen bg-gray-50/50 p-4 flex flex-col space-y-4 lg:overflow-hidden">
+      <div className="lg:h-full min-h-screen bg-[linear-gradient(180deg,#f8fbff_0%,#f3f6fb_100%)] p-4 flex flex-col space-y-4 lg:overflow-hidden">
         {/* Google-style Header */}
-        <div className="flex flex-col md:flex-row items-center justify-between bg-white px-4 py-3 rounded-2xl shadow-sm border border-gray-100 flex-shrink-0 gap-4">
+        <div className="flex flex-col md:flex-row items-center justify-between bg-white/90 backdrop-blur px-5 py-4 rounded-[28px] shadow-sm border border-slate-100 flex-shrink-0 gap-4">
           <div className="flex items-center gap-4 w-full md:w-auto">
             <Button
               variant="ghost"
@@ -643,11 +643,14 @@ export default function RoomViewer() {
               <ArrowLeft className="h-5 w-5 text-gray-600" />
             </Button>
             <div>
-              <h1 className="text-lg font-semibold text-gray-900">{room.name}</h1>
-              <p className="text-xs text-gray-500">
+              <div className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-blue-700">
+                Room Availability
+              </div>
+              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">{room.name}</h1>
+              <p className="text-sm text-slate-500">
                 {format(selectedDate, 'MMMM d, yyyy')}
               </p>
-              <p className="text-xs text-gray-400">
+              <p className="text-sm text-slate-400">
                 Showing availability for {selectedDateLabel}
               </p>
             </div>
@@ -729,9 +732,9 @@ export default function RoomViewer() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-4 lg:flex-1 lg:overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.3fr)_390px] gap-4 lg:flex-1 lg:overflow-hidden">
           {/* Main Content: Grid */}
-          <div className="flex flex-col space-y-3 lg:overflow-hidden">
+          <div className="flex flex-col space-y-4 lg:overflow-hidden">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-shrink-0">
               <Card className="rounded-2xl border-blue-100 bg-blue-50/70 px-4 py-3 shadow-sm">
                 <p className="text-xs font-medium uppercase tracking-wide text-blue-700">Available</p>
@@ -751,7 +754,7 @@ export default function RoomViewer() {
             </div>
 
             {/* Floating Legend */}
-            <div className="bg-white px-4 py-2 rounded-full shadow-sm border border-gray-100 inline-flex items-center gap-6 text-sm flex-shrink-0">
+            <div className="bg-white/90 backdrop-blur px-5 py-3 rounded-[22px] shadow-sm border border-slate-100 inline-flex items-center gap-6 text-sm flex-shrink-0">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-blue-500 shadow-sm"></div>
                 <span className="text-gray-600 font-medium">Available</span>
@@ -767,10 +770,19 @@ export default function RoomViewer() {
             </div>
 
             {/* Room Grid Container */}
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 lg:flex-1 flex flex-col relative overflow-hidden">
-              <div className="overflow-auto touch-pan-x touch-pan-y w-full h-[60vh] lg:h-full p-16 flex">
+            <div className="bg-[radial-gradient(circle_at_top_left,_rgba(96,165,250,0.16),_transparent_30%),linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] rounded-[32px] shadow-sm border border-slate-100 lg:flex-1 flex flex-col relative overflow-hidden">
+              <div className="border-b border-slate-100 px-5 py-4 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Interactive Map</p>
+                  <p className="mt-1 text-sm text-slate-600">Select a desk to inspect or book it for the chosen date.</p>
+                </div>
+                <Badge variant="secondary" className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">
+                  {room.grid_width} x {room.grid_height} layout
+                </Badge>
+              </div>
+              <div className="overflow-auto touch-pan-x touch-pan-y w-full h-[60vh] lg:h-full p-8 md:p-12 flex bg-[linear-gradient(0deg,rgba(226,232,240,0.28)_1px,transparent_1px),linear-gradient(90deg,rgba(226,232,240,0.28)_1px,transparent_1px)] bg-[size:42px_42px]">
                 <div
-                  className="inline-block relative flex-shrink-0 m-auto"
+                  className="inline-block relative flex-shrink-0 m-auto rounded-[28px] border border-white/60 bg-white/70 p-8 shadow-[0_30px_80px_-30px_rgba(37,99,235,0.25)] backdrop-blur-sm"
                   style={{
                     display: 'grid',
                     gridTemplateColumns: `repeat(${room.grid_width}, ${CELL_SIZE}px)`,
@@ -924,17 +936,17 @@ export default function RoomViewer() {
                         const isSelected = selectedDeskId === cell.id;
 
                         // Custom Google-like styling
-                        let bgClass = 'bg-white border-2 border-gray-200';
+                        let bgClass = 'bg-white border-2 border-slate-200 shadow-[0_8px_20px_-16px_rgba(15,23,42,0.35)]';
                         let iconColor = 'text-gray-400';
 
                         if (status === 'available') {
-                          bgClass = 'bg-blue-50 border-2 border-blue-100 hover:border-blue-300 hover:shadow-md';
+                          bgClass = 'bg-gradient-to-br from-blue-50 to-white border-2 border-blue-100 hover:border-blue-300 hover:shadow-lg';
                           iconColor = 'text-blue-500';
                         } else if (status === 'reserved') {
-                          bgClass = 'bg-red-50 border-2 border-red-200';
+                          bgClass = 'bg-gradient-to-br from-red-50 to-white border-2 border-red-200';
                           iconColor = 'text-red-500';
                         } else if (status === 'my-reservation') {
-                          bgClass = 'bg-purple-50 border-2 border-purple-200 shadow-sm';
+                          bgClass = 'bg-gradient-to-br from-purple-50 to-white border-2 border-purple-200 shadow-sm';
                           iconColor = 'text-purple-500';
                         }
 
@@ -944,10 +956,10 @@ export default function RoomViewer() {
                           <div
                             key={`${x}-${y}`}
                             className={`
-                          relative rounded-2xl transition-all duration-300 ease-out
+                          relative rounded-[20px] transition-all duration-300 ease-out
                           flex flex-col items-center justify-center
                           ${bgClass}
-                          ${isSelected ? 'ring-2 ring-offset-2 ring-blue-500 scale-105 shadow-lg' : ''}
+                          ${isSelected ? 'ring-2 ring-offset-4 ring-blue-500 scale-[1.08] shadow-[0_18px_45px_-18px_rgba(37,99,235,0.55)]' : ''}
                           ${isBookable && status !== 'reserved' ? 'cursor-pointer hover:-translate-y-1' : ''}
                         `}
                             style={{ width: CELL_SIZE, height: CELL_SIZE }}
@@ -957,7 +969,7 @@ export default function RoomViewer() {
                             {cell && Icon && (
                               <Icon className={`h-5 w-5 ${iconColor} transition-colors mb-0.5`} strokeWidth={2} />
                             )}
-                            <span className={`text-[9px] font-bold truncate max-w-full px-1 ${status === 'reserved' ? 'text-gray-400' : 'text-gray-600'}`}>
+                            <span className={`text-[9px] font-bold tracking-wide truncate max-w-full px-1 ${status === 'reserved' ? 'text-gray-400' : 'text-gray-600'}`}>
                               {cell.label}
                             </span>
                             {/* Status Dot */}
@@ -988,9 +1000,9 @@ export default function RoomViewer() {
           </div>
 
           {/* Right Sidebar: Available Desks */}
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-4 flex flex-col lg:h-full lg:overflow-hidden">
+          <div className="bg-white/95 backdrop-blur rounded-[32px] shadow-sm border border-slate-100 p-4 flex flex-col lg:h-full lg:overflow-hidden">
             {/* Tabs */}
-            <div className="flex p-1 bg-gray-100 rounded-xl mb-4 flex-shrink-0">
+            <div className="flex p-1 bg-slate-100 rounded-2xl mb-4 flex-shrink-0">
               <button
                 className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'desks'
                   ? 'bg-white text-gray-900 shadow-sm'
@@ -1052,7 +1064,7 @@ export default function RoomViewer() {
                   </div>
 
                   {selectedDesk && selectedDeskStatus && (
-                    <Card className="rounded-2xl border-gray-100 bg-gray-50/80 p-4 shadow-none">
+                    <Card className="rounded-[24px] border-slate-100 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-4 shadow-none">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Selected Desk</p>
@@ -1100,13 +1112,13 @@ export default function RoomViewer() {
                         <div
                           key={cell.id}
                           className={`
-                        group rounded-2xl p-4 transition-all duration-200 cursor-pointer border
+                        group rounded-[24px] p-4 transition-all duration-200 cursor-pointer border
                         ${isSelected ? 'ring-2 ring-blue-500 border-blue-200 shadow-md' : ''}
                         ${isAvailable
                               ? 'bg-white border-gray-100 hover:border-blue-200 hover:shadow-md'
                               : isMyReservation
                                 ? 'bg-purple-50 border-purple-100'
-                                : 'bg-gray-50 border-transparent opacity-70'
+                                : 'bg-red-50/50 border-red-100'
                             }
                       `}
                           onClick={() => {
@@ -1119,7 +1131,7 @@ export default function RoomViewer() {
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
                               <div className={`
-                            p-3 rounded-xl 
+                            p-3 rounded-2xl 
                             ${isAvailable ? 'bg-blue-50 text-blue-600' : isMyReservation ? 'bg-purple-100 text-purple-600' : 'bg-red-100 text-red-600'}
                           `}>
                                 {Icon && <Icon className="h-5 w-5" />}

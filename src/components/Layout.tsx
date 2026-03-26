@@ -19,7 +19,7 @@ export function Layout({ children }: LayoutProps) {
   return (
     <div className="h-screen bg-background flex overflow-hidden">
       {/* Desktop Sidebar */}
-      <Sidebar className="hidden lg:flex w-64 min-h-screen" />
+      <Sidebar compact className="hidden lg:flex w-24 min-h-screen" />
 
       {/* Mobile Sidebar */}
       <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
@@ -37,8 +37,8 @@ export function Layout({ children }: LayoutProps) {
           </Button>
         </header>
 
-        <main className="flex-1 p-4 md:p-6 overflow-y-auto">
-          <div className="max-w-7xl mx-auto h-full">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+          <div className="mx-auto h-full max-w-[1600px]">
             {children}
           </div>
         </main>
