@@ -9,6 +9,7 @@ const corsHeaders = {
 const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected date in YYYY-MM-DD format');
 const timeSegmentSchema = z.enum(['AM', 'PM', 'FULL']);
 const reservationTypeSchema = z.enum(['half_day', 'day', 'week', 'month', 'quarter', 'semester', 'meeting']);
+const biReportTypeSchema = z.enum(['raw', 'daily']);
 const uuidSchema = z.string().uuid();
 const emptyDataSchema = z
   .object({})
@@ -26,6 +27,7 @@ const operationSchema = z.enum([
   'reject',
   'cancel',
   'check_availability',
+  'export_bi_report',
 ]);
 
 const operationDataSchemas = {
@@ -65,6 +67,16 @@ const operationDataSchemas = {
     cellId: uuidSchema,
     date_start: isoDateSchema,
     date_end: isoDateSchema,
+  }).refine((value) => value.date_end >= value.date_start, {
+    message: 'date_end must be on or after date_start',
+    path: ['date_end'],
+  }),
+  export_bi_report: z.object({
+    date_start: isoDateSchema,
+    date_end: isoDateSchema,
+    report_type: biReportTypeSchema,
+    room_ids: z.array(uuidSchema).optional(),
+    user_ids: z.array(uuidSchema).optional(),
   }).refine((value) => value.date_end >= value.date_start, {
     message: 'date_end must be on or after date_start',
     path: ['date_end'],
@@ -570,6 +582,242 @@ Deno.serve(async (req) => {
           .or(`date_start.lte.${data.date_end},date_end.gte.${data.date_start}`);
 
         result = { data: { available: !existingReservations || existingReservations.length === 0, conflicts: existingReservations }, error: null };
+        break;
+      }
+
+      case 'export_bi_report': {
+        if (!isGlobalAdmin) {
+          return new Response(
+            JSON.stringify({ error: 'Only admins can export BI reports' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const roomIdsFilter = data.room_ids?.length ? data.room_ids : null;
+        const userIdsFilter = data.user_ids?.length ? data.user_ids : null;
+
+        let reservationsQuery = supabase
+          .from('reservations')
+          .select(`
+            id,
+            room_id,
+            cell_id,
+            user_id,
+            status,
+            type,
+            time_segment,
+            date_start,
+            date_end,
+            created_at,
+            approved_at,
+            approved_by,
+            rooms!inner(id, name),
+            room_cells!inner(id, label),
+            users!reservations_user_id_fkey(id, username, full_name)
+          `)
+          .gte('date_end', data.date_start)
+          .lte('date_start', data.date_end)
+          .neq('status', 'cancelled')
+          .neq('status', 'rejected');
+
+        if (roomIdsFilter) reservationsQuery = reservationsQuery.in('room_id', roomIdsFilter);
+        if (userIdsFilter) reservationsQuery = reservationsQuery.in('user_id', userIdsFilter);
+
+        const { data: reportReservations, error: reservationsError } = await reservationsQuery;
+        if (reservationsError) {
+          console.error('Error exporting BI reservation report:', reservationsError);
+          throw reservationsError;
+        }
+
+        let assignmentsQuery = supabase
+          .from('fixed_assignments')
+          .select(`
+            id,
+            room_id,
+            cell_id,
+            assigned_to,
+            created_by,
+            date_start,
+            date_end,
+            created_at,
+            rooms!inner(id, name),
+            room_cells!inner(id, label)
+          `)
+          .gte('date_end', data.date_start)
+          .lte('date_start', data.date_end);
+
+        if (roomIdsFilter) assignmentsQuery = assignmentsQuery.in('room_id', roomIdsFilter);
+        if (userIdsFilter) assignmentsQuery = assignmentsQuery.in('assigned_to', userIdsFilter);
+
+        const { data: reportAssignments, error: assignmentsError } = await assignmentsQuery;
+        if (assignmentsError) {
+          console.error('Error exporting BI assignment report:', assignmentsError);
+          throw assignmentsError;
+        }
+
+        const userIds = Array.from(new Set([
+          ...(reportReservations || []).flatMap((reservation: any) => [reservation.user_id, reservation.approved_by].filter(Boolean)),
+          ...(reportAssignments || []).flatMap((assignment: any) => [assignment.assigned_to, assignment.created_by].filter(Boolean)),
+        ]));
+
+        let userMap: Record<string, { full_name: string | null; username: string | null }> = {};
+        if (userIds.length > 0) {
+          const { data: usersData, error: usersError } = await supabase
+            .from('users')
+            .select('id, full_name, username')
+            .in('id', userIds);
+
+          if (usersError) {
+            console.error('Error loading users for BI export:', usersError);
+            throw usersError;
+          }
+
+          userMap = (usersData || []).reduce((acc: Record<string, { full_name: string | null; username: string | null }>, userRecord: any) => {
+            acc[userRecord.id] = {
+              full_name: userRecord.full_name ?? null,
+              username: userRecord.username ?? null,
+            };
+            return acc;
+          }, {});
+        }
+
+        const startBoundary = new Date(`${data.date_start}T00:00:00.000Z`);
+        const endBoundary = new Date(`${data.date_end}T00:00:00.000Z`);
+        const clampDateRange = (dateStart: string, dateEnd: string) => {
+          const effectiveStart = new Date(`${dateStart}T00:00:00.000Z`);
+          const effectiveEnd = new Date(`${dateEnd}T00:00:00.000Z`);
+          const start = effectiveStart < startBoundary ? new Date(startBoundary) : effectiveStart;
+          const end = effectiveEnd > endBoundary ? new Date(endBoundary) : effectiveEnd;
+          return { start, end };
+        };
+        const dateToYmd = (date: Date) => date.toISOString().slice(0, 10);
+        const durationDays = (dateStart: string, dateEnd: string) => {
+          const start = new Date(`${dateStart}T00:00:00.000Z`);
+          const end = new Date(`${dateEnd}T00:00:00.000Z`);
+          return Math.floor((end.getTime() - start.getTime()) / 86400000) + 1;
+        };
+        const monthFromDate = (dateStart: string) => dateStart.slice(0, 7);
+        const yearFromDate = (dateStart: string) => Number.parseInt(dateStart.slice(0, 4), 10);
+        const isWeekendSpan = (dateStart: string, dateEnd: string) => {
+          const { start, end } = clampDateRange(dateStart, dateEnd);
+          const cursor = new Date(start);
+          while (cursor <= end) {
+            const day = cursor.getUTCDay();
+            if (day === 0 || day === 6) return true;
+            cursor.setUTCDate(cursor.getUTCDate() + 1);
+          }
+          return false;
+        };
+
+        const rawRows = [
+          ...(reportReservations || []).map((reservation: any) => ({
+            reservation_id: reservation.id,
+            source_type: 'reservation',
+            room_id: reservation.room_id,
+            room_name: reservation.rooms?.name ?? '',
+            desk_id: reservation.cell_id,
+            desk_label: reservation.room_cells?.label ?? '',
+            user_id: reservation.user_id,
+            user_full_name: reservation.users?.full_name ?? userMap[reservation.user_id]?.full_name ?? '',
+            username: reservation.users?.username ?? userMap[reservation.user_id]?.username ?? '',
+            status: reservation.status,
+            reservation_type: reservation.type,
+            time_segment: reservation.time_segment,
+            date_start: reservation.date_start,
+            date_end: reservation.date_end,
+            created_at: reservation.created_at,
+            approved_at: reservation.approved_at ?? '',
+            approved_by: reservation.approved_by ?? '',
+            approved_by_name: reservation.approved_by ? userMap[reservation.approved_by]?.full_name ?? '' : '',
+            duration_days: durationDays(reservation.date_start, reservation.date_end),
+            is_weekend_span: isWeekendSpan(reservation.date_start, reservation.date_end),
+            month: monthFromDate(reservation.date_start),
+            year: yearFromDate(reservation.date_start),
+          })),
+          ...(reportAssignments || []).map((assignment: any) => ({
+            reservation_id: assignment.id,
+            source_type: 'fixed_assignment',
+            room_id: assignment.room_id,
+            room_name: assignment.rooms?.name ?? '',
+            desk_id: assignment.cell_id,
+            desk_label: assignment.room_cells?.label ?? '',
+            user_id: assignment.assigned_to,
+            user_full_name: userMap[assignment.assigned_to]?.full_name ?? '',
+            username: userMap[assignment.assigned_to]?.username ?? '',
+            status: 'approved',
+            reservation_type: 'fixed_assignment',
+            time_segment: 'FULL',
+            date_start: assignment.date_start,
+            date_end: assignment.date_end,
+            created_at: assignment.created_at ?? '',
+            approved_at: assignment.created_at ?? '',
+            approved_by: assignment.created_by ?? '',
+            approved_by_name: assignment.created_by ? userMap[assignment.created_by]?.full_name ?? '' : '',
+            duration_days: durationDays(assignment.date_start, assignment.date_end),
+            is_weekend_span: isWeekendSpan(assignment.date_start, assignment.date_end),
+            month: monthFromDate(assignment.date_start),
+            year: yearFromDate(assignment.date_start),
+          })),
+        ].sort((a, b) => a.date_start.localeCompare(b.date_start) || a.room_name.localeCompare(b.room_name));
+
+        if (data.report_type === 'raw') {
+          result = {
+            data: {
+              report_type: 'raw',
+              rows: rawRows,
+              generated_at: new Date().toISOString(),
+            },
+            error: null,
+          };
+          break;
+        }
+
+        const weekdayLabels = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const dailyRows = rawRows.flatMap((row) => {
+          const { start, end } = clampDateRange(row.date_start, row.date_end);
+          const rows = [];
+          const cursor = new Date(start);
+
+          while (cursor <= end) {
+            const dayOfWeek = cursor.getUTCDay();
+            rows.push({
+              reservation_id: row.reservation_id,
+              source_type: row.source_type,
+              room_id: row.room_id,
+              room_name: row.room_name,
+              desk_id: row.desk_id,
+              desk_label: row.desk_label,
+              user_id: row.user_id,
+              user_full_name: row.user_full_name,
+              username: row.username,
+              status: row.status,
+              reservation_type: row.reservation_type,
+              time_segment: row.time_segment,
+              occupancy_date: dateToYmd(cursor),
+              weekday_index: dayOfWeek,
+              weekday_name: weekdayLabels[dayOfWeek],
+              is_weekend: dayOfWeek === 0 || dayOfWeek === 6,
+              month: dateToYmd(cursor).slice(0, 7),
+              year: Number.parseInt(dateToYmd(cursor).slice(0, 4), 10),
+              created_at: row.created_at,
+              approved_at: row.approved_at,
+              approved_by: row.approved_by,
+              approved_by_name: row.approved_by_name,
+            });
+            cursor.setUTCDate(cursor.getUTCDate() + 1);
+          }
+
+          return rows;
+        });
+
+        result = {
+          data: {
+            report_type: 'daily',
+            rows: dailyRows,
+            generated_at: new Date().toISOString(),
+          },
+          error: null,
+        };
         break;
       }
 

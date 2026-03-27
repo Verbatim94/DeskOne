@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isWeekend } from 'date-fns';
-import { ChevronLeft, ChevronRight, Loader2, User } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Loader2, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
@@ -58,6 +58,7 @@ export default function Planner() {
     const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
     const [selectedRoomIds, setSelectedRoomIds] = useState<string[]>([]);
     const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+    const [exportingReport, setExportingReport] = useState<'raw' | 'daily' | null>(null);
     const { toast } = useToast();
 
     useEffect(() => {
@@ -148,10 +149,88 @@ export default function Planner() {
         selectedRoomIds.includes(reservation.room_id) && selectedUserIds.includes(reservation.user_id)
     ).length;
 
+    const escapeCsvValue = (value: unknown) => {
+        if (value === null || value === undefined) return '';
+        const normalized = String(value);
+        if (normalized.includes('"') || normalized.includes(',') || normalized.includes('\n')) {
+            return `"${normalized.replace(/"/g, '""')}"`;
+        }
+        return normalized;
+    };
+
+    const downloadCsv = (filename: string, rows: Record<string, unknown>[]) => {
+        if (!rows.length) {
+            toast({
+                title: 'No data to export',
+                description: 'The selected filters returned no rows.',
+                variant: 'destructive',
+            });
+            return;
+        }
+
+        const headers = Object.keys(rows[0]);
+        const csv = [
+            headers.join(','),
+            ...rows.map((row) => headers.map((header) => escapeCsvValue(row[header])).join(',')),
+        ].join('\n');
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        link.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const handleExportReport = async (reportType: 'raw' | 'daily') => {
+        setExportingReport(reportType);
+        try {
+            const session = authService.getSession();
+            if (!session) throw new Error('No session');
+
+            const response = await supabase.functions.invoke('manage-reservations', {
+                body: {
+                    operation: 'export_bi_report',
+                    data: {
+                        date_start: format(startOfMonth(date), 'yyyy-MM-dd'),
+                        date_end: format(endOfMonth(date), 'yyyy-MM-dd'),
+                        report_type: reportType,
+                        room_ids: selectedRoomIds,
+                        user_ids: selectedUserIds,
+                    },
+                },
+                headers: { 'x-session-token': session.token },
+            });
+
+            if (response.error) throw response.error;
+
+            const rows = response.data?.rows || [];
+            const monthLabel = format(date, 'yyyy-MM');
+            const filename = reportType === 'raw'
+                ? `deskone-room-reservations-${monthLabel}.csv`
+                : `deskone-daily-occupancy-${monthLabel}.csv`;
+
+            downloadCsv(filename, rows);
+            toast({
+                title: 'CSV exported',
+                description: `${rows.length} rows exported for ${format(date, 'MMMM yyyy')}.`,
+            });
+        } catch (error: any) {
+            toast({
+                title: 'Export failed',
+                description: error?.message || 'Unable to export the CSV report.',
+                variant: 'destructive',
+            });
+        } finally {
+            setExportingReport(null);
+        }
+    };
+
     return (
         <div className="h-full flex flex-col space-y-4 overflow-hidden">
             <div className="flex items-center justify-between flex-shrink-0">
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 flex-wrap">
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight">Access Planner</h1>
                         <p className="text-muted-foreground text-sm">Overview of all desk reservations</p>
@@ -169,6 +248,24 @@ export default function Planner() {
                         onChange={setSelectedUserIds}
                         placeholder="Filter users..."
                     />
+                    <Button
+                        variant="outline"
+                        className="rounded-full"
+                        disabled={loading || exportingReport !== null}
+                        onClick={() => void handleExportReport('raw')}
+                    >
+                        {exportingReport === 'raw' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                        Export Raw CSV
+                    </Button>
+                    <Button
+                        variant="outline"
+                        className="rounded-full"
+                        disabled={loading || exportingReport !== null}
+                        onClick={() => void handleExportReport('daily')}
+                    >
+                        {exportingReport === 'daily' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                        Export Daily CSV
+                    </Button>
                 </div>
 
                 <div className="flex items-center gap-2">
