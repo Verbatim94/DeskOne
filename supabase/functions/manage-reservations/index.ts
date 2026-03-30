@@ -22,6 +22,7 @@ const operationSchema = z.enum([
   'list_my_reservations',
   'list_all_reservations',
   'list_room_reservations',
+  'get_room_day_state',
   'list_pending_approvals',
   'approve',
   'reject',
@@ -52,6 +53,10 @@ const operationDataSchemas = {
   }),
   list_room_reservations: z.object({
     roomId: uuidSchema,
+  }),
+  get_room_day_state: z.object({
+    roomId: uuidSchema,
+    date: isoDateSchema,
   }),
   list_pending_approvals: emptyDataSchema,
   approve: z.object({
@@ -393,6 +398,107 @@ Deno.serve(async (req) => {
         }
 
         result = { data: roomReservations || [], error: null };
+        break;
+      }
+
+      case 'get_room_day_state': {
+        if (!(await isRoomAdmin(data.roomId)) && !isGlobalAdmin) {
+          const { data: memberAccess } = await supabase
+            .from('room_access')
+            .select('id')
+            .eq('room_id', data.roomId)
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+          if (!memberAccess) {
+            return new Response(
+              JSON.stringify({ error: 'You do not have access to this room' }),
+              { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+        }
+
+        const { data: dayReservations, error: dayReservationsError } = await supabase
+          .from('reservations')
+          .select(`
+            *,
+            users!reservations_user_id_fkey(id, username, full_name),
+            room_cells!inner(id, label, type, x, y)
+          `)
+          .eq('room_id', data.roomId)
+          .gte('date_end', data.date)
+          .lte('date_start', data.date)
+          .neq('status', 'cancelled')
+          .neq('status', 'rejected')
+          .order('date_start', { ascending: false });
+
+        if (dayReservationsError) {
+          console.error('Error fetching room day reservations:', dayReservationsError);
+          throw dayReservationsError;
+        }
+
+        const { data: dayAssignments, error: dayAssignmentsError } = await supabase
+          .from('fixed_assignments')
+          .select(`
+            id,
+            cell_id,
+            room_id,
+            assigned_to,
+            date_start,
+            date_end,
+            created_at
+          `)
+          .eq('room_id', data.roomId)
+          .gte('date_end', data.date)
+          .lte('date_start', data.date)
+          .order('date_start', { ascending: false });
+
+        if (dayAssignmentsError) {
+          console.error('Error fetching room day assignments:', dayAssignmentsError);
+          throw dayAssignmentsError;
+        }
+
+        const assignedUserIds = Array.from(new Set((dayAssignments || []).map((assignment) => assignment.assigned_to).filter(Boolean)));
+        let assignmentUsers: Array<{ id: string; full_name: string | null; username: string | null }> = [];
+
+        if (assignedUserIds.length > 0) {
+          const { data: assignmentUsersData, error: assignmentUsersError } = await supabase
+            .from('users')
+            .select('id, full_name, username')
+            .in('id', assignedUserIds);
+
+          if (assignmentUsersError) {
+            console.error('Error fetching assignment users:', assignmentUsersError);
+            throw assignmentUsersError;
+          }
+
+          assignmentUsers = assignmentUsersData || [];
+        }
+
+        const assignmentUserMap = assignmentUsers.reduce<Record<string, { id: string; full_name: string; username: string }>>((acc, current) => {
+          acc[current.id] = {
+            id: current.id,
+            full_name: current.full_name || '',
+            username: current.username || '',
+          };
+          return acc;
+        }, {});
+
+        result = {
+          data: {
+            date: data.date,
+            reservations: dayReservations || [],
+            fixed_assignments: (dayAssignments || []).map((assignment) => ({
+              ...assignment,
+              assigned_user: assignmentUserMap[assignment.assigned_to] || {
+                id: assignment.assigned_to,
+                full_name: '',
+                username: '',
+              },
+            })),
+          },
+          error: null,
+        };
         break;
       }
 

@@ -20,7 +20,7 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from "@/components/ui/tooltip";
-import { format, parseISO, isWithinInterval, addDays, isEqual, startOfMonth, endOfMonth } from 'date-fns';
+import { format, parseISO, isWithinInterval, addDays, isEqual } from 'date-fns';
 
 
 type DeskType = 'desk';
@@ -127,8 +127,13 @@ export default function RoomViewer() {
   const [deskSearch, setDeskSearch] = useState('');
   const [deskFilter, setDeskFilter] = useState<'all' | 'available' | 'reserved' | 'mine'>('all');
   const [selectedDeskId, setSelectedDeskId] = useState<string | null>(null);
-  const latestReservationsRequestRef = useRef(0);
-  const latestAssignmentsRequestRef = useRef(0);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+  const latestAvailabilityRequestRef = useRef(0);
+  const selectedDateRef = useRef(selectedDate);
+
+  useEffect(() => {
+    selectedDateRef.current = selectedDate;
+  }, [selectedDate]);
 
 
 
@@ -137,7 +142,7 @@ export default function RoomViewer() {
     loadRooms();
 
     const channel = supabase
-      .channel('room-reservations')
+      .channel(`room-viewer-${roomId}`)
       .on(
         'postgres_changes',
         {
@@ -148,7 +153,7 @@ export default function RoomViewer() {
         },
         () => {
           console.log('Reservation changed, reloading...');
-          loadReservations();
+          loadAvailabilityState();
         },
       )
       .on(
@@ -161,7 +166,7 @@ export default function RoomViewer() {
         },
         () => {
           console.log('Fixed assignment changed, reloading...');
-          loadFixedAssignments();
+          loadAvailabilityState();
         },
       )
       .subscribe();
@@ -173,10 +178,30 @@ export default function RoomViewer() {
 
   useEffect(() => {
     if (room) {
-      loadReservations();
-      loadFixedAssignments();
+      loadAvailabilityState();
     }
   }, [selectedDate, room]);
+
+  useEffect(() => {
+    if (!roomId) return;
+
+    const intervalId = window.setInterval(() => {
+      loadAvailabilityState();
+    }, 30000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadAvailabilityState();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [roomId, selectedDate]);
 
   useEffect(() => {
     if (!selectedDeskId && cells.length > 0) {
@@ -224,10 +249,11 @@ export default function RoomViewer() {
       setRoom(result.room);
       setCells(result.cells || []);
       setWalls(result.walls || []);
+      setIsRoomAdmin(false);
 
       // Check if user is room admin
       const session = authService.getSession();
-      if (session?.user.role === 'admin') {
+      if (session?.user.role === 'admin' || session?.user.role === 'super_admin') {
         setIsRoomAdmin(true);
       } else {
         const { data: access } = await supabase
@@ -241,7 +267,7 @@ export default function RoomViewer() {
           setIsRoomAdmin(true);
         }
       }
-      await loadReservations();
+      await loadAvailabilityState();
     } catch (error: unknown) {
       let message = 'Unknown error';
       if (error instanceof Error) message = error.message;
@@ -266,23 +292,18 @@ export default function RoomViewer() {
     }
   };
 
-  const loadReservations = async () => {
+  const loadAvailabilityState = async () => {
     if (!roomId) return;
-    const requestId = ++latestReservationsRequestRef.current;
+    const requestId = ++latestAvailabilityRequestRef.current;
 
     try {
-      const reservationData = user?.role === 'admin' || user?.role === 'super_admin'
-        ? await callReservationFunction('list_all_reservations', {
-            date_start: format(startOfMonth(selectedDate), 'yyyy-MM-dd'),
-            date_end: format(endOfMonth(selectedDate), 'yyyy-MM-dd'),
-          })
-        : await callReservationFunction('list_room_reservations', {
-            roomId,
-          });
+      const roomDayState = await callReservationFunction('get_room_day_state', {
+        roomId,
+        date: format(selectedDateRef.current, 'yyyy-MM-dd'),
+      });
 
-      const data = (reservationData || []).filter((reservation: { room_id?: string }) => reservation.room_id === roomId);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mappedReservations = (data || []).map((r: any): Reservation => ({
+      const mappedReservations = (roomDayState?.reservations || []).map((r: any): Reservation => ({
         id: r.id,
         cell_id: r.cell_id,
         user_id: r.user_id,
@@ -294,12 +315,33 @@ export default function RoomViewer() {
         type: 'reservation',
         created_at: r.created_at
       }));
-      if (requestId === latestReservationsRequestRef.current) {
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mappedAssignments = (roomDayState?.fixed_assignments || []).map((assignment: any): FixedAssignment => ({
+        id: assignment.id,
+        cell_id: assignment.cell_id,
+        assigned_to: assignment.assigned_to,
+        date_start: assignment.date_start,
+        date_end: assignment.date_end,
+        created_at: assignment.created_at,
+        assigned_user: assignment.assigned_user
+          ? {
+              id: assignment.assigned_user.id,
+              full_name: assignment.assigned_user.full_name,
+              username: assignment.assigned_user.username,
+            }
+          : null,
+      }));
+
+      if (requestId === latestAvailabilityRequestRef.current) {
         setReservations(mappedReservations);
+        setFixedAssignments(mappedAssignments);
+        setAvailabilityError(null);
       }
     } catch (error: unknown) {
-      if (requestId === latestReservationsRequestRef.current) {
-        console.error('Error loading reservations:', error);
+      if (requestId === latestAvailabilityRequestRef.current) {
+        console.error('Error loading room availability:', error);
+        setAvailabilityError('Availability could not be synchronized. Showing the latest loaded state.');
       }
     }
   };
@@ -311,8 +353,7 @@ export default function RoomViewer() {
       await Promise.all([
         loadRoom(),
         loadRooms(),
-        loadReservations(),
-        loadFixedAssignments(),
+        loadAvailabilityState(),
       ]);
 
       toast({
@@ -332,82 +373,6 @@ export default function RoomViewer() {
       });
     } finally {
       setRefreshingColors(false);
-    }
-  };
-
-  const loadFixedAssignments = async () => {
-    if (!roomId) return;
-    const requestId = ++latestAssignmentsRequestRef.current;
-
-    try {
-      // Try Edge Function first
-      // 1. Force Client Side Load (Edge Function is bypassed)
-      const data = null;
-
-      if (data) {
-        return;
-      }
-
-      console.log('Edge function returned no fixed assignments, trying direct query...');
-
-      // Fallback: Direct Supabase Query
-      // This bypasses potential Edge Function join errors or outdated logic
-      const { data: directData, error } = await supabase
-        .from('fixed_assignments')
-        .select('*')
-        .eq('room_id', roomId);
-
-      if (error) {
-        console.error('Direct query for fixed_assignments failed:', error);
-        return;
-      }
-
-      if (directData && directData.length > 0) {
-        console.log('Direct query found assignments:', directData);
-
-        // Fetch user details manually
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const userIds = Array.from(new Set(directData.map((a: any) => a.assigned_to).filter(Boolean)));
-        let userMap: Record<string, { full_name: string; username: string }> = {};
-
-        if (userIds.length > 0) {
-          const { data: users } = await supabase
-            .from('users')
-            .select('id, full_name, username')
-            .in('id', userIds);
-
-          if (users) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            userMap = users.reduce((acc: any, u) => ({
-              ...acc,
-              [u.id]: { full_name: u.full_name, username: u.username }
-            }), {});
-          }
-        }
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const mapped: FixedAssignment[] = directData.map((a: any) => ({
-          ...a,
-          assigned_user: userMap[a.assigned_to] ? {
-            id: a.assigned_to,
-            full_name: userMap[a.assigned_to].full_name,
-            username: userMap[a.assigned_to].username
-          } : { id: a.assigned_to, full_name: 'Unknown User', username: 'unknown' }
-        }));
-        if (requestId === latestAssignmentsRequestRef.current) {
-          setFixedAssignments(mapped);
-        }
-      } else {
-        console.log('Direct query returned no result.');
-        if (requestId === latestAssignmentsRequestRef.current) {
-          setFixedAssignments([]);
-        }
-      }
-
-    } catch (error: unknown) {
-      if (requestId === latestAssignmentsRequestRef.current) {
-        console.error('Error loading fixed assignments:', error);
-      }
     }
   };
 
@@ -735,6 +700,12 @@ export default function RoomViewer() {
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-4 lg:flex-1 lg:overflow-hidden">
           {/* Main Content: Grid */}
           <div className="flex flex-col space-y-3 lg:overflow-hidden">
+            {availabilityError ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                {availabilityError}
+              </div>
+            ) : null}
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-shrink-0">
               <Card className="rounded-2xl border-blue-100 bg-blue-50/70 px-4 py-3 shadow-sm">
                 <p className="text-xs font-medium uppercase tracking-wide text-blue-700">Available</p>
@@ -1266,7 +1237,7 @@ export default function RoomViewer() {
                 };
                 setReservations(prev => [...prev, optimisticReservation]);
               }
-              loadReservations();
+              loadAvailabilityState();
               setBookingDialogOpen(false);
             }}
           />
@@ -1339,7 +1310,6 @@ export default function RoomViewer() {
                         }
 
                         toast({ title: 'Availability updated', description: 'Selected day removed from assignment.' });
-                        loadFixedAssignments();
                       } else {
                         await callReservationFunction('cancel', {
                           reservationId: selectedReservation.id
@@ -1351,9 +1321,7 @@ export default function RoomViewer() {
                       }
                       setReservationDetailsOpen(false);
                       setSelectedReservation(null);
-                      loadReservations();
-                      loadFixedAssignments();
-                      loadFixedAssignments();
+                      loadAvailabilityState();
                     } catch (error: unknown) {
                       let message = 'Unknown error';
                       if (error instanceof Error) message = error.message;
