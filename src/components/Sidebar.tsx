@@ -2,7 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
-import { LogOut, LayoutGrid, Building2, BookCheck, Users, CalendarDays } from 'lucide-react';
+import { LogOut, LayoutGrid, Building2, BookCheck, Users, CalendarDays, ChartColumnBig } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import deskOneLogo from '@/assets/deskone-logo.png';
 
@@ -15,6 +15,7 @@ export function Sidebar({ className, compact = false }: { className?: string; co
     const navigation = user.role === 'admin'
         ? [
             { name: 'Dashboard', href: '/', icon: LayoutGrid, roles: ['admin'] },
+            { name: 'Insight', href: '/insight', icon: ChartColumnBig, roles: ['admin'] },
             { name: 'Planner', href: '/planner', icon: CalendarDays, roles: ['admin'] },
             { name: 'Manage Rooms', href: '/rooms', icon: Building2, roles: ['admin'] },
             { name: 'Users', href: '/users', icon: Users, roles: ['admin'] },

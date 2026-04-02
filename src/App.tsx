@@ -22,6 +22,7 @@ import PendingApprovals from "./pages/PendingApprovals";
 import ReservationsCalendar from "./pages/ReservationsCalendar";
 import SharedRooms from "./pages/SharedRooms";
 import Planner from "./pages/Planner";
+import Insight from "./pages/Insight";
 
 const App = () => {
   console.log("App Version: 1.1 - Deployment Check");
@@ -131,6 +132,16 @@ const App = () => {
                   <ProtectedRoute requiredRole="admin">
                     <Layout>
                       <Planner />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/insight"
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <Layout>
+                      <Insight />
                     </Layout>
                   </ProtectedRoute>
                 }
