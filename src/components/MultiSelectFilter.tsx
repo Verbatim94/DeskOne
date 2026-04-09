@@ -22,6 +22,10 @@ interface MultiSelectFilterProps {
     selected: string[]
     onChange: (values: string[]) => void
     placeholder?: string
+    className?: string
+    popoverClassName?: string
+    searchPlaceholder?: string
+    emptyText?: string
 }
 
 export function MultiSelectFilter({
@@ -29,6 +33,10 @@ export function MultiSelectFilter({
     selected,
     onChange,
     placeholder = "Filter...",
+    className,
+    popoverClassName,
+    searchPlaceholder = "Search...",
+    emptyText = "No option found.",
 }: MultiSelectFilterProps) {
     const [open, setOpen] = React.useState(false)
 
@@ -57,7 +65,7 @@ export function MultiSelectFilter({
                     variant="outline"
                     role="combobox"
                     aria-expanded={open}
-                    className="w-[350px] justify-between h-9 text-xs"
+                    className={cn("h-10 w-full justify-between text-xs", className)}
                 >
                     <span className="truncate">
                         {selected.length === 0
@@ -67,11 +75,11 @@ export function MultiSelectFilter({
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[350px] p-0" align="start">
+            <PopoverContent className={cn("w-[min(420px,var(--radix-popover-trigger-width))] p-0", popoverClassName)} align="start">
                 <Command>
-                    <CommandInput placeholder="Search rooms..." />
+                    <CommandInput placeholder={searchPlaceholder} />
                     <CommandList>
-                        <CommandEmpty>No room found.</CommandEmpty>
+                        <CommandEmpty>{emptyText}</CommandEmpty>
                         <CommandGroup>
                             <CommandItem
                                 onSelect={toggleAll}
