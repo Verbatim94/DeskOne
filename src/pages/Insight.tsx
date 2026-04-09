@@ -85,6 +85,65 @@ function buildDailyUniqueRows(rows: DailyOccupancyRow[]) {
   return Array.from(uniqueMap.values());
 }
 
+const italianHolidayCache = new Map<number, Set<string>>();
+
+function getEasterSunday(year: number) {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+
+  return new Date(year, month - 1, day);
+}
+
+function getItalianNationalHolidays(year: number) {
+  if (italianHolidayCache.has(year)) {
+    return italianHolidayCache.get(year)!;
+  }
+
+  const easterMonday = getEasterSunday(year);
+  easterMonday.setDate(easterMonday.getDate() + 1);
+
+  const fixedHolidays = [
+    new Date(year, 0, 1),
+    new Date(year, 0, 6),
+    new Date(year, 3, 25),
+    new Date(year, 4, 1),
+    new Date(year, 5, 2),
+    new Date(year, 7, 15),
+    new Date(year, 10, 1),
+    new Date(year, 11, 8),
+    new Date(year, 11, 25),
+    new Date(year, 11, 26),
+    easterMonday,
+  ];
+
+  const holidaySet = new Set(fixedHolidays.map((holiday) => format(holiday, 'yyyy-MM-dd')));
+  italianHolidayCache.set(year, holidaySet);
+  return holidaySet;
+}
+
+function isItalianWorkingDay(date: Date) {
+  const day = date.getDay();
+  if (day === 0 || day === 6) return false;
+
+  return !getItalianNationalHolidays(date.getFullYear()).has(format(date, 'yyyy-MM-dd'));
+}
+
+function countItalianWorkingDays(start: Date, end: Date) {
+  return eachDayOfInterval({ start, end }).filter(isItalianWorkingDay).length;
+}
+
 function InsightMetric({
   label,
   value,
@@ -211,7 +270,9 @@ export default function Insight() {
 
   const insight = useMemo(() => {
     const rooms = data?.rooms || [];
-    const uniqueRows = buildDailyUniqueRows(data?.rows || []);
+    const uniqueRows = buildDailyUniqueRows(data?.rows || []).filter((row) =>
+      isItalianWorkingDay(parseISO(row.occupancy_date)),
+    );
     const selectedMonthDate = parseISO(`${selectedMonth}-01`);
     const selectedMonthLabel = format(selectedMonthDate, 'MMMM yyyy');
     const isCurrentMonth = selectedMonth === currentMonthValue;
@@ -227,13 +288,14 @@ export default function Insight() {
     });
 
     const selectedMonthRows = filteredBaseRows.filter((row) => row.month === selectedMonth);
-    const snapshotDate = isCurrentMonth ? today : endOfMonth(selectedMonthDate);
-    const snapshotDateStr = format(snapshotDate, 'yyyy-MM-dd');
-    const snapshotRows = selectedMonthRows.filter((row) => row.occupancy_date === snapshotDateStr);
-    const elapsedWindowDays = eachDayOfInterval({
+    const workingDaysInMonth = eachDayOfInterval({
       start: startOfMonth(selectedMonthDate),
       end: isCurrentMonth ? today : endOfMonth(selectedMonthDate),
-    }).length;
+    }).filter(isItalianWorkingDay);
+    const snapshotDate = workingDaysInMonth[workingDaysInMonth.length - 1] || (isCurrentMonth ? today : endOfMonth(selectedMonthDate));
+    const snapshotDateStr = format(snapshotDate, 'yyyy-MM-dd');
+    const snapshotRows = selectedMonthRows.filter((row) => row.occupancy_date === snapshotDateStr);
+    const elapsedWindowDays = workingDaysInMonth.length;
     const uniqueBookers = new Set(selectedMonthRows.map((row) => row.user_id).filter(Boolean)).size;
     const occupiedSnapshot = snapshotRows.length;
     const occupancySnapshot = selectedTotalDesks > 0 ? (occupiedSnapshot / selectedTotalDesks) * 100 : 0;
@@ -265,10 +327,7 @@ export default function Insight() {
       const monthRows = filteredBaseRows.filter((row) => row.month === month.value);
       const isMonthCurrent = month.value === currentMonthValue;
       const visibleMonthEnd = isMonthCurrent ? today : endOfMonth(month.date);
-      const days = eachDayOfInterval({
-        start: startOfMonth(month.date),
-        end: visibleMonthEnd,
-      }).length;
+      const days = countItalianWorkingDays(startOfMonth(month.date), visibleMonthEnd);
       const capacity = selectedTotalDesks * days;
 
       return {
@@ -279,11 +338,11 @@ export default function Insight() {
       };
     });
 
-    const weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
     const weekdayOccurrences = eachDayOfInterval({
       start: startOfMonth(selectedMonthDate),
       end: isCurrentMonth ? today : endOfMonth(selectedMonthDate),
-    }).reduce<Record<number, number>>((acc, day) => {
+    }).filter(isItalianWorkingDay).reduce<Record<number, number>>((acc, day) => {
       const weekday = day.getDay();
       acc[weekday] = (acc[weekday] || 0) + 1;
       return acc;
@@ -295,10 +354,11 @@ export default function Insight() {
       return acc;
     }, {});
 
-    const weekdayData = weekdayLabels.map((label, weekday) => {
+    const weekdayIndexes = [1, 2, 3, 4, 5];
+    const weekdayData = weekdayIndexes.map((weekday, index) => {
       const averageDeskDays = (weekdayDemandMap[weekday] || 0) / Math.max(weekdayOccurrences[weekday] || 1, 1);
       return {
-        label,
+        label: weekdayLabels[index],
         averageDeskDays: Math.round(averageDeskDays * 10) / 10,
       };
     });
@@ -434,6 +494,9 @@ export default function Insight() {
                 <Badge className="rounded-full bg-white/10 px-3 py-1 text-blue-50 hover:bg-white/15">
                   {insight.selectedEntityLabel}
                 </Badge>
+                <Badge className="rounded-full bg-white/10 px-3 py-1 text-blue-50 hover:bg-white/15">
+                  Italian working calendar
+                </Badge>
               </div>
             </div>
 
@@ -478,7 +541,7 @@ export default function Insight() {
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Filters</p>
               <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-950">Slice the workspace signal</h2>
               <p className="mt-1 text-sm text-slate-500">
-                Every metric and chart below responds to these filters.
+                Every metric and chart below responds to these filters and excludes non-working days.
               </p>
             </div>
 
@@ -609,7 +672,7 @@ export default function Insight() {
             <InsightMetric
               label="Average daily demand"
               value={insight.averageDailyDemand.toFixed(1)}
-              detail="Average occupied desk-days per day over the selected month window."
+              detail="Average occupied desk-days per working day over the selected month window."
               accent="bg-violet-50 text-violet-700"
             />
           </div>
@@ -622,7 +685,7 @@ export default function Insight() {
                   <TrendingUp className="h-5 w-5 text-slate-400" />
                 </CardTitle>
                 <p className="text-sm text-slate-500">
-                  Six-month trend filtered by rooms, people, and occupancy type.
+                  Six-month trend filtered by rooms, people, and occupancy type on Italian working days.
                 </p>
               </CardHeader>
               <CardContent>
@@ -735,7 +798,7 @@ export default function Insight() {
                   <CalendarDays className="h-5 w-5 text-slate-400" />
                 </CardTitle>
                 <p className="text-sm text-slate-500">
-                  Average occupied desks by weekday for {insight.selectedMonthLabel.toLowerCase()}.
+                  Average occupied desks by weekday for {insight.selectedMonthLabel.toLowerCase()}, excluding weekends and Italian holidays.
                 </p>
               </CardHeader>
               <CardContent>
