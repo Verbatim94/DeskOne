@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -438,34 +438,48 @@ export default function Insight() {
           ? 'flexible bookings'
           : 'fixed assignments';
 
-    const workingCalendarRows = [1, 2, 3, 4, 5].map((weekday) => ({
-      weekday,
-      label: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'][weekday - 1],
-      days: [] as Array<{
+    const workingCalendarWeeksMap = new Map<string, {
+      key: string;
+      label: string;
+      days: Array<{
         key: string;
         date: string;
         dayNumber: string;
         occupancyCount: number;
         utilization: number;
-      }>,
-    }));
+      } | null>;
+    }>();
 
     workingDaysInMonth.forEach((day) => {
       const dayStr = format(day, 'yyyy-MM-dd');
       const occupancyCount = dailyLoadMap.get(dayStr) || 0;
       const utilization = selectedTotalDesks > 0 ? occupancyCount / selectedTotalDesks : 0;
-      const weekday = day.getDay();
-      const row = workingCalendarRows.find((entry) => entry.weekday === weekday);
-      if (row) {
-        row.days.push({
+      const monday = new Date(day);
+      monday.setDate(day.getDate() - (day.getDay() - 1));
+      const weekKey = format(monday, 'yyyy-MM-dd');
+
+      if (!workingCalendarWeeksMap.has(weekKey)) {
+        workingCalendarWeeksMap.set(weekKey, {
+          key: weekKey,
+          label: format(monday, 'dd MMM'),
+          days: [null, null, null, null, null],
+        });
+      }
+
+      const week = workingCalendarWeeksMap.get(weekKey);
+      const weekdayIndex = day.getDay() - 1;
+      if (week && weekdayIndex >= 0 && weekdayIndex < 5) {
+        week.days[weekdayIndex] = {
           key: dayStr,
           date: dayStr,
           dayNumber: format(day, 'd'),
           occupancyCount,
           utilization,
-        });
+        };
       }
     });
+
+    const workingCalendarWeeks = Array.from(workingCalendarWeeksMap.values());
 
     const roomComparison = [
       ...topRooms.map((room) => ({
@@ -499,7 +513,7 @@ export default function Insight() {
       snapshotPulse,
       primaryRoom,
       averageDailyDemand,
-      workingCalendarRows,
+      workingCalendarWeeks,
       roomComparison,
       generatedAt: data?.generatedAt || new Date().toISOString(),
       selectedMonthLabel,
@@ -1028,28 +1042,40 @@ export default function Insight() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="grid gap-3">
-                    {insight.workingCalendarRows.map((row) => (
-                      <div key={row.label} className="grid grid-cols-[52px_minmax(0,1fr)] items-center gap-3">
-                        <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">{row.label}</p>
-                        <div className="flex flex-wrap gap-2">
-                          {row.days.length > 0 ? (
-                            row.days.map((day) => (
-                              <div
-                                key={day.key}
-                                className={`flex h-11 w-11 flex-col items-center justify-center rounded-2xl text-[11px] font-semibold shadow-sm ${getHeatColor(day.utilization)}`}
-                                title={`${day.date}: ${day.occupancyCount} occupied desks (${formatPercent(day.utilization * 100)})`}
-                              >
-                                <span>{day.dayNumber}</span>
-                                <span className="text-[9px] font-medium opacity-80">{Math.round(day.utilization * 100)}</span>
+                  <div className="overflow-x-auto">
+                    <div className="min-w-[560px]">
+                      <div className="grid grid-cols-[88px_repeat(5,minmax(0,1fr))] gap-2">
+                        <div />
+                        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((label) => (
+                          <div key={label} className="px-2 py-1 text-center text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
+                            {label}
+                          </div>
+                        ))}
+
+                        {insight.workingCalendarWeeks.map((week) => (
+                          <Fragment key={week.key}>
+                            <div key={`${week.key}-label`} className="flex items-center px-2 text-xs font-medium uppercase tracking-[0.14em] text-slate-400">
+                              {week.label}
+                            </div>
+                            {week.days.map((day, index) => (
+                              <div key={`${week.key}-${index}`} className="flex justify-center">
+                                {day ? (
+                                  <div
+                                    className={`flex h-12 w-12 flex-col items-center justify-center rounded-2xl text-[11px] font-semibold shadow-sm ${getHeatColor(day.utilization)}`}
+                                    title={`${day.date}: ${day.occupancyCount} occupied desks (${formatPercent(day.utilization * 100)})`}
+                                  >
+                                    <span>{day.dayNumber}</span>
+                                    <span className="text-[9px] font-medium opacity-80">{Math.round(day.utilization * 100)}</span>
+                                  </div>
+                                ) : (
+                                  <div className="h-12 w-12 rounded-2xl border border-dashed border-slate-200 bg-slate-50/80" />
+                                )}
                               </div>
-                            ))
-                          ) : (
-                            <div className="rounded-2xl bg-slate-50 px-4 py-3 text-xs text-slate-400">No working days</div>
-                          )}
-                        </div>
+                            ))}
+                          </Fragment>
+                        ))}
                       </div>
-                    ))}
+                    </div>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
@@ -1077,10 +1103,10 @@ export default function Insight() {
               <CardContent className="space-y-5">
                 <div className="h-[260px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={insight.roomComparison}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                      <XAxis dataKey="name" tickLine={false} axisLine={false} interval={0} angle={-22} textAnchor="end" height={58} />
-                      <YAxis tickLine={false} axisLine={false} unit="%" />
+                    <BarChart data={insight.roomComparison} layout="vertical" margin={{ left: 8, right: 12 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+                      <XAxis type="number" tickLine={false} axisLine={false} unit="%" />
+                      <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} width={138} />
                       <Tooltip
                         contentStyle={{
                           borderRadius: 16,
@@ -1088,7 +1114,7 @@ export default function Insight() {
                           boxShadow: '0 18px 50px rgba(15, 23, 42, 0.12)',
                         }}
                       />
-                      <Bar dataKey="utilization" radius={[8, 8, 0, 0]}>
+                      <Bar dataKey="utilization" radius={[0, 8, 8, 0]} barSize={18}>
                         {insight.roomComparison.map((entry) => (
                           <Cell
                             key={`${entry.band}-${entry.name}`}
