@@ -701,65 +701,106 @@ Deno.serve(async (req) => {
 
         const roomIdsFilter = data.room_ids?.length ? data.room_ids : null;
         const userIdsFilter = data.user_ids?.length ? data.user_ids : null;
+        const pageSize = 1000;
 
-        let reservationsQuery = supabase
-          .from('reservations')
-          .select(`
-            id,
-            room_id,
-            cell_id,
-            user_id,
-            status,
-            type,
-            time_segment,
-            date_start,
-            date_end,
-            created_at,
-            approved_at,
-            approved_by,
-            rooms!inner(id, name),
-            room_cells!inner(id, label),
-            users!reservations_user_id_fkey(id, username, full_name)
-          `)
-          .gte('date_end', data.date_start)
-          .lte('date_start', data.date_end)
-          .neq('status', 'cancelled')
-          .neq('status', 'rejected');
+        const fetchAllReservations = async () => {
+          let from = 0;
+          const allRows: any[] = [];
 
-        if (roomIdsFilter) reservationsQuery = reservationsQuery.in('room_id', roomIdsFilter);
-        if (userIdsFilter) reservationsQuery = reservationsQuery.in('user_id', userIdsFilter);
+          while (true) {
+            let reservationsQuery = supabase
+              .from('reservations')
+              .select(`
+                id,
+                room_id,
+                cell_id,
+                user_id,
+                status,
+                type,
+                time_segment,
+                date_start,
+                date_end,
+                created_at,
+                approved_at,
+                approved_by,
+                rooms!inner(id, name),
+                room_cells!inner(id, label),
+                users!reservations_user_id_fkey(id, username, full_name)
+              `)
+              .gte('date_end', data.date_start)
+              .lte('date_start', data.date_end)
+              .neq('status', 'cancelled')
+              .neq('status', 'rejected')
+              .range(from, from + pageSize - 1);
 
-        const { data: reportReservations, error: reservationsError } = await reservationsQuery;
-        if (reservationsError) {
-          console.error('Error exporting BI reservation report:', reservationsError);
-          throw reservationsError;
-        }
+            if (roomIdsFilter) reservationsQuery = reservationsQuery.in('room_id', roomIdsFilter);
+            if (userIdsFilter) reservationsQuery = reservationsQuery.in('user_id', userIdsFilter);
 
-        let assignmentsQuery = supabase
-          .from('fixed_assignments')
-          .select(`
-            id,
-            room_id,
-            cell_id,
-            assigned_to,
-            created_by,
-            date_start,
-            date_end,
-            created_at,
-            rooms!inner(id, name),
-            room_cells!inner(id, label)
-          `)
-          .gte('date_end', data.date_start)
-          .lte('date_start', data.date_end);
+            const { data: pageRows, error } = await reservationsQuery;
+            if (error) {
+              console.error('Error exporting BI reservation report:', error);
+              throw error;
+            }
 
-        if (roomIdsFilter) assignmentsQuery = assignmentsQuery.in('room_id', roomIdsFilter);
-        if (userIdsFilter) assignmentsQuery = assignmentsQuery.in('assigned_to', userIdsFilter);
+            allRows.push(...(pageRows || []));
 
-        const { data: reportAssignments, error: assignmentsError } = await assignmentsQuery;
-        if (assignmentsError) {
-          console.error('Error exporting BI assignment report:', assignmentsError);
-          throw assignmentsError;
-        }
+            if (!pageRows || pageRows.length < pageSize) {
+              break;
+            }
+
+            from += pageSize;
+          }
+
+          return allRows;
+        };
+
+        const fetchAllAssignments = async () => {
+          let from = 0;
+          const allRows: any[] = [];
+
+          while (true) {
+            let assignmentsQuery = supabase
+              .from('fixed_assignments')
+              .select(`
+                id,
+                room_id,
+                cell_id,
+                assigned_to,
+                created_by,
+                date_start,
+                date_end,
+                created_at,
+                rooms!inner(id, name),
+                room_cells!inner(id, label)
+              `)
+              .gte('date_end', data.date_start)
+              .lte('date_start', data.date_end)
+              .range(from, from + pageSize - 1);
+
+            if (roomIdsFilter) assignmentsQuery = assignmentsQuery.in('room_id', roomIdsFilter);
+            if (userIdsFilter) assignmentsQuery = assignmentsQuery.in('assigned_to', userIdsFilter);
+
+            const { data: pageRows, error } = await assignmentsQuery;
+            if (error) {
+              console.error('Error exporting BI assignment report:', error);
+              throw error;
+            }
+
+            allRows.push(...(pageRows || []));
+
+            if (!pageRows || pageRows.length < pageSize) {
+              break;
+            }
+
+            from += pageSize;
+          }
+
+          return allRows;
+        };
+        const [reportReservations, reportAssignments] = await Promise.all([
+          fetchAllReservations(),
+          fetchAllAssignments(),
+        ]);
 
         const userIds = Array.from(new Set([
           ...(reportReservations || []).flatMap((reservation: any) => [reservation.user_id, reservation.approved_by].filter(Boolean)),
