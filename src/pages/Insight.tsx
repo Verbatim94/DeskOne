@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { eachDayOfInterval, endOfMonth, format, parseISO, startOfMonth, subMonths } from 'date-fns';
+import { endOfMonth, format, parseISO, startOfMonth, subMonths } from 'date-fns';
 import { Activity, ArrowRight, BrainCircuit, CalendarDays, Flame, Gauge, RefreshCw, Sparkles, TrendingDown, TrendingUp } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +13,13 @@ import { MultiSelectFilter } from '@/components/MultiSelectFilter';
 import { supabase } from '@/integrations/supabase/client';
 import { authService } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  BUSINESS_CALENDAR_END,
+  BUSINESS_CALENDAR_START,
+  getBusinessDaysBetween,
+  INSIGHT_MONTH_OPTIONS,
+  isItalianBusinessDay,
+} from '@/lib/italianBusinessCalendar';
 
 interface RoomStructure {
   id: string;
@@ -85,65 +92,6 @@ function buildDailyUniqueRows(rows: DailyOccupancyRow[]) {
   return Array.from(uniqueMap.values());
 }
 
-const italianHolidayCache = new Map<number, Set<string>>();
-
-function getEasterSunday(year: number) {
-  const a = year % 19;
-  const b = Math.floor(year / 100);
-  const c = year % 100;
-  const d = Math.floor(b / 4);
-  const e = b % 4;
-  const f = Math.floor((b + 8) / 25);
-  const g = Math.floor((b - f + 1) / 3);
-  const h = (19 * a + b - d - g + 15) % 30;
-  const i = Math.floor(c / 4);
-  const k = c % 4;
-  const l = (32 + 2 * e + 2 * i - h - k) % 7;
-  const m = Math.floor((a + 11 * h + 22 * l) / 451);
-  const month = Math.floor((h + l - 7 * m + 114) / 31);
-  const day = ((h + l - 7 * m + 114) % 31) + 1;
-
-  return new Date(year, month - 1, day);
-}
-
-function getItalianNationalHolidays(year: number) {
-  if (italianHolidayCache.has(year)) {
-    return italianHolidayCache.get(year)!;
-  }
-
-  const easterMonday = getEasterSunday(year);
-  easterMonday.setDate(easterMonday.getDate() + 1);
-
-  const fixedHolidays = [
-    new Date(year, 0, 1),
-    new Date(year, 0, 6),
-    new Date(year, 3, 25),
-    new Date(year, 4, 1),
-    new Date(year, 5, 2),
-    new Date(year, 7, 15),
-    new Date(year, 10, 1),
-    new Date(year, 11, 8),
-    new Date(year, 11, 25),
-    new Date(year, 11, 26),
-    easterMonday,
-  ];
-
-  const holidaySet = new Set(fixedHolidays.map((holiday) => format(holiday, 'yyyy-MM-dd')));
-  italianHolidayCache.set(year, holidaySet);
-  return holidaySet;
-}
-
-function isItalianWorkingDay(date: Date) {
-  const day = date.getDay();
-  if (day === 0 || day === 6) return false;
-
-  return !getItalianNationalHolidays(date.getFullYear()).has(format(date, 'yyyy-MM-dd'));
-}
-
-function countItalianWorkingDays(start: Date, end: Date) {
-  return eachDayOfInterval({ start, end }).filter(isItalianWorkingDay).length;
-}
-
 function getHeatColor(intensity: number) {
   if (intensity >= 0.9) return 'bg-rose-500 text-white';
   if (intensity >= 0.7) return 'bg-orange-400 text-white';
@@ -179,7 +127,9 @@ function InsightMetric({
 export default function Insight() {
   const { user } = useAuth();
   const today = new Date();
-  const currentMonthValue = format(today, 'yyyy-MM');
+  const currentMonthValue = INSIGHT_MONTH_OPTIONS.some((option) => option.value === format(today, 'yyyy-MM'))
+    ? format(today, 'yyyy-MM')
+    : INSIGHT_MONTH_OPTIONS[0].value;
   const [selectedMonth, setSelectedMonth] = useState(currentMonthValue);
   const [selectedRoomIds, setSelectedRoomIds] = useState<string[]>([]);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
@@ -187,27 +137,24 @@ export default function Insight() {
   const roomsInitialized = useRef(false);
   const usersInitialized = useRef(false);
 
-  const monthOptions = useMemo(
-    () =>
-      Array.from({ length: 6 }).map((_, index) => {
-        const date = subMonths(today, 5 - index);
-        return {
-          value: format(date, 'yyyy-MM'),
-          label: format(date, 'MMMM yyyy'),
-          date,
-        };
-      }),
-    [today],
-  );
+  const monthOptions = INSIGHT_MONTH_OPTIONS;
+  const selectedMonthIndex = monthOptions.findIndex((option) => option.value === selectedMonth);
+  const trendMonths =
+    selectedMonthIndex >= 0
+      ? monthOptions.slice(Math.max(0, selectedMonthIndex - 5), selectedMonthIndex + 1)
+      : monthOptions.slice(0, 6);
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery<InsightPayload>({
-    queryKey: ['admin-insight-dashboard'],
+    queryKey: ['admin-insight-dashboard', selectedMonth],
     queryFn: async () => {
       const session = authService.getSession();
       if (!session) throw new Error('No session');
 
-      const rangeStart = startOfMonth(subMonths(today, 5));
-      const rangeEnd = endOfMonth(today);
+      const selectedMonthDate = parseISO(`${selectedMonth}-01`);
+      const desiredRangeStart = startOfMonth(subMonths(selectedMonthDate, 5));
+      const desiredRangeEnd = endOfMonth(selectedMonthDate);
+      const rangeStart = desiredRangeStart < BUSINESS_CALENDAR_START ? BUSINESS_CALENDAR_START : desiredRangeStart;
+      const rangeEnd = desiredRangeEnd > BUSINESS_CALENDAR_END ? BUSINESS_CALENDAR_END : desiredRangeEnd;
 
       const [roomsResponse, reportResponse] = await Promise.all([
         supabase.functions.invoke('manage-rooms', {
@@ -279,11 +226,10 @@ export default function Insight() {
   const insight = useMemo(() => {
     const rooms = data?.rooms || [];
     const uniqueRows = buildDailyUniqueRows(data?.rows || []).filter((row) =>
-      isItalianWorkingDay(parseISO(row.occupancy_date)),
+      isItalianBusinessDay(row.occupancy_date),
     );
     const selectedMonthDate = parseISO(`${selectedMonth}-01`);
     const selectedMonthLabel = format(selectedMonthDate, 'MMMM yyyy');
-    const isCurrentMonth = selectedMonth === currentMonthValue;
     const roomIdSet = new Set(selectedRoomIds);
     const userIdSet = new Set(selectedUserIds);
     const selectedRooms = rooms.filter((room) => roomIdSet.has(room.id));
@@ -296,11 +242,8 @@ export default function Insight() {
     });
 
     const selectedMonthRows = filteredBaseRows.filter((row) => row.month === selectedMonth);
-    const workingDaysInMonth = eachDayOfInterval({
-      start: startOfMonth(selectedMonthDate),
-      end: isCurrentMonth ? today : endOfMonth(selectedMonthDate),
-    }).filter(isItalianWorkingDay);
-    const snapshotDate = workingDaysInMonth[workingDaysInMonth.length - 1] || (isCurrentMonth ? today : endOfMonth(selectedMonthDate));
+    const workingDaysInMonth = getBusinessDaysBetween(startOfMonth(selectedMonthDate), endOfMonth(selectedMonthDate));
+    const snapshotDate = workingDaysInMonth[workingDaysInMonth.length - 1] || endOfMonth(selectedMonthDate);
     const snapshotDateStr = format(snapshotDate, 'yyyy-MM-dd');
     const snapshotRows = selectedMonthRows.filter((row) => row.occupancy_date === snapshotDateStr);
     const elapsedWindowDays = workingDaysInMonth.length;
@@ -331,26 +274,75 @@ export default function Insight() {
       })
       .sort((a, b) => b.utilization - a.utilization);
 
-    const monthlyTrend = monthOptions.map((month) => {
+    const computeContextMetrics = (monthRows: DailyOccupancyRow[], monthDate: Date) => {
+      const businessDays = getBusinessDaysBetween(startOfMonth(monthDate), endOfMonth(monthDate));
+      const businessDayCount = businessDays.length;
+
+      const monthRoomDayOccupancyMap = new Map<string, number>();
+      monthRows.forEach((row) => {
+        const key = `${row.room_id}-${row.occupancy_date}`;
+        monthRoomDayOccupancyMap.set(key, (monthRoomDayOccupancyMap.get(key) || 0) + 1);
+      });
+
+      const fullRoomPercentages = selectedRooms.map((room) => {
+        if (room.desks.length === 0 || businessDayCount === 0) return 0;
+
+        const fullyOccupiedDays = businessDays.reduce((count, day) => {
+          const dayKey = format(day, 'yyyy-MM-dd');
+          const occupiedDesks = monthRoomDayOccupancyMap.get(`${room.id}-${dayKey}`) || 0;
+          return count + (occupiedDesks >= room.desks.length ? 1 : 0);
+        }, 0);
+
+        return (fullyOccupiedDays / businessDayCount) * 100;
+      });
+
+      const activeUsers = Array.from(new Set(monthRows.map((row) => row.user_id).filter(Boolean)));
+      const userMetrics = activeUsers.map((userId) => {
+        const bookedDays = new Set(
+          monthRows
+            .filter((row) => row.user_id === userId)
+            .map((row) => row.occupancy_date),
+        ).size;
+
+        return {
+          bookedDays,
+          bookedDayPercentage: businessDayCount > 0 ? (bookedDays / businessDayCount) * 100 : 0,
+        };
+      });
+
+      return {
+        businessDayCount,
+        averageFullRoomDaysPercentage:
+          fullRoomPercentages.length > 0
+            ? fullRoomPercentages.reduce((sum, value) => sum + value, 0) / fullRoomPercentages.length
+            : 0,
+        uniquePeople: activeUsers.length,
+        averagePersonOccupancyPercentage:
+          userMetrics.length > 0
+            ? userMetrics.reduce((sum, item) => sum + item.bookedDayPercentage, 0) / userMetrics.length
+            : 0,
+        averageBookedDaysPerPerson:
+          userMetrics.length > 0
+            ? userMetrics.reduce((sum, item) => sum + item.bookedDays, 0) / userMetrics.length
+            : 0,
+      };
+    };
+
+    const monthlyTrend = trendMonths.map((month) => {
       const monthRows = filteredBaseRows.filter((row) => row.month === month.value);
-      const isMonthCurrent = month.value === currentMonthValue;
-      const visibleMonthEnd = isMonthCurrent ? today : endOfMonth(month.date);
-      const days = countItalianWorkingDays(startOfMonth(month.date), visibleMonthEnd);
-      const capacity = selectedTotalDesks * days;
+      const monthMetrics = computeContextMetrics(monthRows, month.date);
 
       return {
         label: format(month.date, 'MMM'),
-        deskDays: monthRows.length,
-        utilization: capacity > 0 ? Math.round((monthRows.length / capacity) * 100) : 0,
-        users: new Set(monthRows.map((row) => row.user_id).filter(Boolean)).size,
+        fullRoomDays: Math.round(monthMetrics.averageFullRoomDaysPercentage),
+        personOccupancy: Math.round(monthMetrics.averagePersonOccupancyPercentage),
+        avgBookedDays: Math.round(monthMetrics.averageBookedDaysPerPerson * 10) / 10,
+        users: monthMetrics.uniquePeople,
       };
     });
 
     const weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-    const weekdayOccurrences = eachDayOfInterval({
-      start: startOfMonth(selectedMonthDate),
-      end: isCurrentMonth ? today : endOfMonth(selectedMonthDate),
-    }).filter(isItalianWorkingDay).reduce<Record<number, number>>((acc, day) => {
+    const weekdayOccurrences = workingDaysInMonth.reduce<Record<number, number>>((acc, day) => {
       const weekday = day.getDay();
       acc[weekday] = (acc[weekday] || 0) + 1;
       return acc;
@@ -387,6 +379,17 @@ export default function Insight() {
     selectedMonthRows.forEach((row) => {
       roomMonthMap.set(row.room_id, (roomMonthMap.get(row.room_id) || 0) + 1);
     });
+
+    const roomDayOccupancyMap = new Map<string, number>();
+    selectedMonthRows.forEach((row) => {
+      const key = `${row.room_id}-${row.occupancy_date}`;
+      roomDayOccupancyMap.set(key, (roomDayOccupancyMap.get(key) || 0) + 1);
+    });
+
+    const selectedMonthMetrics = computeContextMetrics(selectedMonthRows, selectedMonthDate);
+    const averageFullRoomDaysPercentage = selectedMonthMetrics.averageFullRoomDaysPercentage;
+    const averagePersonOccupancyPercentage = selectedMonthMetrics.averagePersonOccupancyPercentage;
+    const averageBookedDaysPerPerson = selectedMonthMetrics.averageBookedDaysPerPerson;
 
     const topRooms = selectedRooms
       .map((room) => {
@@ -499,7 +502,10 @@ export default function Insight() {
       occupiedSnapshot,
       availabilitySnapshot,
       occupancySnapshot,
+      averageFullRoomDaysPercentage,
       uniqueBookers,
+      averagePersonOccupancyPercentage,
+      averageBookedDaysPerPerson,
       deskDaysInMonth: selectedMonthRows.length,
       pressureRooms,
       activeRooms,
@@ -522,8 +528,9 @@ export default function Insight() {
       roomsCount: selectedRooms.length,
       peopleCount: selectedUserIds.length,
       hasRows: selectedMonthRows.length > 0,
+      businessDaysInMonth: elapsedWindowDays,
     };
-  }, [currentMonthValue, data?.generatedAt, data?.rooms, data?.rows, monthOptions, selectedMonth, selectedRoomIds, selectedSource, selectedUserIds, today]);
+  }, [data?.generatedAt, data?.rooms, data?.rows, selectedMonth, selectedRoomIds, selectedSource, selectedUserIds, trendMonths]);
 
   if (!user) return null;
 
@@ -576,7 +583,7 @@ export default function Insight() {
                   {insight.selectedEntityLabel}
                 </Badge>
                 <Badge className="rounded-full bg-white/10 px-3 py-1 text-blue-50 hover:bg-white/15">
-                  Italian working calendar
+                  Fixed Italian calendar 2026-2036
                 </Badge>
               </div>
             </div>
@@ -622,7 +629,7 @@ export default function Insight() {
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Filters</p>
               <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-950">Slice the workspace signal</h2>
               <p className="mt-1 text-sm text-slate-500">
-                Every metric and chart below responds to these filters and excludes non-working days.
+                Every metric and chart below responds to these filters and uses bookings / total working days, Monday to Friday, excluding Italian national holidays.
               </p>
             </div>
 
@@ -737,27 +744,27 @@ export default function Insight() {
         <>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <InsightMetric
-              label="Desk-days in month"
-              value={compactNumber(insight.deskDaysInMonth)}
-              detail={`Occupied desk-days in ${insight.selectedMonthLabel.toLowerCase()} for the current filters.`}
+              label="Full-room days"
+              value={formatPercent(insight.averageFullRoomDaysPercentage)}
+              detail="Average share of working days with selected rooms fully occupied. With multiple rooms, the dashboard averages the room percentages."
               accent="bg-blue-50 text-blue-700"
             />
             <InsightMetric
               label="Unique people"
               value={String(insight.uniqueBookers)}
-              detail="Distinct people active in the filtered month and selected scope."
+              detail="Distinct people who made at least one booking inside the current filter context."
               accent="bg-emerald-50 text-emerald-700"
             />
             <InsightMetric
-              label="Busy rooms at snapshot"
-              value={String(insight.pressureRooms)}
-              detail="Rooms above 80% utilization on the selected snapshot date."
+              label="Avg person occupancy"
+              value={formatPercent(insight.averagePersonOccupancyPercentage)}
+              detail="Average share of working days with a booked desk per active person in the current filter context."
               accent="bg-amber-50 text-amber-700"
             />
             <InsightMetric
-              label="Average daily demand"
-              value={insight.averageDailyDemand.toFixed(1)}
-              detail="Average occupied desk-days per working day over the selected month window."
+              label="Avg booked days / person"
+              value={insight.averageBookedDaysPerPerson.toFixed(1)}
+              detail="Average number of booked working days per active person inside the filtered month."
               accent="bg-violet-50 text-violet-700"
             />
           </div>
@@ -770,7 +777,7 @@ export default function Insight() {
                   <TrendingUp className="h-5 w-5 text-slate-400" />
                 </CardTitle>
                 <p className="text-sm text-slate-500">
-                  Six-month trend filtered by rooms, people, and occupancy type on Italian working days.
+                  Six-month trend of the core context KPIs on the fixed Italian business calendar.
                 </p>
               </CardHeader>
               <CardContent>
@@ -779,8 +786,8 @@ export default function Insight() {
                     <ComposedChart data={insight.monthlyTrend}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                       <XAxis dataKey="label" tickLine={false} axisLine={false} />
-                      <YAxis yAxisId="left" tickLine={false} axisLine={false} />
-                      <YAxis yAxisId="right" orientation="right" tickLine={false} axisLine={false} unit="%" />
+                      <YAxis yAxisId="left" tickLine={false} axisLine={false} unit="%" />
+                      <YAxis yAxisId="right" orientation="right" tickLine={false} axisLine={false} />
                       <Tooltip
                         contentStyle={{
                           borderRadius: 16,
@@ -791,18 +798,28 @@ export default function Insight() {
                       <Area
                         yAxisId="left"
                         type="monotone"
-                        dataKey="deskDays"
+                        dataKey="fullRoomDays"
                         stroke="#2563eb"
                         fill="url(#insightAreaFill)"
                         strokeWidth={3}
+                        name="Full-room days %"
                       />
                       <Line
-                        yAxisId="right"
+                        yAxisId="left"
                         type="monotone"
-                        dataKey="utilization"
+                        dataKey="personOccupancy"
                         stroke="#8b5cf6"
                         strokeWidth={3}
                         dot={{ r: 4, fill: '#8b5cf6' }}
+                        name="Avg person occupancy %"
+                      />
+                      <Bar
+                        yAxisId="right"
+                        dataKey="avgBookedDays"
+                        fill="#10b981"
+                        radius={[8, 8, 0, 0]}
+                        barSize={18}
+                        name="Avg booked days / person"
                       />
                       <defs>
                         <linearGradient id="insightAreaFill" x1="0" y1="0" x2="0" y2="1">
@@ -914,7 +931,7 @@ export default function Insight() {
                   <Flame className="h-5 w-5 text-slate-400" />
                 </CardTitle>
                 <p className="text-sm text-slate-500">
-                  Highest utilization rooms in the selected month.
+                  Highest room utilization based on booked desk-days / total available desk-days in the selected month.
                 </p>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -1097,7 +1114,7 @@ export default function Insight() {
                   <TrendingDown className="h-5 w-5 text-slate-400" />
                 </CardTitle>
                 <p className="text-sm text-slate-500">
-                  Compare where demand is concentrating and where capacity is underused.
+                  Compare where booked desk-days are concentrating and where business-day capacity stays underused.
                 </p>
               </CardHeader>
               <CardContent className="space-y-5">
