@@ -1226,12 +1226,12 @@ export default function Insight() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="rounded-[28px] border border-slate-100 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-4 shadow-[0_18px_40px_rgba(15,23,42,0.06)] sm:p-5">
-                    <div className="grid grid-cols-5 gap-2 sm:gap-3">
+                  <div className="mx-auto max-w-[430px] rounded-[24px] border border-slate-100 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-3 shadow-[0_18px_40px_rgba(15,23,42,0.06)] sm:p-4">
+                    <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
                       {['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((label) => (
                         <div
                           key={label}
-                          className="pb-1 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400"
+                          className="pb-1 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400"
                         >
                           {label}
                         </div>
@@ -1243,7 +1243,7 @@ export default function Insight() {
                             return (
                               <div
                                 key={`${week.key}-${index}`}
-                                className="aspect-square rounded-[22px] border border-dashed border-slate-200/80 bg-slate-50/70"
+                                className="aspect-square rounded-[18px] border border-dashed border-slate-200/80 bg-slate-50/70"
                               />
                             );
                           }
@@ -1253,7 +1253,7 @@ export default function Insight() {
                           return (
                             <div
                               key={day.key}
-                              className={`group relative aspect-square rounded-[22px] border p-2 transition-all duration-200 sm:p-2.5 ${heatSurface.textClassName}`}
+                              className={`group relative aspect-square rounded-[18px] border p-1.5 transition-all duration-200 sm:p-2 ${heatSurface.textClassName}`}
                               style={{
                                 background: heatSurface.background,
                                 borderColor: heatSurface.borderColor,
@@ -1262,12 +1262,12 @@ export default function Insight() {
                               title={`${day.date}: ${day.occupancyCount} occupied desks (${formatPercent(day.utilization * 100)})`}
                             >
                               <div className="flex h-full flex-col justify-between">
-                                <span className="text-[12px] font-semibold sm:text-[13px]">{day.dayNumber}</span>
+                                <span className="text-[11px] font-semibold sm:text-[12px]">{day.dayNumber}</span>
                                 <div className="space-y-0.5">
-                                  <p className={`text-[9px] font-medium uppercase tracking-[0.16em] ${heatSurface.captionClassName}`}>
+                                  <p className={`text-[8px] font-medium uppercase tracking-[0.16em] ${heatSurface.captionClassName}`}>
                                     {Math.round(day.utilization * 100)}%
                                   </p>
-                                  <p className={`text-[9px] ${heatSurface.captionClassName}`}>
+                                  <p className={`text-[8px] ${heatSurface.captionClassName}`}>
                                     {day.occupancyCount} reserved
                                   </p>
                                 </div>
