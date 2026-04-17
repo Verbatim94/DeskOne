@@ -31,7 +31,7 @@ interface RoomStructure {
   }>;
 }
 
-interface DailyOccupancyRow {
+interface RawOccupancyRow {
   reservation_id: string;
   source_type: 'reservation' | 'fixed_assignment';
   room_id: string;
@@ -44,10 +44,8 @@ interface DailyOccupancyRow {
   status: string;
   reservation_type: string;
   time_segment: string;
-  occupancy_date: string;
-  weekday_index: number;
-  weekday_name: string;
-  is_weekend: boolean;
+  date_start: string;
+  date_end: string;
   month: string;
   year: number;
   created_at: string;
@@ -56,9 +54,16 @@ interface DailyOccupancyRow {
   approved_by_name: string | null;
 }
 
+interface DailyOccupancyRow extends RawOccupancyRow {
+  occupancy_date: string;
+  weekday_index: number;
+  weekday_name: string;
+  is_weekend: boolean;
+}
+
 type InsightPayload = {
   rooms: RoomStructure[];
-  rows: DailyOccupancyRow[];
+  rows: RawOccupancyRow[];
   generatedAt: string;
 };
 
@@ -85,6 +90,38 @@ function buildDailyUniqueRows(rows: DailyOccupancyRow[]) {
 
 function getOccupancyMonth(row: DailyOccupancyRow) {
   return row.occupancy_date.slice(0, 7);
+}
+
+function expandRawRowsToBusinessDaily(rows: RawOccupancyRow[]) {
+  const weekdayLabels = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const expandedRows: DailyOccupancyRow[] = [];
+
+  rows.forEach((row) => {
+    let cursor = parseISO(row.date_start);
+    const end = parseISO(row.date_end);
+
+    while (cursor <= end) {
+      const occupancyDate = format(cursor, 'yyyy-MM-dd');
+      const weekdayIndex = cursor.getDay();
+
+      if (isItalianBusinessDay(occupancyDate)) {
+        expandedRows.push({
+          ...row,
+          occupancy_date: occupancyDate,
+          weekday_index: weekdayIndex,
+          weekday_name: weekdayLabels[weekdayIndex],
+          is_weekend: weekdayIndex === 0 || weekdayIndex === 6,
+          month: occupancyDate.slice(0, 7),
+          year: Number.parseInt(occupancyDate.slice(0, 4), 10),
+        });
+      }
+
+      cursor = new Date(cursor);
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  });
+
+  return expandedRows;
 }
 
 function getHeatSurface(intensity: number) {
@@ -223,7 +260,7 @@ export default function Insight() {
             data: {
               date_start: format(rangeStart, 'yyyy-MM-dd'),
               date_end: format(rangeEnd, 'yyyy-MM-dd'),
-              report_type: 'daily',
+              report_type: 'raw',
             },
           },
           headers: { 'x-session-token': session.token },
@@ -281,9 +318,7 @@ export default function Insight() {
 
   const insight = useMemo(() => {
     const rooms = data?.rooms || [];
-    const uniqueRows = buildDailyUniqueRows(data?.rows || []).filter((row) =>
-      isItalianBusinessDay(row.occupancy_date),
-    );
+    const uniqueRows = buildDailyUniqueRows(expandRawRowsToBusinessDaily(data?.rows || []));
     const selectedMonthDate = parseISO(`${selectedMonth}-01`);
     const selectedMonthLabel = format(selectedMonthDate, 'MMMM yyyy');
     const roomIdSet = new Set(selectedRoomIds);
