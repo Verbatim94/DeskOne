@@ -79,7 +79,8 @@ function buildDailyUniqueRows(rows: DailyOccupancyRow[]) {
   const uniqueMap = new Map<string, DailyOccupancyRow>();
 
   rows.forEach((row) => {
-    const key = `${row.desk_id}-${row.occupancy_date}`;
+    const deskIdentity = row.desk_id || row.desk_label || row.reservation_id;
+    const key = `${row.room_id}-${deskIdentity}-${row.occupancy_date}`;
     if (!uniqueMap.has(key)) {
       uniqueMap.set(key, row);
     }
