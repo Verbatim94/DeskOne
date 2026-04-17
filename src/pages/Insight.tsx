@@ -1226,8 +1226,8 @@ export default function Insight() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="mx-auto max-w-[430px] rounded-[24px] border border-slate-100 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-3 shadow-[0_18px_40px_rgba(15,23,42,0.06)] sm:p-4">
-                    <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
+                  <div className="mx-auto max-w-[520px] rounded-[24px] border border-slate-100 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-3 shadow-[0_18px_40px_rgba(15,23,42,0.06)] sm:p-4">
+                    <div className="grid grid-cols-5 gap-2 sm:gap-2.5">
                       {['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((label) => (
                         <div
                           key={label}
@@ -1279,13 +1279,13 @@ export default function Insight() {
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-slate-500">
                     <span className="font-medium text-slate-600">Intensity</span>
-                    <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full border border-slate-200 bg-white" />0%</div>
-                    <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-emerald-300" />Low</div>
-                    <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-amber-400" />Medium</div>
-                    <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-red-500" />High</div>
-                    <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-red-900" />Critical</div>
+                    <div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full border border-slate-200 bg-white" />0%</div>
+                    <div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-[#ddd6fe]" />Light</div>
+                    <div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-[#a78bfa]" />Elevated</div>
+                    <div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-[#7c3aed]" />High</div>
+                    <div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-[#2b1750]" />Critical</div>
                   </div>
                 </div>
               </CardContent>
@@ -1302,10 +1302,10 @@ export default function Insight() {
                 </p>
               </CardHeader>
               <CardContent className="space-y-5">
-                <div className="h-[300px]">
+                <div className="h-[360px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <ScatterChart margin={{ top: 12, right: 12, left: 0, bottom: 8 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <ScatterChart margin={{ top: 16, right: 24, left: 12, bottom: 18 }}>
+                      <CartesianGrid strokeDasharray="4 6" stroke="#dbe7f5" />
                       <XAxis
                         type="number"
                         dataKey="x"
@@ -1314,6 +1314,8 @@ export default function Insight() {
                         tickLine={false}
                         axisLine={false}
                         domain={[0, 100]}
+                        tickMargin={12}
+                        tick={{ fill: '#64748b', fontSize: 12 }}
                       />
                       <YAxis
                         type="number"
@@ -1322,14 +1324,16 @@ export default function Insight() {
                         tickLine={false}
                         axisLine={false}
                         allowDecimals={false}
+                        tickMargin={12}
+                        tick={{ fill: '#64748b', fontSize: 12 }}
                       />
-                      <ZAxis type="number" dataKey="z" range={[120, 900]} name="Desks" />
+                      <ZAxis type="number" dataKey="z" range={[180, 1000]} name="Desks" />
                       <Tooltip
                         cursor={{ strokeDasharray: '3 3' }}
                         contentStyle={{
-                          borderRadius: 16,
-                          border: '1px solid #e2e8f0',
-                          boxShadow: '0 18px 50px rgba(15, 23, 42, 0.12)',
+                          borderRadius: 18,
+                          border: '1px solid #dbe7f5',
+                          boxShadow: '0 22px 60px rgba(124, 58, 237, 0.12)',
                         }}
                         formatter={(value: number, name: string) => {
                           if (name === 'Occupancy') return [`${value}%`, 'Occupancy'];
