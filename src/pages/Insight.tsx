@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
 import { endOfMonth, format, parseISO, startOfMonth, subMonths } from 'date-fns';
 import { Activity, CalendarDays, ChevronDown, Flame, Gauge, RefreshCw, ShieldCheck, SlidersHorizontal, TrendingDown, TrendingUp } from 'lucide-react';
 
@@ -895,30 +895,52 @@ export default function Insight() {
                       %
                     </Badge>
                   </div>
-                  <div className="h-[220px] w-full">
+                  <div className="h-[240px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={insight.monthlyTrend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                        <XAxis dataKey="label" tickLine={false} axisLine={false} />
-                        <YAxis tickLine={false} axisLine={false} unit="%" domain={[0, 100]} ticks={[0, 20, 40, 60, 80, 100]} />
+                      <AreaChart data={insight.monthlyTrend} margin={{ top: 18, right: 18, left: 12, bottom: 8 }}>
+                        <defs>
+                          <linearGradient id="bookingRateFill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#2563eb" stopOpacity={0.28} />
+                            <stop offset="60%" stopColor="#3b82f6" stopOpacity={0.1} />
+                            <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="4 6" vertical={false} stroke="#dbe7f5" />
+                        <XAxis
+                          dataKey="label"
+                          tickLine={false}
+                          axisLine={false}
+                          tickMargin={12}
+                          tick={{ fill: '#64748b', fontSize: 12 }}
+                        />
+                        <YAxis
+                          tickLine={false}
+                          axisLine={false}
+                          unit="%"
+                          domain={[0, 100]}
+                          ticks={[0, 20, 40, 60, 80, 100]}
+                          tickMargin={12}
+                          tick={{ fill: '#64748b', fontSize: 12 }}
+                        />
                         <Tooltip
                           formatter={(value: number) => [`${value}%`, 'Booking rate']}
                           contentStyle={{
-                            borderRadius: 16,
-                            border: '1px solid #e2e8f0',
-                            boxShadow: '0 18px 50px rgba(15, 23, 42, 0.12)',
+                            borderRadius: 18,
+                            border: '1px solid #dbe7f5',
+                            boxShadow: '0 22px 60px rgba(37, 99, 235, 0.12)',
                           }}
                         />
-                        <Line
+                        <Area
                           type="monotone"
                           dataKey="reservationRate"
                           stroke="#2563eb"
-                          strokeWidth={3}
-                          dot={{ r: 4, fill: '#2563eb' }}
-                          activeDot={{ r: 6 }}
+                          fill="url(#bookingRateFill)"
+                          strokeWidth={3.5}
+                          dot={{ r: 4.5, fill: '#2563eb', stroke: '#ffffff', strokeWidth: 2 }}
+                          activeDot={{ r: 6.5, fill: '#2563eb', stroke: '#ffffff', strokeWidth: 2 }}
                           name="Booking rate"
                         />
-                      </LineChart>
+                      </AreaChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
@@ -936,30 +958,52 @@ export default function Insight() {
                       Count
                     </Badge>
                   </div>
-                  <div className="h-[220px] w-full">
+                  <div className="h-[240px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={insight.monthlyTrend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                        <XAxis dataKey="label" tickLine={false} axisLine={false} />
-                        <YAxis tickLine={false} axisLine={false} allowDecimals={false} domain={[0, 100]} ticks={[0, 20, 40, 60, 80, 100]} />
+                      <AreaChart data={insight.monthlyTrend} margin={{ top: 18, right: 18, left: 12, bottom: 8 }}>
+                        <defs>
+                          <linearGradient id="peopleCountFill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#10b981" stopOpacity={0.24} />
+                            <stop offset="60%" stopColor="#34d399" stopOpacity={0.1} />
+                            <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="4 6" vertical={false} stroke="#d9efe8" />
+                        <XAxis
+                          dataKey="label"
+                          tickLine={false}
+                          axisLine={false}
+                          tickMargin={12}
+                          tick={{ fill: '#64748b', fontSize: 12 }}
+                        />
+                        <YAxis
+                          tickLine={false}
+                          axisLine={false}
+                          allowDecimals={false}
+                          domain={[0, 100]}
+                          ticks={[0, 20, 40, 60, 80, 100]}
+                          tickMargin={12}
+                          tick={{ fill: '#64748b', fontSize: 12 }}
+                        />
                         <Tooltip
                           formatter={(value: number) => [value, 'Unique people']}
                           contentStyle={{
-                            borderRadius: 16,
-                            border: '1px solid #e2e8f0',
-                            boxShadow: '0 18px 50px rgba(15, 23, 42, 0.12)',
+                            borderRadius: 18,
+                            border: '1px solid #d9efe8',
+                            boxShadow: '0 22px 60px rgba(16, 185, 129, 0.12)',
                           }}
                         />
-                        <Line
+                        <Area
                           type="monotone"
                           dataKey="users"
                           stroke="#10b981"
-                          strokeWidth={3}
-                          dot={{ r: 4, fill: '#10b981' }}
-                          activeDot={{ r: 6 }}
+                          fill="url(#peopleCountFill)"
+                          strokeWidth={3.5}
+                          dot={{ r: 4.5, fill: '#10b981', stroke: '#ffffff', strokeWidth: 2 }}
+                          activeDot={{ r: 6.5, fill: '#10b981', stroke: '#ffffff', strokeWidth: 2 }}
                           name="Unique people"
                         />
-                      </LineChart>
+                      </AreaChart>
                     </ResponsiveContainer>
                   </div>
                   </div>
