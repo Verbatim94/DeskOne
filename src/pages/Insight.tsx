@@ -1,14 +1,15 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
 import { endOfMonth, format, parseISO, startOfMonth, subMonths } from 'date-fns';
-import { Activity, CalendarDays, Flame, Gauge, RefreshCw, Sparkles, TrendingDown, TrendingUp } from 'lucide-react';
+import { Activity, CalendarDays, ChevronDown, Flame, Gauge, RefreshCw, ShieldCheck, SlidersHorizontal, TrendingDown, TrendingUp } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MultiSelectFilter } from '@/components/MultiSelectFilter';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { supabase } from '@/integrations/supabase/client';
 import { authService } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
@@ -60,15 +61,6 @@ type InsightPayload = {
   rows: DailyOccupancyRow[];
   generatedAt: string;
 };
-
-type SourceFilter = 'all' | 'reservation' | 'fixed_assignment';
-
-const MIX_COLORS = ['#3b82f6', '#8b5cf6'];
-const SOURCE_FILTERS: Array<{ value: SourceFilter; label: string }> = [
-  { value: 'all', label: 'All occupancy' },
-  { value: 'reservation', label: 'Flexible bookings' },
-  { value: 'fixed_assignment', label: 'Fixed assignments' },
-];
 
 function formatPercent(value: number) {
   return `${Math.round(value)}%`;
@@ -178,7 +170,7 @@ export default function Insight() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonthValue);
   const [selectedRoomIds, setSelectedRoomIds] = useState<string[]>([]);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
-  const [selectedSource, setSelectedSource] = useState<SourceFilter>('all');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const roomsInitialized = useRef(false);
   const usersInitialized = useRef(false);
 
@@ -282,8 +274,7 @@ export default function Insight() {
     const filteredBaseRows = uniqueRows.filter((row) => {
       const matchesRoom = roomIdSet.has(row.room_id);
       const matchesUser = userIdSet.has(row.user_id);
-      const matchesSource = selectedSource === 'all' || row.source_type === selectedSource;
-      return matchesRoom && matchesUser && matchesSource;
+      return matchesRoom && matchesUser;
     });
 
     const selectedMonthRows = filteredBaseRows.filter((row) => row.month === selectedMonth);
@@ -384,16 +375,6 @@ export default function Insight() {
 
     const busiestWeekday = [...weekdayData].sort((a, b) => b.averageDeskDays - a.averageDeskDays)[0];
 
-    const sourceMixMap = selectedMonthRows.reduce<Record<string, number>>((acc, row) => {
-      acc[row.source_type] = (acc[row.source_type] || 0) + 1;
-      return acc;
-    }, {});
-
-    const sourceMix = [
-      { name: 'Flexible bookings', value: sourceMixMap.reservation || 0 },
-      { name: 'Fixed assignments', value: sourceMixMap.fixed_assignment || 0 },
-    ];
-
     const roomMonthMap = new Map<string, number>();
     selectedMonthRows.forEach((row) => {
       roomMonthMap.set(row.room_id, (roomMonthMap.get(row.room_id) || 0) + 1);
@@ -467,12 +448,7 @@ export default function Insight() {
     const activeRooms = roomMonthlySummaries.filter((room) => room.deskDays > 0).length;
     const averageDailyDemand = elapsedWindowDays > 0 ? selectedMonthRows.length / elapsedWindowDays : 0;
     const primaryRoom = topRooms[0];
-    const selectedEntityLabel =
-      selectedSource === 'all'
-        ? 'all occupancy'
-        : selectedSource === 'reservation'
-          ? 'flexible bookings'
-          : 'fixed assignments';
+    const selectedEntityLabel = 'reserved desks';
 
     const workingCalendarWeeksMap = new Map<string, {
       key: string;
@@ -528,19 +504,6 @@ export default function Insight() {
       fill: getRoomBubbleColor(room.fixedShare, room.utilization),
     }));
 
-    const roomComparison = [
-      ...topRooms.map((room) => ({
-        name: room.name.length > 20 ? `${room.name.slice(0, 20)}…` : room.name,
-        utilization: Math.round(room.utilization),
-        band: 'Top rooms',
-      })),
-      ...bottomRooms.map((room) => ({
-        name: room.name.length > 20 ? `${room.name.slice(0, 20)}…` : room.name,
-        utilization: Math.round(room.utilization),
-        band: 'Underused rooms',
-      })),
-    ];
-
     return {
       totalDesks: selectedTotalDesks,
       averageReservedDesks,
@@ -556,7 +519,6 @@ export default function Insight() {
       monthlyTrend,
       weekdayData,
       busiestWeekday,
-      sourceMix,
       topRooms,
       bottomRooms,
       peakDay,
@@ -565,7 +527,6 @@ export default function Insight() {
       averageDailyDemand,
       workingCalendarWeeks,
       roomOpportunityMap,
-      roomComparison,
       generatedAt: data?.generatedAt || new Date().toISOString(),
       selectedMonthLabel,
       selectedEntityLabel,
@@ -574,7 +535,7 @@ export default function Insight() {
       hasRows: selectedMonthRows.length > 0,
       businessDaysInMonth: elapsedWindowDays,
     };
-  }, [data?.generatedAt, data?.rooms, data?.rows, selectedMonth, selectedRoomIds, selectedSource, selectedUserIds, trendMonths]);
+  }, [data?.generatedAt, data?.rooms, data?.rows, selectedMonth, selectedRoomIds, selectedUserIds, trendMonths]);
 
   if (!user) return null;
 
@@ -655,114 +616,158 @@ export default function Insight() {
 
       <Card className="border border-slate-200/80 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.05)]">
         <CardContent className="p-4">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Filters</p>
-              <h2 className="mt-1 text-base font-semibold tracking-tight text-slate-950">Context controls</h2>
-              <p className="mt-1 text-[12px] text-slate-500">
-                Metrics respond to the selected month, rooms, people, and occupancy type.
-              </p>
-            </div>
+          <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen} className="space-y-4">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div className="space-y-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Filters</p>
+                  <h2 className="mt-1 text-base font-semibold tracking-tight text-slate-950">Context controls</h2>
+                  <p className="mt-1 text-[12px] text-slate-500">
+                    Metrics respond to month, rooms, and people. A desk counts as occupied whenever it is reserved.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge className="rounded-full bg-slate-100 px-3 py-1 text-slate-700 hover:bg-slate-100">
+                    {insight.selectedMonthLabel}
+                  </Badge>
+                  <Badge className="rounded-full bg-slate-100 px-3 py-1 text-slate-700 hover:bg-slate-100">
+                    {insight.roomsCount} rooms
+                  </Badge>
+                  <Badge className="rounded-full bg-slate-100 px-3 py-1 text-slate-700 hover:bg-slate-100">
+                    {insight.peopleCount} people
+                  </Badge>
+                  <Badge className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700 hover:bg-emerald-50">
+                    reserved desks only
+                  </Badge>
+                </div>
+              </div>
 
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="rounded-full px-4 text-slate-600 hover:text-slate-950"
-                onClick={() => refetch()}
-                disabled={isFetching}
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
-                Refresh
-              </Button>
-              <Button
-                variant="outline"
-                className="rounded-full"
-                onClick={() => {
-                  setSelectedMonth(currentMonthValue);
-                  setSelectedRoomIds(roomOptions.map((room) => room.value));
-                  setSelectedUserIds(userOptions.map((person) => person.value));
-                  setSelectedSource('all');
-                }}
-              >
-                Reset filters
-              </Button>
-            </div>
-          </div>
-
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 2xl:grid-cols-[220px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)]">
-            <div className="space-y-2 min-w-0">
-              <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">Month</p>
-              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger className="h-11 rounded-[20px] border-slate-200 bg-slate-50/60">
-                  <SelectValue placeholder="Select month" />
-                </SelectTrigger>
-                <SelectContent>
-                  {monthOptions.map((month) => (
-                    <SelectItem key={month.value} value={month.value}>
-                      {month.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2 min-w-0">
-              <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">Rooms</p>
-              <MultiSelectFilter
-                options={roomOptions}
-                selected={selectedRoomIds}
-                onChange={setSelectedRoomIds}
-                placeholder="Filter rooms"
-                searchPlaceholder="Search rooms..."
-                emptyText="No room found."
-              />
-            </div>
-
-            <div className="space-y-2 min-w-0">
-              <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">People</p>
-              <MultiSelectFilter
-                options={userOptions}
-                selected={selectedUserIds}
-                onChange={setSelectedUserIds}
-                placeholder="Filter people"
-                searchPlaceholder="Search people..."
-                emptyText="No person found."
-              />
-            </div>
-
-            <div className="space-y-2 min-w-0">
-              <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">Occupancy type</p>
-              <div className="flex min-h-11 flex-wrap items-center gap-2 rounded-[20px] border border-slate-200 bg-slate-50/70 p-1.5">
-                {SOURCE_FILTERS.map((source) => (
-                  <button
-                    key={source.value}
-                    type="button"
-                    onClick={() => setSelectedSource(source.value)}
-                    className={`rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
-                      selectedSource === source.value
-                        ? 'bg-white text-slate-950 shadow-sm'
-                        : 'text-slate-500 hover:text-slate-900'
-                    }`}
-                  >
-                    {source.label}
-                  </button>
-                ))}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="rounded-full px-4 text-slate-600 hover:text-slate-950"
+                  onClick={() => refetch()}
+                  disabled={isFetching}
+                >
+                  <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+                <Button
+                  variant="outline"
+                  className="rounded-full"
+                  onClick={() => {
+                    setSelectedMonth(currentMonthValue);
+                    setSelectedRoomIds(roomOptions.map((room) => room.value));
+                    setSelectedUserIds(userOptions.map((person) => person.value));
+                  }}
+                >
+                  Reset
+                </Button>
+                <CollapsibleTrigger asChild>
+                  <Button variant="outline" className="rounded-full border-slate-200 bg-white">
+                    <SlidersHorizontal className="mr-2 h-4 w-4" />
+                    Filters
+                    <ChevronDown className={`ml-2 h-4 w-4 transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
+                  </Button>
+                </CollapsibleTrigger>
               </div>
             </div>
+
+            <CollapsibleContent>
+              <div className="grid gap-3 rounded-[24px] border border-slate-200/70 bg-[linear-gradient(180deg,#fbfcff_0%,#f8fafc_100%)] p-3 sm:grid-cols-2 xl:grid-cols-[220px_minmax(0,1fr)_minmax(0,1fr)]">
+                <div className="space-y-2 min-w-0">
+                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">Month</p>
+                  <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                    <SelectTrigger className="h-11 rounded-[18px] border-slate-200 bg-white">
+                      <SelectValue placeholder="Select month" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {monthOptions.map((month) => (
+                        <SelectItem key={month.value} value={month.value}>
+                          {month.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2 min-w-0">
+                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">Rooms</p>
+                  <MultiSelectFilter
+                    options={roomOptions}
+                    selected={selectedRoomIds}
+                    onChange={setSelectedRoomIds}
+                    placeholder="Filter rooms"
+                    searchPlaceholder="Search rooms..."
+                    emptyText="No room found."
+                  />
+                </div>
+
+                <div className="space-y-2 min-w-0">
+                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">People</p>
+                  <MultiSelectFilter
+                    options={userOptions}
+                    selected={selectedUserIds}
+                    onChange={setSelectedUserIds}
+                    placeholder="Filter people"
+                    searchPlaceholder="Search people..."
+                    emptyText="No person found."
+                  />
+                </div>
+              </div>
+            </CollapsibleContent>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-slate-200/70 bg-slate-50/70 px-4 py-3 text-[12px] text-slate-600">
+              <div className="flex flex-wrap items-center gap-3">
+                <span>{insight.roomsCount} rooms selected</span>
+                <span className="text-slate-300">|</span>
+                <span>{insight.peopleCount} people selected</span>
+                <span className="text-slate-300">|</span>
+                <span>{insight.selectedMonthLabel}</span>
+              </div>
+              <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
+                business-day model
+              </span>
+            </div>
+          </Collapsible>
+        </CardContent>
+      </Card>
+
+      <Card className="border border-slate-200/80 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.05)]">
+        <CardContent className="p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Metric audit</p>
+              <h2 className="mt-1 text-base font-semibold tracking-tight text-slate-950">Calculation checks</h2>
+              <p className="mt-1 text-[12px] text-slate-500">
+                Quick references to validate the denominator and the scope used by the KPI cards.
+              </p>
+            </div>
+            <ShieldCheck className="mt-1 h-5 w-5 text-slate-400" />
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-slate-200/70 bg-slate-50/70 px-4 py-3 text-[12px] text-slate-600">
-            <div className="flex flex-wrap items-center gap-3">
-              <span>{insight.roomsCount} rooms selected</span>
-              <span className="text-slate-300">|</span>
-              <span>{insight.peopleCount} people selected</span>
-              <span className="text-slate-300">|</span>
-              <span>{insight.selectedMonthLabel}</span>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl border border-slate-200/70 bg-slate-50/70 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Working days</p>
+              <p className="mt-2 text-lg font-semibold text-slate-950">{insight.businessDaysInMonth}</p>
+              <p className="mt-1 text-[11px] text-slate-500">Italian business days in the selected month.</p>
             </div>
-            <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
-              business-day model
-            </span>
+            <div className="rounded-2xl border border-slate-200/70 bg-slate-50/70 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Reserved desk-days</p>
+              <p className="mt-2 text-lg font-semibold text-slate-950">{insight.deskDaysInMonth}</p>
+              <p className="mt-1 text-[11px] text-slate-500">Total reserved desks counted in the current scope.</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200/70 bg-slate-50/70 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Active people</p>
+              <p className="mt-2 text-lg font-semibold text-slate-950">{insight.uniqueBookers}</p>
+              <p className="mt-1 text-[11px] text-slate-500">People with at least one reserved day in context.</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200/70 bg-slate-50/70 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">KPI rule</p>
+              <p className="mt-2 text-[12px] font-semibold text-slate-950">Reserved = occupied</p>
+              <p className="mt-1 text-[11px] text-slate-500">Standard bookings and fixed assignments are merged into one occupancy model.</p>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -772,7 +777,7 @@ export default function Insight() {
           <CardContent className="p-8 text-center">
             <p className="text-lg font-semibold text-slate-950">No data for the current filter set</p>
             <p className="mt-2 text-[12px] text-slate-500">
-              Try broadening rooms, people, or occupancy type to see insight cards and charts again.
+              Try broadening rooms or people to see insight cards and charts again.
             </p>
           </CardContent>
         </Card>
@@ -1037,47 +1042,31 @@ export default function Insight() {
               <Card className="min-w-0 border-slate-200 bg-white shadow-sm">
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center justify-between text-base">
-                    Occupancy mix
-                    <Sparkles className="h-5 w-5 text-slate-400" />
+                    Data model
+                    <Activity className="h-5 w-5 text-slate-400" />
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="h-[200px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={insight.sourceMix}
-                          dataKey="value"
-                          nameKey="name"
-                          innerRadius={52}
-                          outerRadius={82}
-                          paddingAngle={4}
-                        >
-                          {insight.sourceMix.map((entry, index) => (
-                            <Cell key={entry.name} fill={MIX_COLORS[index % MIX_COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          contentStyle={{
-                            borderRadius: 16,
-                            border: '1px solid #e2e8f0',
-                            boxShadow: '0 18px 50px rgba(15, 23, 42, 0.12)',
-                          }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
+                  <div className="rounded-2xl bg-slate-50 px-4 py-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Occupancy rule</p>
+                    <p className="mt-2 text-[12px] leading-5 text-slate-700">
+                      Every metric counts a desk as occupied whenever it is reserved, regardless of whether the source row comes from a standard booking or a fixed assignment.
+                    </p>
                   </div>
 
-                  <div className="space-y-3">
-                    {insight.sourceMix.map((item, index) => (
-                      <div key={item.name} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <span className="h-3 w-3 rounded-full" style={{ backgroundColor: MIX_COLORS[index % MIX_COLORS.length] }} />
-                          <span className="text-[12px] font-medium text-slate-700">{item.name}</span>
-                        </div>
-                        <span className="text-[12px] font-semibold text-slate-950">{compactNumber(item.value)}</span>
-                      </div>
-                    ))}
+                  <div className="grid gap-3">
+                    <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Avg. person occupancy</p>
+                      <p className="mt-1 text-[12px] leading-5 text-slate-700">
+                        Mean of `reserved working days / total working days` across active people in the current context.
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Room utilization</p>
+                      <p className="mt-1 text-[12px] leading-5 text-slate-700">
+                        `Reserved desk-days / total possible desk-days`, using desks multiplied by working days in the selected month.
+                      </p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
