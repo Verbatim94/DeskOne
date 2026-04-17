@@ -161,6 +161,21 @@ function InsightMetric({
   );
 }
 
+function FilterChip({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-[11px] text-slate-600 shadow-[0_6px_18px_rgba(15,23,42,0.04)]">
+      <span className="font-semibold uppercase tracking-[0.18em] text-slate-400">{label}</span>
+      <span className="max-w-[180px] truncate font-medium text-slate-900">{value}</span>
+    </div>
+  );
+}
+
 export default function Insight() {
   const { user } = useAuth();
   const today = new Date();
@@ -271,16 +286,14 @@ export default function Insight() {
     const userIdSet = new Set(selectedUserIds);
     const selectedRooms = rooms.filter((room) => roomIdSet.has(room.id));
     const selectedTotalDesks = selectedRooms.reduce((sum, room) => sum + room.desks.length, 0);
-    const filteredBaseRows = uniqueRows.filter((row) => {
-      const matchesRoom = roomIdSet.has(row.room_id);
-      const matchesUser = userIdSet.has(row.user_id);
-      return matchesRoom && matchesUser;
-    });
+    const roomFilteredRows = uniqueRows.filter((row) => roomIdSet.has(row.room_id));
+    const peopleFilteredRows = roomFilteredRows.filter((row) => userIdSet.has(row.user_id));
 
-    const selectedMonthRows = filteredBaseRows.filter((row) => row.month === selectedMonth);
+    const selectedMonthRoomRows = roomFilteredRows.filter((row) => row.month === selectedMonth);
+    const selectedMonthPeopleRows = peopleFilteredRows.filter((row) => row.month === selectedMonth);
     const workingDaysInMonth = getBusinessDaysBetween(startOfMonth(selectedMonthDate), endOfMonth(selectedMonthDate));
     const elapsedWindowDays = workingDaysInMonth.length;
-    const uniqueBookers = new Set(selectedMonthRows.map((row) => row.user_id).filter(Boolean)).size;
+    const uniqueBookers = new Set(selectedMonthPeopleRows.map((row) => row.user_id).filter(Boolean)).size;
 
     const computeContextMetrics = (monthRows: DailyOccupancyRow[], monthDate: Date) => {
       const businessDays = getBusinessDaysBetween(startOfMonth(monthDate), endOfMonth(monthDate));
@@ -341,7 +354,7 @@ export default function Insight() {
     };
 
     const monthlyTrend = trendMonths.map((month) => {
-      const monthRows = filteredBaseRows.filter((row) => row.month === month.value);
+      const monthRows = roomFilteredRows.filter((row) => row.month === month.value);
       const monthMetrics = computeContextMetrics(monthRows, month.date);
 
       return {
@@ -358,7 +371,7 @@ export default function Insight() {
       return acc;
     }, {});
 
-    const weekdayDemandMap = selectedMonthRows.reduce<Record<number, number>>((acc, row) => {
+    const weekdayDemandMap = selectedMonthRoomRows.reduce<Record<number, number>>((acc, row) => {
       const weekday = parseISO(row.occupancy_date).getDay();
       acc[weekday] = (acc[weekday] || 0) + 1;
       return acc;
@@ -376,13 +389,13 @@ export default function Insight() {
     const busiestWeekday = [...weekdayData].sort((a, b) => b.averageDeskDays - a.averageDeskDays)[0];
 
     const roomMonthMap = new Map<string, number>();
-    selectedMonthRows.forEach((row) => {
+    selectedMonthRoomRows.forEach((row) => {
       roomMonthMap.set(row.room_id, (roomMonthMap.get(row.room_id) || 0) + 1);
     });
 
     const roomUniqueUsersMap = new Map<string, Set<string>>();
     const roomFixedDeskDaysMap = new Map<string, number>();
-    selectedMonthRows.forEach((row) => {
+    selectedMonthRoomRows.forEach((row) => {
       if (!roomUniqueUsersMap.has(row.room_id)) {
         roomUniqueUsersMap.set(row.room_id, new Set());
       }
@@ -395,16 +408,17 @@ export default function Insight() {
     });
 
     const roomDayOccupancyMap = new Map<string, number>();
-    selectedMonthRows.forEach((row) => {
+    selectedMonthRoomRows.forEach((row) => {
       const key = `${row.room_id}-${row.occupancy_date}`;
       roomDayOccupancyMap.set(key, (roomDayOccupancyMap.get(key) || 0) + 1);
     });
 
-    const selectedMonthMetrics = computeContextMetrics(selectedMonthRows, selectedMonthDate);
-    const averageFullRoomDaysPercentage = selectedMonthMetrics.averageFullRoomDaysPercentage;
-    const averagePersonOccupancyPercentage = selectedMonthMetrics.averagePersonOccupancyPercentage;
-    const averageBookedDaysPerPerson = selectedMonthMetrics.averageBookedDaysPerPerson;
-    const averageReservedDesks = elapsedWindowDays > 0 ? selectedMonthRows.length / elapsedWindowDays : 0;
+    const selectedMonthRoomMetrics = computeContextMetrics(selectedMonthRoomRows, selectedMonthDate);
+    const selectedMonthPeopleMetrics = computeContextMetrics(selectedMonthPeopleRows, selectedMonthDate);
+    const averageFullRoomDaysPercentage = selectedMonthRoomMetrics.averageFullRoomDaysPercentage;
+    const averagePersonOccupancyPercentage = selectedMonthPeopleMetrics.averagePersonOccupancyPercentage;
+    const averageBookedDaysPerPerson = selectedMonthPeopleMetrics.averageBookedDaysPerPerson;
+    const averageReservedDesks = elapsedWindowDays > 0 ? selectedMonthRoomRows.length / elapsedWindowDays : 0;
     const averageOpenDesks = Math.max(selectedTotalDesks - averageReservedDesks, 0);
     const monthlyOccupancyRate = selectedTotalDesks > 0 ? (averageReservedDesks / selectedTotalDesks) * 100 : 0;
 
@@ -436,7 +450,7 @@ export default function Insight() {
       .slice(0, 5);
 
     const dailyLoadMap = new Map<string, number>();
-    selectedMonthRows.forEach((row) => {
+    selectedMonthRoomRows.forEach((row) => {
       dailyLoadMap.set(row.occupancy_date, (dailyLoadMap.get(row.occupancy_date) || 0) + 1);
     });
 
@@ -446,7 +460,7 @@ export default function Insight() {
 
     const pressureRooms = roomMonthlySummaries.filter((room) => room.utilization >= 80).length;
     const activeRooms = roomMonthlySummaries.filter((room) => room.deskDays > 0).length;
-    const averageDailyDemand = elapsedWindowDays > 0 ? selectedMonthRows.length / elapsedWindowDays : 0;
+    const averageDailyDemand = elapsedWindowDays > 0 ? selectedMonthRoomRows.length / elapsedWindowDays : 0;
     const primaryRoom = topRooms[0];
     const selectedEntityLabel = 'reserved desks';
 
@@ -513,7 +527,8 @@ export default function Insight() {
       uniqueBookers,
       averagePersonOccupancyPercentage,
       averageBookedDaysPerPerson,
-      deskDaysInMonth: selectedMonthRows.length,
+      roomDeskDaysInMonth: selectedMonthRoomRows.length,
+      peopleDeskDaysInMonth: selectedMonthPeopleRows.length,
       pressureRooms,
       activeRooms,
       monthlyTrend,
@@ -532,7 +547,7 @@ export default function Insight() {
       selectedEntityLabel,
       roomsCount: selectedRooms.length,
       peopleCount: selectedUserIds.length,
-      hasRows: selectedMonthRows.length > 0,
+      hasRows: selectedMonthRoomRows.length > 0,
       businessDaysInMonth: elapsedWindowDays,
     };
   }, [data?.generatedAt, data?.rooms, data?.rows, selectedMonth, selectedRoomIds, selectedUserIds, trendMonths]);
@@ -606,7 +621,7 @@ export default function Insight() {
               <div className="min-w-0 rounded-[24px] border border-slate-200/80 bg-white/90 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Scope</p>
                 <p className="mt-2 text-[12px] font-semibold text-slate-900">
-                  {insight.roomsCount} rooms / {insight.peopleCount} people
+                  {insight.roomsCount} rooms / {insight.peopleCount} people filter
                 </p>
               </div>
             </div>
@@ -627,18 +642,13 @@ export default function Insight() {
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge className="rounded-full bg-slate-100 px-3 py-1 text-slate-700 hover:bg-slate-100">
-                    {insight.selectedMonthLabel}
-                  </Badge>
-                  <Badge className="rounded-full bg-slate-100 px-3 py-1 text-slate-700 hover:bg-slate-100">
-                    {insight.roomsCount} rooms
-                  </Badge>
-                  <Badge className="rounded-full bg-slate-100 px-3 py-1 text-slate-700 hover:bg-slate-100">
-                    {insight.peopleCount} people
-                  </Badge>
-                  <Badge className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700 hover:bg-emerald-50">
+                  <FilterChip label="Month" value={insight.selectedMonthLabel} />
+                  <FilterChip label="Rooms" value={`${insight.roomsCount} selected`} />
+                  <FilterChip label="People" value={`${insight.peopleCount} in filter`} />
+                  <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-[11px] font-medium text-emerald-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                     reserved desks only
-                  </Badge>
+                  </div>
                 </div>
               </div>
 
@@ -665,7 +675,7 @@ export default function Insight() {
                   Reset
                 </Button>
                 <CollapsibleTrigger asChild>
-                  <Button variant="outline" className="rounded-full border-slate-200 bg-white">
+                  <Button variant="outline" className="rounded-full border-slate-200 bg-white shadow-[0_8px_18px_rgba(15,23,42,0.05)]">
                     <SlidersHorizontal className="mr-2 h-4 w-4" />
                     Filters
                     <ChevronDown className={`ml-2 h-4 w-4 transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
@@ -675,11 +685,11 @@ export default function Insight() {
             </div>
 
             <CollapsibleContent>
-              <div className="grid gap-3 rounded-[24px] border border-slate-200/70 bg-[linear-gradient(180deg,#fbfcff_0%,#f8fafc_100%)] p-3 sm:grid-cols-2 xl:grid-cols-[220px_minmax(0,1fr)_minmax(0,1fr)]">
+              <div className="grid gap-3 rounded-[26px] border border-slate-200/70 bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.05),_transparent_22%),linear-gradient(180deg,#fbfcff_0%,#f8fafc_100%)] p-3.5 sm:grid-cols-2 xl:grid-cols-[220px_minmax(0,1fr)_minmax(0,1fr)]">
                 <div className="space-y-2 min-w-0">
                   <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">Month</p>
                   <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                    <SelectTrigger className="h-11 rounded-[18px] border-slate-200 bg-white">
+                    <SelectTrigger className="h-11 rounded-[18px] border-slate-200 bg-white shadow-[0_6px_16px_rgba(15,23,42,0.04)]">
                       <SelectValue placeholder="Select month" />
                     </SelectTrigger>
                     <SelectContent>
@@ -699,6 +709,8 @@ export default function Insight() {
                     selected={selectedRoomIds}
                     onChange={setSelectedRoomIds}
                     placeholder="Filter rooms"
+                    className="h-11 rounded-[18px] border-slate-200 bg-white text-[12px] shadow-[0_6px_16px_rgba(15,23,42,0.04)]"
+                    popoverClassName="rounded-[20px] border-slate-200 shadow-[0_22px_50px_rgba(15,23,42,0.12)]"
                     searchPlaceholder="Search rooms..."
                     emptyText="No room found."
                   />
@@ -711,6 +723,8 @@ export default function Insight() {
                     selected={selectedUserIds}
                     onChange={setSelectedUserIds}
                     placeholder="Filter people"
+                    className="h-11 rounded-[18px] border-slate-200 bg-white text-[12px] shadow-[0_6px_16px_rgba(15,23,42,0.04)]"
+                    popoverClassName="rounded-[20px] border-slate-200 shadow-[0_22px_50px_rgba(15,23,42,0.12)]"
                     searchPlaceholder="Search people..."
                     emptyText="No person found."
                   />
@@ -722,7 +736,7 @@ export default function Insight() {
               <div className="flex flex-wrap items-center gap-3">
                 <span>{insight.roomsCount} rooms selected</span>
                 <span className="text-slate-300">|</span>
-                <span>{insight.peopleCount} people selected</span>
+                <span>{insight.peopleCount} people in filter</span>
                 <span className="text-slate-300">|</span>
                 <span>{insight.selectedMonthLabel}</span>
               </div>
@@ -755,13 +769,13 @@ export default function Insight() {
             </div>
             <div className="rounded-2xl border border-slate-200/70 bg-slate-50/70 px-4 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Reserved desk-days</p>
-              <p className="mt-2 text-lg font-semibold text-slate-950">{insight.deskDaysInMonth}</p>
-              <p className="mt-1 text-[11px] text-slate-500">Total reserved desks counted in the current scope.</p>
+              <p className="mt-2 text-lg font-semibold text-slate-950">{insight.roomDeskDaysInMonth}</p>
+              <p className="mt-1 text-[11px] text-slate-500">Total reserved desk-days across the selected rooms, before applying the people filter.</p>
             </div>
             <div className="rounded-2xl border border-slate-200/70 bg-slate-50/70 px-4 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Active people</p>
               <p className="mt-2 text-lg font-semibold text-slate-950">{insight.uniqueBookers}</p>
-              <p className="mt-1 text-[11px] text-slate-500">People with at least one reserved day in context.</p>
+              <p className="mt-1 text-[11px] text-slate-500">People with at least one reserved day inside the selected people filter.</p>
             </div>
             <div className="rounded-2xl border border-slate-200/70 bg-slate-50/70 px-4 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">KPI rule</p>
@@ -793,13 +807,13 @@ export default function Insight() {
             <InsightMetric
               label="Unique people"
               value={String(insight.uniqueBookers)}
-              detail="Distinct people who made at least one booking inside the current filter context."
+              detail="Distinct people who made at least one booking inside the selected people filter."
               accent="bg-emerald-50 text-emerald-700"
             />
             <InsightMetric
               label="Avg person occupancy"
               value={formatPercent(insight.averagePersonOccupancyPercentage)}
-              detail="Average share of working days with a booked desk per active person in the current filter context."
+              detail="Average share of working days with a booked desk per active person inside the selected people filter."
               accent="bg-amber-50 text-amber-700"
             />
             <InsightMetric
@@ -867,7 +881,7 @@ export default function Insight() {
                     <div>
                       <p className="text-[13px] font-medium text-slate-900">People connected to selected rooms</p>
                       <p className="text-[11px] text-slate-500">
-                        Unique active people across the selected rooms and filters, month by month.
+                        Unique active people across the selected rooms, limited by the selected people filter.
                       </p>
                     </div>
                     <Badge variant="secondary" className="rounded-full bg-emerald-50 text-emerald-700">
@@ -911,7 +925,7 @@ export default function Insight() {
                   <Gauge className="h-5 w-5 text-slate-400" />
                 </CardTitle>
                 <p className="text-[12px] text-slate-500">
-                  Average reserved desks across {insight.selectedMonthLabel.toLowerCase()} in the current filter context.
+                  Average reserved desks across {insight.selectedMonthLabel.toLowerCase()} for the full selected rooms scope.
                 </p>
               </CardHeader>
               <CardContent className="space-y-5">
@@ -1090,7 +1104,7 @@ export default function Insight() {
                   <div className="rounded-2xl bg-emerald-50 p-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Adoption</p>
                     <p className="mt-2 leading-5 text-emerald-950">
-                      {insight.uniqueBookers} people generated {compactNumber(insight.deskDaysInMonth)} desk-days in {insight.selectedMonthLabel.toLowerCase()}.
+                      {insight.uniqueBookers} people generated {compactNumber(insight.peopleDeskDaysInMonth)} reserved desk-days inside the selected people filter.
                     </p>
                   </div>
                   <div className="rounded-2xl bg-amber-50 p-4">
