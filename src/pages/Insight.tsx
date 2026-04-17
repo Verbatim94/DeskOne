@@ -434,6 +434,12 @@ export default function Insight() {
     });
 
     const busiestWeekday = [...weekdayData].sort((a, b) => b.averageDeskDays - a.averageDeskDays)[0];
+    const weekdayPeak = Math.max(...weekdayData.map((day) => day.averageDeskDays), 0);
+    const weekdayAxisMax = Math.max(5, Math.ceil((weekdayPeak + 1) / 5) * 5);
+    const weekdayAverage =
+      weekdayData.length > 0
+        ? weekdayData.reduce((sum, day) => sum + day.averageDeskDays, 0) / weekdayData.length
+        : 0;
 
     const roomMonthMap = new Map<string, number>();
     selectedMonthRoomRows.forEach((row) => {
@@ -581,6 +587,8 @@ export default function Insight() {
       monthlyTrend,
       weekdayData,
       busiestWeekday,
+      weekdayAxisMax,
+      weekdayAverage,
       topRooms,
       bottomRooms,
       peakDay,
@@ -1086,23 +1094,63 @@ export default function Insight() {
                   Average occupied desks by weekday for {insight.selectedMonthLabel.toLowerCase()}, excluding weekends and Italian holidays.
                 </p>
               </CardHeader>
-              <CardContent>
-                <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={insight.weekdayData}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                      <XAxis dataKey="label" tickLine={false} axisLine={false} />
-                      <YAxis tickLine={false} axisLine={false} />
-                      <Tooltip
-                        contentStyle={{
-                          borderRadius: 16,
-                          border: '1px solid #e2e8f0',
-                          boxShadow: '0 18px 50px rgba(15, 23, 42, 0.12)',
-                        }}
-                      />
-                      <Bar dataKey="averageDeskDays" radius={[10, 10, 4, 4]} fill="#2563eb" />
-                    </BarChart>
-                  </ResponsiveContainer>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-[24px] border border-slate-100 bg-[linear-gradient(180deg,#f8fbff_0%,#ffffff_100%)] px-4 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Peak day</p>
+                    <p className="mt-2 text-lg font-semibold tracking-tight text-slate-950">
+                      {insight.busiestWeekday?.label || 'N/A'}
+                    </p>
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      {insight.busiestWeekday?.averageDeskDays?.toFixed(1) || '0.0'} avg occupied desks
+                    </p>
+                  </div>
+                  <div className="rounded-[24px] border border-slate-100 bg-[linear-gradient(180deg,#f8fbff_0%,#ffffff_100%)] px-4 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Week average</p>
+                    <p className="mt-2 text-lg font-semibold tracking-tight text-slate-950">
+                      {insight.weekdayAverage.toFixed(1)}
+                    </p>
+                    <p className="mt-1 text-[11px] text-slate-500">avg occupied desks across Mon-Fri</p>
+                  </div>
+                </div>
+
+                <div className="rounded-[28px] border border-slate-100 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-4 shadow-[0_18px_40px_rgba(15,23,42,0.05)]">
+                  <div className="h-[320px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={insight.weekdayData} barSize={56} margin={{ top: 8, right: 8, left: 4, bottom: 8 }}>
+                        <defs>
+                          <linearGradient id="weekdayDemandFill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#2563eb" stopOpacity={0.96} />
+                            <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.82} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="4 6" vertical={false} stroke="#dbe7f5" />
+                        <XAxis
+                          dataKey="label"
+                          tickLine={false}
+                          axisLine={false}
+                          tickMargin={10}
+                          tick={{ fill: '#64748b', fontSize: 12 }}
+                        />
+                        <YAxis
+                          tickLine={false}
+                          axisLine={false}
+                          tickMargin={10}
+                          tick={{ fill: '#64748b', fontSize: 12 }}
+                          domain={[0, insight.weekdayAxisMax]}
+                        />
+                        <Tooltip
+                          formatter={(value: number) => [`${value}`, 'Avg occupied desks']}
+                          contentStyle={{
+                            borderRadius: 18,
+                            border: '1px solid #dbe7f5',
+                            boxShadow: '0 22px 60px rgba(37, 99, 235, 0.12)',
+                          }}
+                        />
+                        <Bar dataKey="averageDeskDays" radius={[14, 14, 6, 6]} fill="url(#weekdayDemandFill)" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -1117,31 +1165,58 @@ export default function Insight() {
                   Highest room utilization based on booked desk-days / total available desk-days in the selected month.
                 </p>
               </CardHeader>
-              <CardContent className="space-y-3">
-                {insight.topRooms.map((room, index) => (
-                  <div key={room.id} className="rounded-3xl border border-slate-100 bg-slate-50/80 p-4">
-                    <div className="flex items-start justify-between gap-4">
+              <CardContent className="space-y-4">
+                {insight.primaryRoom && (
+                  <div className="rounded-[28px] border border-slate-100 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.08),_transparent_28%),linear-gradient(180deg,#fbfcff_0%,#ffffff_100%)] p-4 shadow-[0_18px_40px_rgba(15,23,42,0.05)]">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Top performer</p>
+                    <div className="mt-3 flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                          {String(index + 1).padStart(2, '0')}
-                        </p>
-                        <p className="mt-2 truncate text-[12px] font-semibold text-slate-900">{room.name}</p>
+                        <p className="truncate text-[13px] font-semibold text-slate-950">{insight.primaryRoom.name}</p>
                         <p className="mt-1 text-[11px] text-slate-500">
-                          {room.deskDays} desk-days, {room.avgDailyBooked.toFixed(1)} avg booked desks/day
+                          {insight.primaryRoom.deskDays} desk-days, {insight.primaryRoom.avgDailyBooked.toFixed(1)} avg booked desks/day
                         </p>
                       </div>
-                      <Badge variant="secondary" className="rounded-full bg-white text-slate-700">
-                        {formatPercent(room.utilization)}
+                      <Badge className="rounded-full bg-slate-950 px-3 py-1 text-white hover:bg-slate-950">
+                        {formatPercent(insight.primaryRoom.utilization)}
                       </Badge>
                     </div>
-                    <div className="mt-4 h-2 overflow-hidden rounded-full bg-white">
-                      <div
-                        className="h-full rounded-full bg-[linear-gradient(90deg,#2563eb_0%,#8b5cf6_100%)]"
-                        style={{ width: `${Math.min(room.utilization, 100)}%` }}
-                      />
-                    </div>
                   </div>
-                ))}
+                )}
+
+                <div className="space-y-3">
+                  {insight.topRooms.map((room, index) => (
+                    <div key={room.id} className="rounded-[28px] border border-slate-100 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] p-4 shadow-[0_14px_32px_rgba(15,23,42,0.04)]">
+                      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-50 text-[13px] font-semibold tracking-[0.18em] text-slate-400">
+                          {String(index + 1).padStart(2, '0')}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-semibold leading-5 text-slate-950">{room.name}</p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <span className="rounded-full bg-slate-50 px-2.5 py-1 text-[10px] font-medium text-slate-600">
+                              {room.deskDays} desk-days
+                            </span>
+                            <span className="rounded-full bg-slate-50 px-2.5 py-1 text-[10px] font-medium text-slate-600">
+                              {room.avgDailyBooked.toFixed(1)} avg/day
+                            </span>
+                            <span className="rounded-full bg-slate-50 px-2.5 py-1 text-[10px] font-medium text-slate-600">
+                              {room.totalDesks} desks
+                            </span>
+                          </div>
+                        </div>
+                        <Badge variant="secondary" className="rounded-full bg-white text-slate-700">
+                          {formatPercent(room.utilization)}
+                        </Badge>
+                      </div>
+                      <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className="h-full rounded-full bg-[linear-gradient(90deg,#2563eb_0%,#8b5cf6_100%)]"
+                          style={{ width: `${Math.min(room.utilization, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
 
