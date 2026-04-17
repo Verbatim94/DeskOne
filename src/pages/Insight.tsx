@@ -232,11 +232,18 @@ export default function Insight() {
   const usersInitialized = useRef(false);
 
   const monthOptions = INSIGHT_MONTH_OPTIONS;
-  const selectedMonthIndex = monthOptions.findIndex((option) => option.value === selectedMonth);
-  const trendMonths =
-    selectedMonthIndex >= 0
-      ? monthOptions.slice(Math.max(0, selectedMonthIndex - 5), selectedMonthIndex + 1)
-      : monthOptions.slice(0, 6);
+  const trendMonths = useMemo(() => {
+    const selectedDate = parseISO(`${selectedMonth}-01`);
+
+    return Array.from({ length: 6 }, (_, index) => {
+      const date = startOfMonth(subMonths(selectedDate, 5 - index));
+      return {
+        value: format(date, 'yyyy-MM'),
+        label: format(date, 'MMMM yyyy'),
+        date,
+      };
+    });
+  }, [selectedMonth]);
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery<InsightPayload>({
     queryKey: ['admin-insight-dashboard', selectedMonth],
@@ -876,7 +883,7 @@ export default function Insight() {
                 </p>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div>
+                <div className="rounded-[28px] border border-slate-100 bg-slate-50/40 p-4 md:p-5">
                   <div className="mb-3 flex items-center justify-between">
                     <div>
                       <p className="text-[13px] font-medium text-slate-900">Desk booking rate</p>
@@ -893,7 +900,7 @@ export default function Insight() {
                       <LineChart data={insight.monthlyTrend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                         <XAxis dataKey="label" tickLine={false} axisLine={false} />
-                        <YAxis tickLine={false} axisLine={false} unit="%" />
+                        <YAxis tickLine={false} axisLine={false} unit="%" domain={[0, 100]} ticks={[0, 20, 40, 60, 80, 100]} />
                         <Tooltip
                           formatter={(value: number) => [`${value}%`, 'Booking rate']}
                           contentStyle={{
@@ -917,6 +924,7 @@ export default function Insight() {
                 </div>
 
                 <div className="border-t border-slate-100 pt-6">
+                  <div className="rounded-[28px] border border-slate-100 bg-slate-50/40 p-4 md:p-5">
                   <div className="mb-3 flex items-center justify-between">
                     <div>
                       <p className="text-[13px] font-medium text-slate-900">People connected to selected rooms</p>
@@ -933,7 +941,7 @@ export default function Insight() {
                       <LineChart data={insight.monthlyTrend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                         <XAxis dataKey="label" tickLine={false} axisLine={false} />
-                        <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
+                        <YAxis tickLine={false} axisLine={false} allowDecimals={false} domain={[0, 100]} ticks={[0, 20, 40, 60, 80, 100]} />
                         <Tooltip
                           formatter={(value: number) => [value, 'Unique people']}
                           contentStyle={{
@@ -953,6 +961,7 @@ export default function Insight() {
                         />
                       </LineChart>
                     </ResponsiveContainer>
+                  </div>
                   </div>
                 </div>
               </CardContent>
