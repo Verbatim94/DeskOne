@@ -1,9 +1,8 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { endOfMonth, format, parseISO, startOfMonth, subMonths } from 'date-fns';
-import { Activity, ArrowRight, BrainCircuit, CalendarDays, Flame, Gauge, RefreshCw, Sparkles, TrendingDown, TrendingUp } from 'lucide-react';
+import { Activity, CalendarDays, Flame, Gauge, RefreshCw, Sparkles, TrendingDown, TrendingUp } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -92,12 +91,51 @@ function buildDailyUniqueRows(rows: DailyOccupancyRow[]) {
   return Array.from(uniqueMap.values());
 }
 
-function getHeatColor(intensity: number) {
-  if (intensity >= 0.9) return 'bg-rose-500 text-white';
-  if (intensity >= 0.7) return 'bg-orange-400 text-white';
-  if (intensity >= 0.45) return 'bg-amber-300 text-slate-900';
-  if (intensity > 0) return 'bg-emerald-200 text-slate-900';
-  return 'bg-slate-100 text-slate-400';
+function getHeatSurface(intensity: number) {
+  if (intensity >= 0.95) {
+    return {
+      background: 'linear-gradient(180deg, #7f1d1d 0%, #991b1b 100%)',
+      borderColor: '#7f1d1d',
+      textClassName: 'text-white',
+      captionClassName: 'text-rose-100',
+      shadow: '0 12px 30px rgba(127, 29, 29, 0.26)',
+    };
+  }
+  if (intensity >= 0.75) {
+    return {
+      background: 'linear-gradient(180deg, #dc2626 0%, #ef4444 100%)',
+      borderColor: '#dc2626',
+      textClassName: 'text-white',
+      captionClassName: 'text-rose-100',
+      shadow: '0 10px 24px rgba(239, 68, 68, 0.24)',
+    };
+  }
+  if (intensity >= 0.5) {
+    return {
+      background: 'linear-gradient(180deg, #f59e0b 0%, #f97316 100%)',
+      borderColor: '#f59e0b',
+      textClassName: 'text-white',
+      captionClassName: 'text-amber-100',
+      shadow: '0 10px 22px rgba(245, 158, 11, 0.22)',
+    };
+  }
+  if (intensity > 0) {
+    return {
+      background: 'linear-gradient(180deg, #d1fae5 0%, #86efac 100%)',
+      borderColor: '#86efac',
+      textClassName: 'text-slate-900',
+      captionClassName: 'text-emerald-900/70',
+      shadow: '0 8px 18px rgba(16, 185, 129, 0.14)',
+    };
+  }
+
+  return {
+    background: 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
+    borderColor: '#e2e8f0',
+    textClassName: 'text-slate-500',
+    captionClassName: 'text-slate-300',
+    shadow: 'none',
+  };
 }
 
 function InsightMetric({
@@ -112,13 +150,13 @@ function InsightMetric({
   accent: string;
 }) {
   return (
-    <Card className="border-white/60 bg-white/90 shadow-sm backdrop-blur">
+    <Card className="overflow-hidden border border-slate-200/80 bg-[linear-gradient(180deg,#ffffff_0%,#fbfdff_100%)] shadow-[0_18px_40px_rgba(15,23,42,0.06)]">
       <CardContent className="p-5">
-        <div className={`mb-4 inline-flex rounded-2xl px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${accent}`}>
+        <div className={`mb-4 inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] ${accent}`}>
           {label}
         </div>
-        <div className="text-3xl font-semibold tracking-tight text-slate-950">{value}</div>
-        <p className="mt-2 text-sm leading-6 text-slate-500">{detail}</p>
+        <div className="text-3xl font-semibold tracking-tight text-slate-950 md:text-[2rem]">{value}</div>
+        <p className="mt-2 max-w-xs text-sm leading-6 text-slate-500">{detail}</p>
       </CardContent>
     </Card>
   );
@@ -245,34 +283,8 @@ export default function Insight() {
     const workingDaysInMonth = getBusinessDaysBetween(startOfMonth(selectedMonthDate), endOfMonth(selectedMonthDate));
     const snapshotDate = workingDaysInMonth[workingDaysInMonth.length - 1] || endOfMonth(selectedMonthDate);
     const snapshotDateStr = format(snapshotDate, 'yyyy-MM-dd');
-    const snapshotRows = selectedMonthRows.filter((row) => row.occupancy_date === snapshotDateStr);
     const elapsedWindowDays = workingDaysInMonth.length;
     const uniqueBookers = new Set(selectedMonthRows.map((row) => row.user_id).filter(Boolean)).size;
-    const occupiedSnapshot = snapshotRows.length;
-    const occupancySnapshot = selectedTotalDesks > 0 ? (occupiedSnapshot / selectedTotalDesks) * 100 : 0;
-    const availabilitySnapshot = selectedTotalDesks > 0 ? ((selectedTotalDesks - occupiedSnapshot) / selectedTotalDesks) * 100 : 0;
-
-    const roomSnapshotMap = new Map<string, number>();
-    snapshotRows.forEach((row) => {
-      roomSnapshotMap.set(row.room_id, (roomSnapshotMap.get(row.room_id) || 0) + 1);
-    });
-
-    const snapshotRooms = selectedRooms
-      .map((room) => {
-        const occupied = roomSnapshotMap.get(room.id) || 0;
-        const capacity = room.desks.length;
-        const free = Math.max(capacity - occupied, 0);
-        const utilization = capacity > 0 ? (occupied / capacity) * 100 : 0;
-        return {
-          id: room.id,
-          name: room.name,
-          occupied,
-          capacity,
-          free,
-          utilization,
-        };
-      })
-      .sort((a, b) => b.utilization - a.utilization);
 
     const computeContextMetrics = (monthRows: DailyOccupancyRow[], monthDate: Date) => {
       const businessDays = getBusinessDaysBetween(startOfMonth(monthDate), endOfMonth(monthDate));
@@ -312,6 +324,10 @@ export default function Insight() {
 
       return {
         businessDayCount,
+        reservationRate:
+          selectedTotalDesks > 0 && businessDayCount > 0
+            ? (monthRows.length / (selectedTotalDesks * businessDayCount)) * 100
+            : 0,
         averageFullRoomDaysPercentage:
           fullRoomPercentages.length > 0
             ? fullRoomPercentages.reduce((sum, value) => sum + value, 0) / fullRoomPercentages.length
@@ -334,9 +350,7 @@ export default function Insight() {
 
       return {
         label: format(month.date, 'MMM'),
-        fullRoomDays: Math.round(monthMetrics.averageFullRoomDaysPercentage),
-        personOccupancy: Math.round(monthMetrics.averagePersonOccupancyPercentage),
-        avgBookedDays: Math.round(monthMetrics.averageBookedDaysPerPerson * 10) / 10,
+        reservationRate: Math.round(monthMetrics.reservationRate * 10) / 10,
         users: monthMetrics.uniquePeople,
       };
     });
@@ -390,8 +404,11 @@ export default function Insight() {
     const averageFullRoomDaysPercentage = selectedMonthMetrics.averageFullRoomDaysPercentage;
     const averagePersonOccupancyPercentage = selectedMonthMetrics.averagePersonOccupancyPercentage;
     const averageBookedDaysPerPerson = selectedMonthMetrics.averageBookedDaysPerPerson;
+    const averageReservedDesks = elapsedWindowDays > 0 ? selectedMonthRows.length / elapsedWindowDays : 0;
+    const averageOpenDesks = Math.max(selectedTotalDesks - averageReservedDesks, 0);
+    const monthlyOccupancyRate = selectedTotalDesks > 0 ? (averageReservedDesks / selectedTotalDesks) * 100 : 0;
 
-    const topRooms = selectedRooms
+    const roomMonthlySummaries = selectedRooms
       .map((room) => {
         const deskDays = roomMonthMap.get(room.id) || 0;
         const capacity = room.desks.length * elapsedWindowDays;
@@ -399,24 +416,18 @@ export default function Insight() {
           id: room.id,
           name: room.name,
           deskDays,
+          totalPossibleDeskDays: capacity,
           utilization: capacity > 0 ? (deskDays / capacity) * 100 : 0,
           avgDailyBooked: elapsedWindowDays > 0 ? deskDays / elapsedWindowDays : 0,
+          totalDesks: room.desks.length,
         };
       })
-      .sort((a, b) => b.utilization - a.utilization)
+      .sort((a, b) => b.utilization - a.utilization);
+
+    const topRooms = roomMonthlySummaries
       .slice(0, 5);
 
-    const bottomRooms = selectedRooms
-      .map((room) => {
-        const deskDays = roomMonthMap.get(room.id) || 0;
-        const capacity = room.desks.length * elapsedWindowDays;
-        return {
-          id: room.id,
-          name: room.name,
-          deskDays,
-          utilization: capacity > 0 ? (deskDays / capacity) * 100 : 0,
-        };
-      })
+    const bottomRooms = [...roomMonthlySummaries]
       .sort((a, b) => a.utilization - b.utilization)
       .slice(0, 5);
 
@@ -429,11 +440,10 @@ export default function Insight() {
       .map(([date, count]) => ({ date, count }))
       .sort((a, b) => b.count - a.count)[0];
 
-    const pressureRooms = snapshotRooms.filter((room) => room.utilization >= 80).length;
-    const activeRooms = snapshotRooms.filter((room) => room.occupied > 0).length;
+    const pressureRooms = roomMonthlySummaries.filter((room) => room.utilization >= 80).length;
+    const activeRooms = roomMonthlySummaries.filter((room) => room.deskDays > 0).length;
     const averageDailyDemand = elapsedWindowDays > 0 ? selectedMonthRows.length / elapsedWindowDays : 0;
     const primaryRoom = topRooms[0];
-    const snapshotPulse = snapshotRooms.slice(0, 4);
     const selectedEntityLabel =
       selectedSource === 'all'
         ? 'all occupancy'
@@ -499,9 +509,9 @@ export default function Insight() {
 
     return {
       totalDesks: selectedTotalDesks,
-      occupiedSnapshot,
-      availabilitySnapshot,
-      occupancySnapshot,
+      averageReservedDesks,
+      averageOpenDesks,
+      monthlyOccupancyRate,
       averageFullRoomDaysPercentage,
       uniqueBookers,
       averagePersonOccupancyPercentage,
@@ -516,7 +526,7 @@ export default function Insight() {
       topRooms,
       bottomRooms,
       peakDay,
-      snapshotPulse,
+      roomMonthlySummaries,
       primaryRoom,
       averageDailyDemand,
       workingCalendarWeeks,
@@ -556,102 +566,101 @@ export default function Insight() {
   }
 
   return (
-    <div className="space-y-6">
-      <Card className="overflow-hidden border-0 bg-[radial-gradient(circle_at_top_left,_rgba(129,140,248,0.22),_transparent_30%),radial-gradient(circle_at_80%_20%,_rgba(34,197,94,0.16),_transparent_20%),linear-gradient(135deg,#0f172a_0%,#1d4ed8_45%,#7c3aed_100%)] text-white shadow-xl">
-        <CardContent className="p-6 md:p-8">
-          <div className="flex flex-col gap-8 xl:flex-row xl:items-end xl:justify-between">
-            <div className="max-w-3xl">
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-blue-50 backdrop-blur">
-                <BrainCircuit className="h-3.5 w-3.5" />
-                Admin Insight
-              </div>
-              <h1 className="text-3xl font-semibold tracking-tight md:text-5xl">
-                Read workspace demand with real operational context.
-              </h1>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-blue-50/88 md:text-base">
-                Filter the signal by month, room, people, and occupancy type to understand pressure, adoption,
-                and where desk demand is concentrating.
-              </p>
-              <div className="mt-6 flex flex-wrap items-center gap-3">
-                <Badge className="rounded-full bg-white/15 px-3 py-1 text-white hover:bg-white/20">
-                  Updated {format(parseISO(insight.generatedAt), 'dd MMM yyyy, HH:mm')}
+    <div className="space-y-5">
+      <Card className="overflow-hidden border border-slate-200/80 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.08),_transparent_26%),linear-gradient(180deg,#ffffff_0%,#fbfcff_100%)] shadow-[0_24px_60px_rgba(15,23,42,0.07)]">
+        <CardContent className="p-5 md:p-6">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-700 hover:bg-white">
+                  Insight
                 </Badge>
-                <Badge className="rounded-full bg-emerald-400/15 px-3 py-1 text-emerald-50 hover:bg-emerald-400/20">
+                <Badge className="rounded-full bg-slate-950 px-3 py-1 text-white hover:bg-slate-950">
                   {insight.selectedMonthLabel}
                 </Badge>
-                <Badge className="rounded-full bg-white/10 px-3 py-1 text-blue-50 hover:bg-white/15">
+                <Badge className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700 hover:bg-emerald-50">
                   {insight.selectedEntityLabel}
                 </Badge>
-                <Badge className="rounded-full bg-white/10 px-3 py-1 text-blue-50 hover:bg-white/15">
-                  Fixed Italian calendar 2026-2036
+                <Badge className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 hover:bg-slate-100">
+                  Italian business calendar 2026-2036
                 </Badge>
               </div>
-            </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-3xl border border-white/15 bg-white/10 p-4 backdrop-blur">
-                <p className="text-xs uppercase tracking-[0.18em] text-blue-100/75">Busiest weekday</p>
-                <div className="mt-2 text-2xl font-semibold">{insight.busiestWeekday?.label || 'N/A'}</div>
-                <p className="mt-2 text-sm text-blue-50/80">
-                  averages {insight.busiestWeekday?.averageDeskDays || 0} occupied desks per day.
-                </p>
-              </div>
-              <div className="rounded-3xl border border-white/15 bg-white/10 p-4 backdrop-blur">
-                <p className="text-xs uppercase tracking-[0.18em] text-blue-100/75">Snapshot date</p>
-                <div className="mt-2 text-2xl font-semibold">
-                  {format(parseISO(insight.snapshotDateStr), 'dd MMM yyyy')}
-                </div>
-                <p className="mt-2 text-sm text-blue-50/80">
-                  {insight.roomsCount} rooms and {insight.peopleCount} people currently in scope.
+              <div>
+                <h1 className="text-2xl font-semibold tracking-tight text-slate-950 md:text-3xl">
+                  Workspace insight
+                </h1>
+                <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+                  A compact view of occupancy, adoption, and pressure across the selected workspace context.
                 </p>
               </div>
             </div>
-          </div>
 
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Button asChild className="rounded-full bg-white text-slate-900 hover:bg-blue-50">
-              <Link to="/planner">
-                Open Planner
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-            <Button asChild variant="ghost" className="rounded-full border border-white/20 bg-white/10 text-white hover:bg-white/15">
-              <Link to="/rooms">Manage Rooms</Link>
-            </Button>
+            <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[520px]">
+              <div className="rounded-[24px] border border-slate-200/80 bg-white/90 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Updated</p>
+                <p className="mt-2 text-sm font-semibold text-slate-900">
+                  {format(parseISO(insight.generatedAt), 'dd MMM yyyy, HH:mm')}
+                </p>
+              </div>
+              <div className="rounded-[24px] border border-slate-200/80 bg-white/90 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Busiest day</p>
+                <p className="mt-2 text-sm font-semibold text-slate-900">{insight.busiestWeekday?.label || 'N/A'}</p>
+                <p className="mt-1 text-xs text-slate-500">{insight.busiestWeekday?.averageDeskDays || 0} avg desks</p>
+              </div>
+              <div className="rounded-[24px] border border-slate-200/80 bg-white/90 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Scope</p>
+                <p className="mt-2 text-sm font-semibold text-slate-900">
+                  {insight.roomsCount} rooms / {insight.peopleCount} people
+                </p>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      <Card className="border-slate-200 bg-white shadow-sm">
+      <Card className="border border-slate-200/80 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.05)]">
         <CardContent className="p-5">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Filters</p>
-              <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-950">Slice the workspace signal</h2>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Filters</p>
+              <h2 className="mt-1 text-lg font-semibold tracking-tight text-slate-950">Context controls</h2>
               <p className="mt-1 text-sm text-slate-500">
-                Every metric and chart below responds to these filters and uses bookings / total working days, Monday to Friday, excluding Italian national holidays.
+                Metrics respond to the selected month, rooms, people, and occupancy type.
               </p>
             </div>
 
-            <Button
-              variant="outline"
-              className="rounded-full"
-              onClick={() => {
-                setSelectedMonth(currentMonthValue);
-                setSelectedRoomIds(roomOptions.map((room) => room.value));
-                setSelectedUserIds(userOptions.map((person) => person.value));
-                setSelectedSource('all');
-              }}
-            >
-              Reset filters
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="rounded-full px-4 text-slate-600 hover:text-slate-950"
+                onClick={() => refetch()}
+                disabled={isFetching}
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+              <Button
+                variant="outline"
+                className="rounded-full"
+                onClick={() => {
+                  setSelectedMonth(currentMonthValue);
+                  setSelectedRoomIds(roomOptions.map((room) => room.value));
+                  setSelectedUserIds(userOptions.map((person) => person.value));
+                  setSelectedSource('all');
+                }}
+              >
+                Reset filters
+              </Button>
+            </div>
           </div>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2 2xl:grid-cols-[220px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)]">
             <div className="space-y-2 min-w-0">
               <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">Month</p>
               <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger className="h-10 rounded-2xl border-slate-200">
+                <SelectTrigger className="h-11 rounded-[20px] border-slate-200 bg-slate-50/60">
                   <SelectValue placeholder="Select month" />
                 </SelectTrigger>
                 <SelectContent>
@@ -690,7 +699,7 @@ export default function Insight() {
 
             <div className="space-y-2 min-w-0">
               <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">Occupancy type</p>
-              <div className="flex min-h-10 flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-1.5">
+              <div className="flex min-h-11 flex-wrap items-center gap-2 rounded-[20px] border border-slate-200 bg-slate-50/70 p-1.5">
                 {SOURCE_FILTERS.map((source) => (
                   <button
                     key={source.value}
@@ -709,7 +718,7 @@ export default function Insight() {
             </div>
           </div>
 
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-slate-200/70 bg-slate-50/70 px-4 py-3 text-sm text-slate-600">
             <div className="flex flex-wrap items-center gap-3">
               <span>{insight.roomsCount} rooms selected</span>
               <span className="text-slate-300">|</span>
@@ -717,16 +726,9 @@ export default function Insight() {
               <span className="text-slate-300">|</span>
               <span>{insight.selectedMonthLabel}</span>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="rounded-full text-slate-600 hover:text-slate-950"
-              onClick={() => refetch()}
-              disabled={isFetching}
-            >
-              <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
-              Refresh data
-            </Button>
+            <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
+              business-day model
+            </span>
           </div>
         </CardContent>
       </Card>
@@ -777,58 +779,88 @@ export default function Insight() {
                   <TrendingUp className="h-5 w-5 text-slate-400" />
                 </CardTitle>
                 <p className="text-sm text-slate-500">
-                  Six-month trend of the core context KPIs on the fixed Italian business calendar.
+                  Top: average desk booking rate. Bottom: unique people active in the selected room context over time.
                 </p>
               </CardHeader>
-              <CardContent>
-                <div className="h-[320px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={insight.monthlyTrend}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                      <XAxis dataKey="label" tickLine={false} axisLine={false} />
-                      <YAxis yAxisId="left" tickLine={false} axisLine={false} unit="%" />
-                      <YAxis yAxisId="right" orientation="right" tickLine={false} axisLine={false} />
-                      <Tooltip
-                        contentStyle={{
-                          borderRadius: 16,
-                          border: '1px solid #e2e8f0',
-                          boxShadow: '0 18px 50px rgba(15, 23, 42, 0.12)',
-                        }}
-                      />
-                      <Area
-                        yAxisId="left"
-                        type="monotone"
-                        dataKey="fullRoomDays"
-                        stroke="#2563eb"
-                        fill="url(#insightAreaFill)"
-                        strokeWidth={3}
-                        name="Full-room days %"
-                      />
-                      <Line
-                        yAxisId="left"
-                        type="monotone"
-                        dataKey="personOccupancy"
-                        stroke="#8b5cf6"
-                        strokeWidth={3}
-                        dot={{ r: 4, fill: '#8b5cf6' }}
-                        name="Avg person occupancy %"
-                      />
-                      <Bar
-                        yAxisId="right"
-                        dataKey="avgBookedDays"
-                        fill="#10b981"
-                        radius={[8, 8, 0, 0]}
-                        barSize={18}
-                        name="Avg booked days / person"
-                      />
-                      <defs>
-                        <linearGradient id="insightAreaFill" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.35} />
-                          <stop offset="95%" stopColor="#60a5fa" stopOpacity={0.03} />
-                        </linearGradient>
-                      </defs>
-                    </ComposedChart>
-                  </ResponsiveContainer>
+              <CardContent className="space-y-6">
+                <div>
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-slate-900">Desk booking rate</p>
+                      <p className="text-xs text-slate-500">
+                        Occupied desk-days / total available desk-days in the selected scope.
+                      </p>
+                    </div>
+                    <Badge variant="secondary" className="rounded-full bg-blue-50 text-blue-700">
+                      %
+                    </Badge>
+                  </div>
+                  <div className="h-[220px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={insight.monthlyTrend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                        <XAxis dataKey="label" tickLine={false} axisLine={false} />
+                        <YAxis tickLine={false} axisLine={false} unit="%" />
+                        <Tooltip
+                          formatter={(value: number) => [`${value}%`, 'Booking rate']}
+                          contentStyle={{
+                            borderRadius: 16,
+                            border: '1px solid #e2e8f0',
+                            boxShadow: '0 18px 50px rgba(15, 23, 42, 0.12)',
+                          }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="reservationRate"
+                          stroke="#2563eb"
+                          strokeWidth={3}
+                          dot={{ r: 4, fill: '#2563eb' }}
+                          activeDot={{ r: 6 }}
+                          name="Booking rate"
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-100 pt-6">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-slate-900">People connected to selected rooms</p>
+                      <p className="text-xs text-slate-500">
+                        Unique active people across the selected rooms and filters, month by month.
+                      </p>
+                    </div>
+                    <Badge variant="secondary" className="rounded-full bg-emerald-50 text-emerald-700">
+                      Count
+                    </Badge>
+                  </div>
+                  <div className="h-[220px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={insight.monthlyTrend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                        <XAxis dataKey="label" tickLine={false} axisLine={false} />
+                        <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
+                        <Tooltip
+                          formatter={(value: number) => [value, 'Unique people']}
+                          contentStyle={{
+                            borderRadius: 16,
+                            border: '1px solid #e2e8f0',
+                            boxShadow: '0 18px 50px rgba(15, 23, 42, 0.12)',
+                          }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="users"
+                          stroke="#10b981"
+                          strokeWidth={3}
+                          dot={{ r: 4, fill: '#10b981' }}
+                          activeDot={{ r: 6 }}
+                          name="Unique people"
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -840,40 +872,45 @@ export default function Insight() {
                   <Gauge className="h-5 w-5 text-slate-400" />
                 </CardTitle>
                 <p className="text-sm text-slate-500">
-                  Utilization for {format(parseISO(insight.snapshotDateStr), 'dd MMM yyyy')}.
+                  Average reserved desks across {insight.selectedMonthLabel.toLowerCase()} in the current filter context.
                 </p>
               </CardHeader>
               <CardContent className="space-y-5">
                 <div>
                   <div className="flex items-end justify-between">
                     <div>
-                      <p className="text-sm text-slate-500">Occupancy</p>
+                      <p className="text-sm text-slate-500">Average reserved desks</p>
                       <p className="text-4xl font-semibold tracking-tight text-slate-950">
-                        {formatPercent(insight.occupancySnapshot)}
+                        {insight.averageReservedDesks.toFixed(1)}
+                      </p>
+                      <p className="mt-2 text-sm text-slate-500">
+                        out of {insight.totalDesks} total desks on average
                       </p>
                     </div>
                     <div className="rounded-2xl bg-blue-50 px-3 py-2 text-right">
-                      <p className="text-xs uppercase tracking-[0.16em] text-blue-700">Open seats</p>
+                      <p className="text-xs uppercase tracking-[0.16em] text-blue-700">Average open desks</p>
                       <p className="text-lg font-semibold text-blue-950">
-                        {Math.max(insight.totalDesks - insight.occupiedSnapshot, 0)}
+                        {insight.averageOpenDesks.toFixed(1)}
                       </p>
                     </div>
                   </div>
                   <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100">
                     <div
                       className="h-full rounded-full bg-[linear-gradient(90deg,#2563eb_0%,#7c3aed_100%)]"
-                      style={{ width: `${Math.min(insight.occupancySnapshot, 100)}%` }}
+                      style={{ width: `${Math.min(insight.monthlyOccupancyRate, 100)}%` }}
                     />
                   </div>
                 </div>
 
                 <div className="grid gap-3">
-                  {insight.snapshotPulse.map((room) => (
+                  {insight.roomMonthlySummaries.map((room) => (
                     <div key={room.id} className="rounded-2xl border border-slate-100 bg-slate-50/90 p-3">
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium text-slate-900">{room.name}</p>
-                          <p className="text-xs text-slate-500">{room.occupied} occupied, {room.free} free</p>
+                          <p className="text-xs text-slate-500">
+                            {room.deskDays} reserved desk-days / {room.totalPossibleDeskDays} possible
+                          </p>
                         </div>
                         <Badge variant="secondary" className="rounded-full bg-white text-slate-700">
                           {formatPercent(room.utilization)}
@@ -1037,8 +1074,8 @@ export default function Insight() {
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Pressure</p>
                     <p className="mt-2 leading-6 text-amber-950">
                       {insight.pressureRooms > 0
-                        ? `${insight.pressureRooms} rooms are above the 80% pressure threshold on the selected snapshot.`
-                        : 'No room has crossed the 80% pressure threshold in the current snapshot.'}
+                        ? `${insight.pressureRooms} rooms are above the 80% occupancy threshold across the selected month.`
+                        : 'No room has crossed the 80% monthly occupancy threshold in the current context.'}
                     </p>
                   </div>
                 </CardContent>
@@ -1054,54 +1091,71 @@ export default function Insight() {
                   <CalendarDays className="h-5 w-5 text-slate-400" />
                 </CardTitle>
                 <p className="text-sm text-slate-500">
-                  Daily demand intensity across the working days of {insight.selectedMonthLabel.toLowerCase()}.
+                  Calendar view of daily occupancy intensity across the working days of {insight.selectedMonthLabel.toLowerCase()}.
                 </p>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="overflow-x-auto">
-                    <div className="min-w-[560px]">
-                      <div className="grid grid-cols-[88px_repeat(5,minmax(0,1fr))] gap-2">
-                        <div />
-                        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((label) => (
-                          <div key={label} className="px-2 py-1 text-center text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
-                            {label}
-                          </div>
-                        ))}
+                  <div className="rounded-[28px] border border-slate-100 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-4 shadow-[0_18px_40px_rgba(15,23,42,0.06)] sm:p-5">
+                    <div className="grid grid-cols-5 gap-2 sm:gap-3">
+                      {['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((label) => (
+                        <div
+                          key={label}
+                          className="pb-1 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400"
+                        >
+                          {label}
+                        </div>
+                      ))}
 
-                        {insight.workingCalendarWeeks.map((week) => (
-                          <Fragment key={week.key}>
-                            <div key={`${week.key}-label`} className="flex items-center px-2 text-xs font-medium uppercase tracking-[0.14em] text-slate-400">
-                              {week.label}
-                            </div>
-                            {week.days.map((day, index) => (
-                              <div key={`${week.key}-${index}`} className="flex justify-center">
-                                {day ? (
-                                  <div
-                                    className={`flex h-12 w-12 flex-col items-center justify-center rounded-2xl text-[11px] font-semibold shadow-sm ${getHeatColor(day.utilization)}`}
-                                    title={`${day.date}: ${day.occupancyCount} occupied desks (${formatPercent(day.utilization * 100)})`}
-                                  >
-                                    <span>{day.dayNumber}</span>
-                                    <span className="text-[9px] font-medium opacity-80">{Math.round(day.utilization * 100)}</span>
-                                  </div>
-                                ) : (
-                                  <div className="h-12 w-12 rounded-2xl border border-dashed border-slate-200 bg-slate-50/80" />
-                                )}
+                      {insight.workingCalendarWeeks.flatMap((week) =>
+                        week.days.map((day, index) => {
+                          if (!day) {
+                            return (
+                              <div
+                                key={`${week.key}-${index}`}
+                                className="aspect-square rounded-[22px] border border-dashed border-slate-200/80 bg-slate-50/70"
+                              />
+                            );
+                          }
+
+                          const heatSurface = getHeatSurface(day.utilization);
+
+                          return (
+                            <div
+                              key={day.key}
+                              className={`group relative aspect-square rounded-[22px] border p-2.5 transition-all duration-200 sm:p-3 ${heatSurface.textClassName}`}
+                              style={{
+                                background: heatSurface.background,
+                                borderColor: heatSurface.borderColor,
+                                boxShadow: heatSurface.shadow,
+                              }}
+                              title={`${day.date}: ${day.occupancyCount} occupied desks (${formatPercent(day.utilization * 100)})`}
+                            >
+                              <div className="flex h-full flex-col justify-between">
+                                <span className="text-sm font-semibold sm:text-base">{day.dayNumber}</span>
+                                <div className="space-y-0.5">
+                                  <p className={`text-[10px] font-medium uppercase tracking-[0.16em] ${heatSurface.captionClassName}`}>
+                                    {Math.round(day.utilization * 100)}%
+                                  </p>
+                                  <p className={`text-[10px] ${heatSurface.captionClassName}`}>
+                                    {day.occupancyCount} reserved
+                                  </p>
+                                </div>
                               </div>
-                            ))}
-                          </Fragment>
-                        ))}
-                      </div>
+                            </div>
+                          );
+                        }),
+                      )}
                     </div>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
                     <span className="font-medium text-slate-600">Intensity</span>
-                    <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-slate-100" />0%</div>
-                    <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-emerald-200" />Low</div>
-                    <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-amber-300" />Medium</div>
-                    <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-orange-400" />High</div>
-                    <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-rose-500" />Critical</div>
+                    <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full border border-slate-200 bg-white" />0%</div>
+                    <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-emerald-300" />Low</div>
+                    <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-amber-400" />Medium</div>
+                    <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-red-500" />High</div>
+                    <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-red-900" />Critical</div>
                   </div>
                 </div>
               </CardContent>
