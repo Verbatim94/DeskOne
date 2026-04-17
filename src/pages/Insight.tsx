@@ -83,6 +83,10 @@ function buildDailyUniqueRows(rows: DailyOccupancyRow[]) {
   return Array.from(uniqueMap.values());
 }
 
+function getOccupancyMonth(row: DailyOccupancyRow) {
+  return row.occupancy_date.slice(0, 7);
+}
+
 function getHeatSurface(intensity: number) {
   if (intensity >= 0.95) {
     return {
@@ -289,8 +293,8 @@ export default function Insight() {
     const roomFilteredRows = uniqueRows.filter((row) => roomIdSet.has(row.room_id));
     const peopleFilteredRows = roomFilteredRows.filter((row) => userIdSet.has(row.user_id));
 
-    const selectedMonthRoomRows = roomFilteredRows.filter((row) => row.month === selectedMonth);
-    const selectedMonthPeopleRows = peopleFilteredRows.filter((row) => row.month === selectedMonth);
+    const selectedMonthRoomRows = roomFilteredRows.filter((row) => getOccupancyMonth(row) === selectedMonth);
+    const selectedMonthPeopleRows = peopleFilteredRows.filter((row) => getOccupancyMonth(row) === selectedMonth);
     const workingDaysInMonth = getBusinessDaysBetween(startOfMonth(selectedMonthDate), endOfMonth(selectedMonthDate));
     const elapsedWindowDays = workingDaysInMonth.length;
     const uniqueBookers = new Set(selectedMonthPeopleRows.map((row) => row.user_id).filter(Boolean)).size;
@@ -354,7 +358,7 @@ export default function Insight() {
     };
 
     const monthlyTrend = trendMonths.map((month) => {
-      const monthRows = roomFilteredRows.filter((row) => row.month === month.value);
+      const monthRows = roomFilteredRows.filter((row) => getOccupancyMonth(row) === month.value);
       const monthMetrics = computeContextMetrics(monthRows, month.date);
 
       return {
