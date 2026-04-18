@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
-import { endOfMonth, format, parseISO, startOfMonth, subMonths } from 'date-fns';
+import { endOfMonth, endOfWeek, format, parseISO, startOfMonth, startOfWeek, subMonths, subWeeks } from 'date-fns';
 import { Activity, CalendarDays, ChevronDown, Flame, Gauge, RefreshCw, ShieldCheck, SlidersHorizontal, TrendingDown, TrendingUp } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -231,6 +231,7 @@ export default function Insight() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonthValue);
   const [selectedRoomIds, setSelectedRoomIds] = useState<string[]>([]);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [trendGranularity, setTrendGranularity] = useState<'monthly' | 'weekly'>('monthly');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const roomsInitialized = useRef(false);
   const usersInitialized = useRef(false);
@@ -245,6 +246,23 @@ export default function Insight() {
         value: format(date, 'yyyy-MM'),
         label: format(date, 'MMMM yyyy'),
         date,
+      };
+    });
+  }, [selectedMonth]);
+
+  const trendWeeks = useMemo(() => {
+    const selectedDate = parseISO(`${selectedMonth}-01`);
+    const selectedMonthEnd = endOfMonth(selectedDate);
+
+    return Array.from({ length: 6 }, (_, index) => {
+      const anchor = subWeeks(selectedMonthEnd, 5 - index);
+      const dateStart = startOfWeek(anchor, { weekStartsOn: 1 });
+      const dateEnd = endOfWeek(anchor, { weekStartsOn: 1 });
+      return {
+        value: format(dateStart, 'yyyy-MM-dd'),
+        label: format(dateStart, 'dd MMM'),
+        dateStart,
+        dateEnd,
       };
     });
   }, [selectedMonth]);
@@ -358,12 +376,12 @@ export default function Insight() {
     const elapsedWindowDays = workingDaysInMonth.length;
     const uniqueBookers = new Set(selectedMonthPeopleRows.map((row) => row.user_id).filter(Boolean)).size;
 
-    const computeContextMetrics = (monthRows: DailyOccupancyRow[], monthDate: Date) => {
-      const businessDays = getBusinessDaysBetween(startOfMonth(monthDate), endOfMonth(monthDate));
+    const computeContextMetrics = (scopeRows: DailyOccupancyRow[], rangeStart: Date, rangeEnd: Date) => {
+      const businessDays = getBusinessDaysBetween(rangeStart, rangeEnd);
       const businessDayCount = businessDays.length;
 
       const monthRoomDayOccupancyMap = new Map<string, number>();
-      monthRows.forEach((row) => {
+      scopeRows.forEach((row) => {
         const key = `${row.room_id}-${row.occupancy_date}`;
         monthRoomDayOccupancyMap.set(key, (monthRoomDayOccupancyMap.get(key) || 0) + 1);
       });
@@ -380,10 +398,10 @@ export default function Insight() {
         return (fullyOccupiedDays / businessDayCount) * 100;
       });
 
-      const activeUsers = Array.from(new Set(monthRows.map((row) => row.user_id).filter(Boolean)));
+      const activeUsers = Array.from(new Set(scopeRows.map((row) => row.user_id).filter(Boolean)));
       const userMetrics = activeUsers.map((userId) => {
         const bookedDays = new Set(
-          monthRows
+          scopeRows
             .filter((row) => row.user_id === userId)
             .map((row) => row.occupancy_date),
         ).size;
@@ -398,7 +416,7 @@ export default function Insight() {
         businessDayCount,
         reservationRate:
           selectedTotalDesks > 0 && businessDayCount > 0
-            ? (monthRows.length / (selectedTotalDesks * businessDayCount)) * 100
+            ? (scopeRows.length / (selectedTotalDesks * businessDayCount)) * 100
             : 0,
         averageFullRoomDaysPercentage:
           fullRoomPercentages.length > 0
@@ -417,13 +435,37 @@ export default function Insight() {
     };
 
     const monthlyTrend = trendMonths.map((month) => {
-      const monthRows = roomFilteredRows.filter((row) => getOccupancyMonth(row) === month.value);
-      const monthMetrics = computeContextMetrics(monthRows, month.date);
+      const monthRoomRows = roomFilteredRows.filter((row) => getOccupancyMonth(row) === month.value);
+      const monthPeopleRows = peopleFilteredRows.filter((row) => getOccupancyMonth(row) === month.value);
+      const monthRoomMetrics = computeContextMetrics(monthRoomRows, startOfMonth(month.date), endOfMonth(month.date));
+      const monthPeopleMetrics = computeContextMetrics(monthPeopleRows, startOfMonth(month.date), endOfMonth(month.date));
 
       return {
         label: format(month.date, 'MMM'),
-        reservationRate: Math.round(monthMetrics.reservationRate * 10) / 10,
-        users: monthMetrics.uniquePeople,
+        reservationRate: Math.round(monthRoomMetrics.reservationRate * 10) / 10,
+        users: monthPeopleMetrics.uniquePeople,
+        eligibleUsers: eligiblePeopleCount,
+      };
+    });
+
+    const weeklyTrend = trendWeeks.map((week) => {
+      const weekStart = week.dateStart;
+      const weekEnd = week.dateEnd;
+      const weekRoomRows = roomFilteredRows.filter((row) => {
+        const rowDate = parseISO(row.occupancy_date);
+        return rowDate >= weekStart && rowDate <= weekEnd;
+      });
+      const weekPeopleRows = peopleFilteredRows.filter((row) => {
+        const rowDate = parseISO(row.occupancy_date);
+        return rowDate >= weekStart && rowDate <= weekEnd;
+      });
+      const weekRoomMetrics = computeContextMetrics(weekRoomRows, weekStart, weekEnd);
+      const weekPeopleMetrics = computeContextMetrics(weekPeopleRows, weekStart, weekEnd);
+
+      return {
+        label: week.label,
+        reservationRate: Math.round(weekRoomMetrics.reservationRate * 10) / 10,
+        users: weekPeopleMetrics.uniquePeople,
         eligibleUsers: eligiblePeopleCount,
       };
     });
@@ -483,8 +525,16 @@ export default function Insight() {
       roomDayOccupancyMap.set(key, (roomDayOccupancyMap.get(key) || 0) + 1);
     });
 
-    const selectedMonthRoomMetrics = computeContextMetrics(selectedMonthRoomRows, selectedMonthDate);
-    const selectedMonthPeopleMetrics = computeContextMetrics(selectedMonthPeopleRows, selectedMonthDate);
+    const selectedMonthRoomMetrics = computeContextMetrics(
+      selectedMonthRoomRows,
+      startOfMonth(selectedMonthDate),
+      endOfMonth(selectedMonthDate),
+    );
+    const selectedMonthPeopleMetrics = computeContextMetrics(
+      selectedMonthPeopleRows,
+      startOfMonth(selectedMonthDate),
+      endOfMonth(selectedMonthDate),
+    );
     const averageFullRoomDaysPercentage = selectedMonthRoomMetrics.averageFullRoomDaysPercentage;
     const averagePersonOccupancyPercentage = selectedMonthPeopleMetrics.averagePersonOccupancyPercentage;
     const averageBookedDaysPerPerson = selectedMonthPeopleMetrics.averageBookedDaysPerPerson;
@@ -688,6 +738,7 @@ export default function Insight() {
       pressureRooms,
       activeRooms,
       monthlyTrend,
+      weeklyTrend,
       weekdayData,
       busiestWeekday,
       weekdayAxisMax,
@@ -717,7 +768,7 @@ export default function Insight() {
       hasRows: selectedMonthRoomRows.length > 0,
       businessDaysInMonth: elapsedWindowDays,
     };
-  }, [data?.generatedAt, data?.roomAccess, data?.rooms, data?.rows, selectedMonth, selectedRoomIds, selectedUserIds, trendMonths]);
+  }, [data?.generatedAt, data?.roomAccess, data?.rooms, data?.rows, selectedMonth, selectedRoomIds, selectedUserIds, trendMonths, trendWeeks]);
 
   if (!user) return null;
 
@@ -741,6 +792,9 @@ export default function Insight() {
       </Card>
     );
   }
+
+  const trendData = trendGranularity === 'monthly' ? insight.monthlyTrend : insight.weeklyTrend;
+  const trendWindowLabel = trendGranularity === 'monthly' ? 'Last 6 months' : 'Last 6 weeks';
 
   return (
     <div className="space-y-4">
@@ -994,13 +1048,41 @@ export default function Insight() {
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.95fr)]">
             <Card className="min-w-0 overflow-hidden border-slate-200 bg-white shadow-sm">
               <CardHeader className="pb-2">
-                <CardTitle className="flex items-center justify-between text-base">
-                  Occupancy momentum
-                  <TrendingUp className="h-5 w-5 text-slate-400" />
-                </CardTitle>
-                <p className="text-[12px] text-slate-500">
-                  Top: average desk booking rate. Bottom: unique people active in the selected room context over time.
-                </p>
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      Occupancy momentum
+                      <TrendingUp className="h-5 w-5 text-slate-400" />
+                    </CardTitle>
+                    <p className="mt-2 text-[12px] text-slate-500">
+                      Top: average desk booking rate. Bottom: unique people active in the selected room context over time.
+                    </p>
+                  </div>
+                  <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 p-1 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+                    <button
+                      type="button"
+                      onClick={() => setTrendGranularity('monthly')}
+                      className={`rounded-full px-3 py-1.5 text-[11px] font-semibold transition ${
+                        trendGranularity === 'monthly'
+                          ? 'bg-white text-slate-950 shadow-[0_6px_18px_rgba(15,23,42,0.08)]'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      Monthly
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTrendGranularity('weekly')}
+                      className={`rounded-full px-3 py-1.5 text-[11px] font-semibold transition ${
+                        trendGranularity === 'weekly'
+                          ? 'bg-white text-slate-950 shadow-[0_6px_18px_rgba(15,23,42,0.08)]'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      Weekly
+                    </button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="rounded-[28px] border border-slate-100 bg-slate-50/40 p-4 md:p-5">
@@ -1008,7 +1090,7 @@ export default function Insight() {
                     <div>
                       <p className="text-[13px] font-medium text-slate-900">Desk booking rate</p>
                       <p className="text-[11px] text-slate-500">
-                        Occupied desk-days / total available desk-days in the selected scope.
+                        {trendWindowLabel}. Occupied desk-days / total available desk-days in the selected scope.
                       </p>
                     </div>
                     <Badge variant="secondary" className="rounded-full bg-blue-50 text-blue-700">
@@ -1017,7 +1099,7 @@ export default function Insight() {
                   </div>
                   <div className="h-[240px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={insight.monthlyTrend} margin={{ top: 18, right: 18, left: 12, bottom: 8 }}>
+                      <AreaChart data={trendData} margin={{ top: 18, right: 18, left: 12, bottom: 8 }}>
                         <defs>
                           <linearGradient id="bookingRateFill" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="0%" stopColor="#2563eb" stopOpacity={0.28} />
@@ -1071,7 +1153,7 @@ export default function Insight() {
                     <div>
                       <p className="text-[13px] font-medium text-slate-900">People connected to selected rooms</p>
                       <p className="text-[11px] text-slate-500">
-                        Unique active people across the selected rooms, limited by the selected people filter.
+                        {trendWindowLabel}. Unique active people across the selected rooms, limited by the selected people filter.
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1085,7 +1167,7 @@ export default function Insight() {
                   </div>
                   <div className="h-[240px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={insight.monthlyTrend} margin={{ top: 18, right: 18, left: 12, bottom: 8 }}>
+                      <AreaChart data={trendData} margin={{ top: 18, right: 18, left: 12, bottom: 8 }}>
                         <defs>
                           <linearGradient id="peopleCountFill" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="0%" stopColor="#10b981" stopOpacity={0.24} />
@@ -1271,28 +1353,38 @@ export default function Insight() {
                   </div>
                 </div>
 
-                <div className="grid flex-1 gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-                  <div className="rounded-[24px] border border-slate-100 bg-[linear-gradient(180deg,#f8fbff_0%,#ffffff_100%)] px-4 py-4 shadow-[0_14px_30px_rgba(15,23,42,0.04)] h-full flex flex-col justify-between">
-                    <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Peak day</p>
-                    <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
-                      {insight.busiestWeekday?.label || 'N/A'}
-                    </p>
-                    <p className="mt-2 text-[12px] text-slate-500">
-                      {insight.busiestWeekday?.averageDeskDays?.toFixed(1) || '0.0'} avg occupied desks
-                    </p>
-                    </div>
-                    <div className="mt-5 h-px bg-slate-100" />
-                    <div>
-                      <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Week average</p>
-                      <p className="mt-2 text-xl font-semibold tracking-tight text-slate-950">
-                        {insight.weekdayAverage.toFixed(1)}
+                <div className="grid flex-1 items-stretch gap-4 lg:grid-cols-[minmax(220px,0.72fr)_minmax(0,1.28fr)]">
+                  <div className="grid h-full gap-4">
+                    <div className="rounded-[24px] border border-slate-100 bg-[linear-gradient(180deg,#f8fbff_0%,#ffffff_100%)] px-4 py-4 shadow-[0_14px_30px_rgba(15,23,42,0.04)]">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Peak day</p>
+                      <div className="mt-4 flex items-end justify-between gap-3">
+                        <p className="text-[40px] font-semibold tracking-tight text-slate-950">
+                          {insight.busiestWeekday?.label || 'N/A'}
+                        </p>
+                        <Badge variant="secondary" className="rounded-full bg-slate-100 text-slate-700">
+                          {insight.busiestWeekday?.averageDeskDays?.toFixed(1) || '0.0'}
+                        </Badge>
+                      </div>
+                      <p className="mt-3 text-[12px] text-slate-500">
+                        Average occupied desks on the busiest weekday in the selected month.
                       </p>
-                      <p className="mt-2 text-[12px] text-slate-500">avg occupied desks across Mon-Fri</p>
+                    </div>
+
+                    <div className="rounded-[24px] border border-slate-100 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] px-4 py-4 shadow-[0_14px_30px_rgba(15,23,42,0.04)]">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Week average</p>
+                      <div className="mt-4 flex items-end justify-between gap-3">
+                        <p className="text-[34px] font-semibold tracking-tight text-slate-950">
+                          {insight.weekdayAverage.toFixed(1)}
+                        </p>
+                        <Badge variant="secondary" className="rounded-full bg-blue-50 text-blue-700">
+                          Mon-Fri
+                        </Badge>
+                      </div>
+                      <p className="mt-3 text-[12px] text-slate-500">Average occupied desks across all working weekdays.</p>
                     </div>
                   </div>
 
-                  <div className="rounded-[24px] border border-slate-100 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.08),_transparent_32%),linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] px-4 py-4 shadow-[0_18px_40px_rgba(15,23,42,0.05)] h-full">
+                  <div className="rounded-[24px] border border-slate-100 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.08),_transparent_32%),linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] px-4 py-4 shadow-[0_18px_40px_rgba(15,23,42,0.05)] h-full flex flex-col">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Monthly booking share</p>
@@ -1305,15 +1397,15 @@ export default function Insight() {
                       </Badge>
                     </div>
 
-                    <div className="mt-4 grid items-center gap-4 sm:grid-cols-[170px_minmax(0,1fr)]">
-                      <div className="relative h-[170px]">
+                    <div className="mt-4 grid flex-1 items-center gap-4 sm:grid-cols-[188px_minmax(0,1fr)]">
+                      <div className="relative mx-auto h-[184px] w-[184px]">
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
                             <Pie
                               data={insight.weekdayOccupancyBreakdown}
                               dataKey="value"
-                              innerRadius={50}
-                              outerRadius={72}
+                              innerRadius={56}
+                              outerRadius={82}
                               paddingAngle={3}
                               stroke="none"
                             >
@@ -1334,7 +1426,7 @@ export default function Insight() {
                       </div>
 
                       <div className="space-y-3">
-                        <div className="rounded-2xl border border-slate-100 bg-white/80 px-3 py-3">
+                        <div className="rounded-2xl border border-slate-100 bg-white/80 px-3 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.03)]">
                           <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2">
                               <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
@@ -1345,7 +1437,7 @@ export default function Insight() {
                             </span>
                           </div>
                         </div>
-                        <div className="rounded-2xl border border-slate-100 bg-white/80 px-3 py-3">
+                        <div className="rounded-2xl border border-slate-100 bg-white/80 px-3 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.03)]">
                           <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2">
                               <span className="h-2.5 w-2.5 rounded-full bg-slate-200" />
@@ -1356,7 +1448,19 @@ export default function Insight() {
                             </span>
                           </div>
                         </div>
-                        <p className="text-[11px] text-slate-500">
+                        <div className="rounded-2xl border border-slate-100 bg-white/75 px-3 py-3">
+                          <div className="flex items-center justify-between gap-3 text-[11px] text-slate-500">
+                            <span>Reserved share</span>
+                            <span className="font-semibold text-slate-900">{formatPercent(insight.monthlyOccupancyRate)}</span>
+                          </div>
+                          <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+                            <div
+                              className="h-full rounded-full bg-[linear-gradient(90deg,#2563eb_0%,#60a5fa_100%)]"
+                              style={{ width: `${Math.min(insight.monthlyOccupancyRate, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                        <p className="text-[11px] leading-5 text-slate-500">
                           {compactNumber(insight.roomDeskDaysInMonth)} reserved desk-days out of {compactNumber(insight.totalPossibleDeskDays)} possible.
                         </p>
                       </div>
