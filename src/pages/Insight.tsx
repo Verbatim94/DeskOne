@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
 import { endOfMonth, format, parseISO, startOfMonth, subMonths } from 'date-fns';
 import { Activity, CalendarDays, ChevronDown, Flame, Gauge, RefreshCw, ShieldCheck, SlidersHorizontal, TrendingDown, TrendingUp } from 'lucide-react';
 
@@ -1135,7 +1135,7 @@ export default function Insight() {
           </div>
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(280px,0.9fr)]">
-            <Card className="min-w-0 border-slate-200 bg-white shadow-sm">
+            <Card className="min-w-0 border-slate-200 bg-white shadow-sm h-full flex flex-col">
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center justify-between text-base">
                   Weekday demand
@@ -1145,7 +1145,7 @@ export default function Insight() {
                   Average occupied desks by weekday for {insight.selectedMonthLabel.toLowerCase()}, excluding weekends and Italian holidays.
                 </p>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="flex flex-1 flex-col space-y-4">
                 <div className="rounded-[28px] border border-slate-100 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-4 shadow-[0_18px_40px_rgba(15,23,42,0.05)]">
                   <div className="h-[290px]">
                     <ResponsiveContainer width="100%" height="100%">
@@ -1179,14 +1179,23 @@ export default function Insight() {
                             boxShadow: '0 22px 60px rgba(37, 99, 235, 0.12)',
                           }}
                         />
-                        <Bar dataKey="averageDeskDays" radius={[14, 14, 6, 6]} fill="url(#weekdayDemandFill)" />
+                        <Bar dataKey="averageDeskDays" radius={[14, 14, 6, 6]} fill="url(#weekdayDemandFill)">
+                          <LabelList
+                            dataKey="averageDeskDays"
+                            position="top"
+                            offset={10}
+                            formatter={(value: number) => value.toFixed(1)}
+                            className="fill-slate-500 text-[11px] font-medium"
+                          />
+                        </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
 
-                <div className="grid gap-4 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-                  <div className="rounded-[24px] border border-slate-100 bg-[linear-gradient(180deg,#f8fbff_0%,#ffffff_100%)] px-4 py-4 shadow-[0_14px_30px_rgba(15,23,42,0.04)]">
+                <div className="grid flex-1 gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+                  <div className="rounded-[24px] border border-slate-100 bg-[linear-gradient(180deg,#f8fbff_0%,#ffffff_100%)] px-4 py-4 shadow-[0_14px_30px_rgba(15,23,42,0.04)] h-full flex flex-col justify-between">
+                    <div>
                     <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Peak day</p>
                     <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
                       {insight.busiestWeekday?.label || 'N/A'}
@@ -1194,15 +1203,18 @@ export default function Insight() {
                     <p className="mt-2 text-[12px] text-slate-500">
                       {insight.busiestWeekday?.averageDeskDays?.toFixed(1) || '0.0'} avg occupied desks
                     </p>
+                    </div>
                     <div className="mt-5 h-px bg-slate-100" />
-                    <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Week average</p>
-                    <p className="mt-2 text-xl font-semibold tracking-tight text-slate-950">
-                      {insight.weekdayAverage.toFixed(1)}
-                    </p>
-                    <p className="mt-2 text-[12px] text-slate-500">avg occupied desks across Mon-Fri</p>
+                    <div>
+                      <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Week average</p>
+                      <p className="mt-2 text-xl font-semibold tracking-tight text-slate-950">
+                        {insight.weekdayAverage.toFixed(1)}
+                      </p>
+                      <p className="mt-2 text-[12px] text-slate-500">avg occupied desks across Mon-Fri</p>
+                    </div>
                   </div>
 
-                  <div className="rounded-[24px] border border-slate-100 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.08),_transparent_32%),linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] px-4 py-4 shadow-[0_18px_40px_rgba(15,23,42,0.05)]">
+                  <div className="rounded-[24px] border border-slate-100 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.08),_transparent_32%),linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] px-4 py-4 shadow-[0_18px_40px_rgba(15,23,42,0.05)] h-full">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Monthly booking share</p>
@@ -1215,15 +1227,15 @@ export default function Insight() {
                       </Badge>
                     </div>
 
-                    <div className="mt-4 grid items-center gap-4 sm:grid-cols-[150px_minmax(0,1fr)]">
-                      <div className="relative h-[150px]">
+                    <div className="mt-4 grid items-center gap-4 sm:grid-cols-[170px_minmax(0,1fr)]">
+                      <div className="relative h-[170px]">
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
                             <Pie
                               data={insight.weekdayOccupancyBreakdown}
                               dataKey="value"
-                              innerRadius={44}
-                              outerRadius={64}
+                              innerRadius={50}
+                              outerRadius={72}
                               paddingAngle={3}
                               stroke="none"
                             >
@@ -1409,7 +1421,7 @@ export default function Insight() {
             </div>
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+          <div className="grid gap-4 xl:grid-cols-[minmax(380px,0.78fr)_minmax(0,1.22fr)]">
             <Card className="min-w-0 border-slate-200 bg-white shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center justify-between text-base">
@@ -1422,7 +1434,7 @@ export default function Insight() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="mx-auto max-w-[520px] rounded-[24px] border border-slate-100 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-3 shadow-[0_18px_40px_rgba(15,23,42,0.06)] sm:p-4">
+                  <div className="mx-auto w-full max-w-[488px] rounded-[24px] border border-slate-100 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-3 shadow-[0_18px_40px_rgba(15,23,42,0.06)] sm:max-w-[510px] sm:p-4 xl:max-w-[500px]">
                     <div className="grid grid-cols-5 gap-2 sm:gap-2.5">
                       {['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((label) => (
                         <div
@@ -1498,9 +1510,9 @@ export default function Insight() {
                 </p>
               </CardHeader>
               <CardContent className="space-y-5">
-                <div className="h-[360px]">
+                <div className="h-[388px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <ScatterChart margin={{ top: 16, right: 24, left: 12, bottom: 18 }}>
+                    <ScatterChart margin={{ top: 18, right: 38, left: 18, bottom: 24 }}>
                       <CartesianGrid strokeDasharray="4 6" stroke="#dbe7f5" />
                       <XAxis
                         type="number"
@@ -1510,7 +1522,7 @@ export default function Insight() {
                         tickLine={false}
                         axisLine={false}
                         domain={[0, 100]}
-                        tickMargin={12}
+                        tickMargin={18}
                         tick={{ fill: '#64748b', fontSize: 12 }}
                       />
                       <YAxis
@@ -1520,7 +1532,7 @@ export default function Insight() {
                         tickLine={false}
                         axisLine={false}
                         allowDecimals={false}
-                        tickMargin={12}
+                        tickMargin={16}
                         tick={{ fill: '#64748b', fontSize: 12 }}
                       />
                       <ZAxis type="number" dataKey="z" range={[180, 1000]} name="Desks" />
