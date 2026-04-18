@@ -1353,8 +1353,8 @@ export default function Insight() {
                   </div>
                 </div>
 
-                <div className="grid flex-1 items-stretch gap-4 lg:grid-cols-[minmax(220px,0.72fr)_minmax(0,1.28fr)]">
-                  <div className="grid h-full gap-4">
+                <div className="grid flex-1 items-stretch gap-4 2xl:grid-cols-[minmax(220px,0.72fr)_minmax(0,1.28fr)]">
+                  <div className="grid h-full gap-4 md:grid-cols-2 2xl:grid-cols-1">
                     <div className="rounded-[24px] border border-slate-100 bg-[linear-gradient(180deg,#f8fbff_0%,#ffffff_100%)] px-4 py-4 shadow-[0_14px_30px_rgba(15,23,42,0.04)]">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Peak day</p>
                       <div className="mt-4 flex items-end justify-between gap-3">
@@ -1384,9 +1384,9 @@ export default function Insight() {
                     </div>
                   </div>
 
-                  <div className="rounded-[24px] border border-slate-100 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.08),_transparent_32%),linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] px-4 py-4 shadow-[0_18px_40px_rgba(15,23,42,0.05)] h-full flex flex-col">
+                  <div className="min-w-0 rounded-[24px] border border-slate-100 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.08),_transparent_32%),linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] px-4 py-4 shadow-[0_18px_40px_rgba(15,23,42,0.05)] h-full flex flex-col">
                     <div className="flex items-start justify-between gap-3">
-                      <div>
+                      <div className="min-w-0">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Monthly booking share</p>
                         <p className="mt-2 text-[12px] text-slate-500">
                           Reserved desk-days versus total possible desk-days in the selected scope.
@@ -1397,8 +1397,8 @@ export default function Insight() {
                       </Badge>
                     </div>
 
-                    <div className="mt-4 grid flex-1 items-center gap-4 sm:grid-cols-[188px_minmax(0,1fr)]">
-                      <div className="relative mx-auto h-[184px] w-[184px]">
+                    <div className="mt-4 flex flex-1 flex-col gap-4">
+                      <div className="relative mx-auto h-[184px] w-[184px] shrink-0">
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
                             <Pie
@@ -1425,8 +1425,8 @@ export default function Insight() {
                         </div>
                       </div>
 
-                      <div className="space-y-3">
-                        <div className="rounded-2xl border border-slate-100 bg-white/80 px-3 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.03)]">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="min-w-0 rounded-2xl border border-slate-100 bg-white/80 px-3 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.03)]">
                           <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2">
                               <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
@@ -1437,7 +1437,7 @@ export default function Insight() {
                             </span>
                           </div>
                         </div>
-                        <div className="rounded-2xl border border-slate-100 bg-white/80 px-3 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.03)]">
+                        <div className="min-w-0 rounded-2xl border border-slate-100 bg-white/80 px-3 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.03)]">
                           <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2">
                               <span className="h-2.5 w-2.5 rounded-full bg-slate-200" />
@@ -1448,19 +1448,19 @@ export default function Insight() {
                             </span>
                           </div>
                         </div>
-                        <div className="rounded-2xl border border-slate-100 bg-white/75 px-3 py-3">
-                          <div className="flex items-center justify-between gap-3 text-[11px] text-slate-500">
-                            <span>Reserved share</span>
-                            <span className="font-semibold text-slate-900">{formatPercent(insight.monthlyOccupancyRate)}</span>
-                          </div>
-                          <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
-                            <div
-                              className="h-full rounded-full bg-[linear-gradient(90deg,#2563eb_0%,#60a5fa_100%)]"
-                              style={{ width: `${Math.min(insight.monthlyOccupancyRate, 100)}%` }}
-                            />
-                          </div>
+                      </div>
+                      <div className="rounded-2xl border border-slate-100 bg-white/75 px-3 py-3">
+                        <div className="flex items-center justify-between gap-3 text-[11px] text-slate-500">
+                          <span>Reserved share</span>
+                          <span className="font-semibold text-slate-900">{formatPercent(insight.monthlyOccupancyRate)}</span>
                         </div>
-                        <p className="text-[11px] leading-5 text-slate-500">
+                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+                          <div
+                            className="h-full rounded-full bg-[linear-gradient(90deg,#2563eb_0%,#60a5fa_100%)]"
+                            style={{ width: `${Math.min(insight.monthlyOccupancyRate, 100)}%` }}
+                          />
+                        </div>
+                        <p className="mt-3 text-[11px] leading-5 text-slate-500">
                           {compactNumber(insight.roomDeskDaysInMonth)} reserved desk-days out of {compactNumber(insight.totalPossibleDeskDays)} possible.
                         </p>
                       </div>
