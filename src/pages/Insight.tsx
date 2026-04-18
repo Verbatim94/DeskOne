@@ -519,6 +519,76 @@ export default function Insight() {
       .sort((a, b) => a.utilization - b.utilization)
       .slice(0, 5);
 
+    const roomAdoptionBookedUsersMap = new Map<string, Set<string>>();
+    selectedMonthRoomRows.forEach((row) => {
+      if (!row.user_id) return;
+      if (!roomAdoptionBookedUsersMap.has(row.room_id)) {
+        roomAdoptionBookedUsersMap.set(row.room_id, new Set());
+      }
+      roomAdoptionBookedUsersMap.get(row.room_id)?.add(row.user_id);
+    });
+
+    const roomEligibleUsersMap = new Map<string, Set<string>>();
+    (data?.roomAccess || []).forEach((entry) => {
+      if (!roomIdSet.has(entry.room_id)) return;
+      if (!roomEligibleUsersMap.has(entry.room_id)) {
+        roomEligibleUsersMap.set(entry.room_id, new Set());
+      }
+      roomEligibleUsersMap.get(entry.room_id)?.add(entry.user_id);
+    });
+
+    const roomAdoptionSummaries = selectedRooms
+      .map((room) => {
+        const bookedUsers = roomAdoptionBookedUsersMap.get(room.id)?.size || 0;
+        const eligibleUsers = roomEligibleUsersMap.get(room.id)?.size || 0;
+        return {
+          id: room.id,
+          name: room.name,
+          bookedUsers,
+          eligibleUsers,
+          adoptionRate: eligibleUsers > 0 ? (bookedUsers / eligibleUsers) * 100 : 0,
+        };
+      })
+      .sort((a, b) => b.adoptionRate - a.adoptionRate);
+
+    const roomScopeUniqueBookers = new Set(selectedMonthRoomRows.map((row) => row.user_id).filter(Boolean)).size;
+    const adoptionCoverageRate = eligiblePeopleCount > 0 ? (roomScopeUniqueBookers / eligiblePeopleCount) * 100 : 0;
+    const inactiveEligiblePeople = Math.max(eligiblePeopleCount - roomScopeUniqueBookers, 0);
+
+    const deskReservedDaysMap = new Map<string, number>();
+    selectedMonthRoomRows.forEach((row) => {
+      const deskIdentity = row.desk_id || row.desk_label || row.reservation_id;
+      const key = `${row.room_id}-${deskIdentity}`;
+      deskReservedDaysMap.set(key, (deskReservedDaysMap.get(key) || 0) + 1);
+    });
+
+    const deskMonthlySummaries = selectedRooms
+      .flatMap((room) =>
+        room.desks.map((desk) => {
+          const deskIdentity = desk.id || desk.label;
+          const key = `${room.id}-${deskIdentity}`;
+          const reservedDays = deskReservedDaysMap.get(key) || 0;
+          return {
+            id: key,
+            roomId: room.id,
+            roomName: room.name,
+            label: desk.label,
+            reservedDays,
+            utilization: elapsedWindowDays > 0 ? (reservedDays / elapsedWindowDays) * 100 : 0,
+          };
+        }),
+      )
+      .sort((a, b) => {
+        if (a.utilization !== b.utilization) return a.utilization - b.utilization;
+        if (a.reservedDays !== b.reservedDays) return a.reservedDays - b.reservedDays;
+        return a.label.localeCompare(b.label);
+      });
+
+    const coldDeskThreshold = 20;
+    const idleDeskCount = deskMonthlySummaries.filter((desk) => desk.reservedDays === 0).length;
+    const coldDeskCount = deskMonthlySummaries.filter((desk) => desk.utilization < coldDeskThreshold).length;
+    const coldDeskLeaders = deskMonthlySummaries.slice(0, 6);
+
     const dailyLoadMap = new Map<string, number>();
     selectedMonthRoomRows.forEach((row) => {
       dailyLoadMap.set(row.occupancy_date, (dailyLoadMap.get(row.occupancy_date) || 0) + 1);
@@ -627,6 +697,14 @@ export default function Insight() {
       peakDay,
       roomMonthlySummaries,
       primaryRoom,
+      roomScopeUniqueBookers,
+      adoptionCoverageRate,
+      inactiveEligiblePeople,
+      roomAdoptionSummaries,
+      coldDeskThreshold,
+      coldDeskCount,
+      idleDeskCount,
+      coldDeskLeaders,
       averageDailyDemand,
       workingCalendarWeeks,
       roomOpportunityMap,
@@ -1591,6 +1669,165 @@ export default function Insight() {
                         </div>
                       ))}
                     </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-2">
+            <Card className="min-w-0 border-slate-200 bg-white shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center justify-between text-base">
+                  Adoption coverage
+                  <ShieldCheck className="h-5 w-5 text-slate-400" />
+                </CardTitle>
+                <p className="text-[12px] text-slate-500">
+                  Eligible people with at least one reserved desk-day in the selected rooms during {insight.selectedMonthLabel.toLowerCase()}.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="rounded-[28px] border border-slate-100 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.08),_transparent_32%),linear-gradient(180deg,#ffffff_0%,#f7fffb_100%)] p-5 shadow-[0_18px_40px_rgba(15,23,42,0.05)]">
+                  <div className="flex items-end justify-between gap-4">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Eligible people reached</p>
+                      <p className="mt-2 text-[34px] font-semibold tracking-tight text-slate-950">
+                        {formatPercent(insight.adoptionCoverageRate)}
+                      </p>
+                      <p className="mt-2 text-[12px] text-slate-500">
+                        {insight.roomScopeUniqueBookers} of {insight.eligiblePeopleCount} eligible people booked at least once.
+                      </p>
+                    </div>
+                    <Badge variant="secondary" className="rounded-full bg-emerald-50 text-emerald-700">
+                      Gap {insight.inactiveEligiblePeople}
+                    </Badge>
+                  </div>
+
+                  <div className="mt-5 h-2.5 overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className="h-full rounded-full bg-[linear-gradient(90deg,#10b981_0%,#2563eb_100%)]"
+                      style={{ width: `${Math.min(insight.adoptionCoverageRate, 100)}%` }}
+                    />
+                  </div>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-2xl border border-slate-100 bg-white/85 px-3 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Active</p>
+                      <p className="mt-2 text-lg font-semibold text-slate-950">{insight.roomScopeUniqueBookers}</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-100 bg-white/85 px-3 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Eligible</p>
+                      <p className="mt-2 text-lg font-semibold text-slate-950">{insight.eligiblePeopleCount}</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-100 bg-white/85 px-3 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Inactive</p>
+                      <p className="mt-2 text-lg font-semibold text-slate-950">{insight.inactiveEligiblePeople}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-[24px] border border-slate-100 bg-slate-50/70 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Room reach</p>
+                    <span className="text-[11px] text-slate-500">booked users / eligible users</span>
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    {insight.roomAdoptionSummaries.slice(0, 4).map((room) => (
+                      <div key={room.id} className="rounded-2xl border border-slate-100 bg-white/90 px-3 py-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-[12px] font-medium text-slate-900">{room.name}</p>
+                            <p className="mt-1 text-[11px] text-slate-500">
+                              {room.bookedUsers} of {room.eligibleUsers} eligible people
+                            </p>
+                          </div>
+                          <Badge variant="secondary" className="rounded-full bg-emerald-50 text-emerald-700">
+                            {formatPercent(room.adoptionRate)}
+                          </Badge>
+                        </div>
+                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+                          <div
+                            className="h-full rounded-full bg-[linear-gradient(90deg,#34d399_0%,#3b82f6_100%)]"
+                            style={{ width: `${Math.min(room.adoptionRate, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="min-w-0 border-slate-200 bg-white shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center justify-between text-base">
+                  Cold desks
+                  <Activity className="h-5 w-5 text-slate-400" />
+                </CardTitle>
+                <p className="text-[12px] text-slate-500">
+                  Desks with the weakest monthly usage in the selected room context, measured on Italian working days.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="rounded-[28px] border border-slate-100 bg-[radial-gradient(circle_at_top_left,_rgba(139,92,246,0.08),_transparent_30%),linear-gradient(180deg,#ffffff_0%,#fbfaff_100%)] p-5 shadow-[0_18px_40px_rgba(15,23,42,0.05)]">
+                  <div className="flex items-end justify-between gap-4">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Underused footprint</p>
+                      <p className="mt-2 text-[34px] font-semibold tracking-tight text-slate-950">{insight.coldDeskCount}</p>
+                      <p className="mt-2 text-[12px] text-slate-500">
+                        Desks below {insight.coldDeskThreshold}% monthly utilization across the selected rooms.
+                      </p>
+                    </div>
+                    <Badge variant="secondary" className="rounded-full bg-violet-50 text-violet-700">
+                      {insight.idleDeskCount} idle
+                    </Badge>
+                  </div>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-2xl border border-slate-100 bg-white/85 px-3 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Tracked desks</p>
+                      <p className="mt-2 text-lg font-semibold text-slate-950">{insight.totalDesks}</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-100 bg-white/85 px-3 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Cold threshold</p>
+                      <p className="mt-2 text-lg font-semibold text-slate-950">{insight.coldDeskThreshold}%</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-100 bg-white/85 px-3 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Idle desks</p>
+                      <p className="mt-2 text-lg font-semibold text-slate-950">{insight.idleDeskCount}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-[24px] border border-slate-100 bg-slate-50/70 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Most underused desks</p>
+                    <span className="text-[11px] text-slate-500">reserved days / working days</span>
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    {insight.coldDeskLeaders.map((desk) => (
+                      <div key={desk.id} className="rounded-2xl border border-slate-100 bg-white/90 px-3 py-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-[12px] font-medium text-slate-900">{desk.label}</p>
+                            <p className="mt-1 truncate text-[11px] text-slate-500">{desk.roomName}</p>
+                          </div>
+                          <Badge variant="secondary" className="rounded-full bg-white text-slate-700">
+                            {formatPercent(desk.utilization)}
+                          </Badge>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between gap-3 text-[11px] text-slate-500">
+                          <span>{desk.reservedDays} / {insight.businessDaysInMonth} days</span>
+                          <span>{desk.reservedDays === 0 ? 'Never used' : 'Low usage'}</span>
+                        </div>
+                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+                          <div
+                            className="h-full rounded-full bg-[linear-gradient(90deg,#c4b5fd_0%,#8b5cf6_100%)]"
+                            style={{ width: `${Math.max(Math.min(desk.utilization, 100), desk.reservedDays > 0 ? 4 : 0)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </CardContent>
