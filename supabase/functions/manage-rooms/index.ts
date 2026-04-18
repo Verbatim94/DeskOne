@@ -561,6 +561,49 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case 'list_all_room_access': {
+        if (user.role !== 'admin' && user.role !== 'super_admin') {
+          return new Response(
+            JSON.stringify({ error: 'Only admins can view room access' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { data: accessRows, error: accessError } = await supabase
+          .from('room_access')
+          .select('room_id, user_id');
+
+        if (accessError) {
+          result = { data: [], error: accessError };
+          break;
+        }
+
+        const uniqueUserIds = Array.from(new Set((accessRows || []).map((row: any) => row.user_id).filter(Boolean)));
+
+        if (uniqueUserIds.length === 0) {
+          result = { data: [], error: null };
+          break;
+        }
+
+        const { data: activeUsers, error: activeUsersError } = await supabase
+          .from('users')
+          .select('id')
+          .in('id', uniqueUserIds)
+          .eq('is_active', true);
+
+        if (activeUsersError) {
+          result = { data: [], error: activeUsersError };
+          break;
+        }
+
+        const activeUserSet = new Set((activeUsers || []).map((row: any) => row.id));
+        result = {
+          data: (accessRows || []).filter((row: any) => activeUserSet.has(row.user_id)),
+          error: null,
+        };
+        break;
+      }
+
 
       default:
         return new Response(

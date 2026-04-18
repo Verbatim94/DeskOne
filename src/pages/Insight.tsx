@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from 'recharts';
 import { endOfMonth, format, parseISO, startOfMonth, subMonths } from 'date-fns';
 import { Activity, CalendarDays, ChevronDown, Flame, Gauge, RefreshCw, ShieldCheck, SlidersHorizontal, TrendingDown, TrendingUp } from 'lucide-react';
 
@@ -64,6 +64,10 @@ interface DailyOccupancyRow extends RawOccupancyRow {
 type InsightPayload = {
   rooms: RoomStructure[];
   rows: RawOccupancyRow[];
+  roomAccess: Array<{
+    room_id: string;
+    user_id: string;
+  }>;
   generatedAt: string;
 };
 
@@ -257,9 +261,13 @@ export default function Insight() {
       const rangeStart = desiredRangeStart < BUSINESS_CALENDAR_START ? BUSINESS_CALENDAR_START : desiredRangeStart;
       const rangeEnd = desiredRangeEnd > BUSINESS_CALENDAR_END ? BUSINESS_CALENDAR_END : desiredRangeEnd;
 
-      const [roomsResponse, reportResponse] = await Promise.all([
+      const [roomsResponse, accessResponse, reportResponse] = await Promise.all([
         supabase.functions.invoke('manage-rooms', {
           body: { operation: 'list_all_desks' },
+          headers: { 'x-session-token': session.token },
+        }),
+        supabase.functions.invoke('manage-rooms', {
+          body: { operation: 'list_all_room_access' },
           headers: { 'x-session-token': session.token },
         }),
         supabase.functions.invoke('manage-reservations', {
@@ -276,11 +284,13 @@ export default function Insight() {
       ]);
 
       if (roomsResponse.error) throw roomsResponse.error;
+      if (accessResponse.error) throw accessResponse.error;
       if (reportResponse.error) throw reportResponse.error;
 
       return {
         rooms: roomsResponse.data || [],
         rows: reportResponse.data?.rows || [],
+        roomAccess: accessResponse.data || [],
         generatedAt: reportResponse.data?.generated_at || new Date().toISOString(),
       };
     },
@@ -333,6 +343,12 @@ export default function Insight() {
     const userIdSet = new Set(selectedUserIds);
     const selectedRooms = rooms.filter((room) => roomIdSet.has(room.id));
     const selectedTotalDesks = selectedRooms.reduce((sum, room) => sum + room.desks.length, 0);
+    const eligibleUsersForSelectedRooms = new Set(
+      (data?.roomAccess || [])
+        .filter((entry) => roomIdSet.has(entry.room_id))
+        .map((entry) => entry.user_id),
+    );
+    const eligiblePeopleCount = eligibleUsersForSelectedRooms.size;
     const roomFilteredRows = uniqueRows.filter((row) => roomIdSet.has(row.room_id));
     const peopleFilteredRows = roomFilteredRows.filter((row) => userIdSet.has(row.user_id));
 
@@ -408,6 +424,7 @@ export default function Insight() {
         label: format(month.date, 'MMM'),
         reservationRate: Math.round(monthMetrics.reservationRate * 10) / 10,
         users: monthMetrics.uniquePeople,
+        eligibleUsers: eligiblePeopleCount,
       };
     });
 
@@ -570,6 +587,20 @@ export default function Insight() {
       deskDays: room.deskDays,
       fill: getRoomBubbleColor(room.fixedShare, room.utilization),
     }));
+    const totalPossibleDeskDays = selectedTotalDesks * elapsedWindowDays;
+    const openDeskDays = Math.max(totalPossibleDeskDays - selectedMonthRoomRows.length, 0);
+    const weekdayOccupancyBreakdown = [
+      {
+        name: 'Reserved',
+        value: selectedMonthRoomRows.length,
+        fill: '#2563eb',
+      },
+      {
+        name: 'Open',
+        value: openDeskDays,
+        fill: '#e2e8f0',
+      },
+    ];
 
     return {
       totalDesks: selectedTotalDesks,
@@ -581,6 +612,8 @@ export default function Insight() {
       averagePersonOccupancyPercentage,
       averageBookedDaysPerPerson,
       roomDeskDaysInMonth: selectedMonthRoomRows.length,
+      totalPossibleDeskDays,
+      weekdayOccupancyBreakdown,
       peopleDeskDaysInMonth: selectedMonthPeopleRows.length,
       pressureRooms,
       activeRooms,
@@ -602,10 +635,11 @@ export default function Insight() {
       selectedEntityLabel,
       roomsCount: selectedRooms.length,
       peopleCount: selectedUserIds.length,
+      eligiblePeopleCount,
       hasRows: selectedMonthRoomRows.length > 0,
       businessDaysInMonth: elapsedWindowDays,
     };
-  }, [data?.generatedAt, data?.rooms, data?.rows, selectedMonth, selectedRoomIds, selectedUserIds, trendMonths]);
+  }, [data?.generatedAt, data?.roomAccess, data?.rooms, data?.rows, selectedMonth, selectedRoomIds, selectedUserIds, trendMonths]);
 
   if (!user) return null;
 
@@ -962,9 +996,14 @@ export default function Insight() {
                         Unique active people across the selected rooms, limited by the selected people filter.
                       </p>
                     </div>
-                    <Badge variant="secondary" className="rounded-full bg-emerald-50 text-emerald-700">
-                      Count
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="rounded-full bg-emerald-50 text-emerald-700">
+                        Count
+                      </Badge>
+                      <Badge variant="secondary" className="rounded-full bg-slate-100 text-slate-700">
+                        Eligible {insight.eligiblePeopleCount}
+                      </Badge>
+                    </div>
                   </div>
                   <div className="h-[240px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
@@ -988,10 +1027,22 @@ export default function Insight() {
                           tickLine={false}
                           axisLine={false}
                           allowDecimals={false}
-                          domain={[0, 100]}
-                          ticks={[0, 20, 40, 60, 80, 100]}
+                          domain={[0, Math.max(100, Math.ceil((insight.eligiblePeopleCount || 0) / 10) * 10)]}
                           tickMargin={12}
                           tick={{ fill: '#64748b', fontSize: 12 }}
+                        />
+                        <ReferenceLine
+                          y={insight.eligiblePeopleCount}
+                          stroke="#94a3b8"
+                          strokeWidth={1}
+                          strokeDasharray="3 6"
+                          ifOverflow="extendDomain"
+                          label={{
+                            value: 'Eligible',
+                            position: 'insideTopRight',
+                            fill: '#94a3b8',
+                            fontSize: 11,
+                          }}
                         />
                         <Tooltip
                           formatter={(value: number) => [value, 'Unique people']}
@@ -1095,27 +1146,8 @@ export default function Insight() {
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-[24px] border border-slate-100 bg-[linear-gradient(180deg,#f8fbff_0%,#ffffff_100%)] px-4 py-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Peak day</p>
-                    <p className="mt-2 text-lg font-semibold tracking-tight text-slate-950">
-                      {insight.busiestWeekday?.label || 'N/A'}
-                    </p>
-                    <p className="mt-1 text-[11px] text-slate-500">
-                      {insight.busiestWeekday?.averageDeskDays?.toFixed(1) || '0.0'} avg occupied desks
-                    </p>
-                  </div>
-                  <div className="rounded-[24px] border border-slate-100 bg-[linear-gradient(180deg,#f8fbff_0%,#ffffff_100%)] px-4 py-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Week average</p>
-                    <p className="mt-2 text-lg font-semibold tracking-tight text-slate-950">
-                      {insight.weekdayAverage.toFixed(1)}
-                    </p>
-                    <p className="mt-1 text-[11px] text-slate-500">avg occupied desks across Mon-Fri</p>
-                  </div>
-                </div>
-
                 <div className="rounded-[28px] border border-slate-100 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-4 shadow-[0_18px_40px_rgba(15,23,42,0.05)]">
-                  <div className="h-[320px]">
+                  <div className="h-[290px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={insight.weekdayData} barSize={56} margin={{ top: 8, right: 8, left: 4, bottom: 8 }}>
                         <defs>
@@ -1150,6 +1182,95 @@ export default function Insight() {
                         <Bar dataKey="averageDeskDays" radius={[14, 14, 6, 6]} fill="url(#weekdayDemandFill)" />
                       </BarChart>
                     </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+                  <div className="rounded-[24px] border border-slate-100 bg-[linear-gradient(180deg,#f8fbff_0%,#ffffff_100%)] px-4 py-4 shadow-[0_14px_30px_rgba(15,23,42,0.04)]">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Peak day</p>
+                    <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
+                      {insight.busiestWeekday?.label || 'N/A'}
+                    </p>
+                    <p className="mt-2 text-[12px] text-slate-500">
+                      {insight.busiestWeekday?.averageDeskDays?.toFixed(1) || '0.0'} avg occupied desks
+                    </p>
+                    <div className="mt-5 h-px bg-slate-100" />
+                    <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Week average</p>
+                    <p className="mt-2 text-xl font-semibold tracking-tight text-slate-950">
+                      {insight.weekdayAverage.toFixed(1)}
+                    </p>
+                    <p className="mt-2 text-[12px] text-slate-500">avg occupied desks across Mon-Fri</p>
+                  </div>
+
+                  <div className="rounded-[24px] border border-slate-100 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.08),_transparent_32%),linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] px-4 py-4 shadow-[0_18px_40px_rgba(15,23,42,0.05)]">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Monthly booking share</p>
+                        <p className="mt-2 text-[12px] text-slate-500">
+                          Reserved desk-days versus total possible desk-days in the selected scope.
+                        </p>
+                      </div>
+                      <Badge variant="secondary" className="rounded-full bg-blue-50 text-blue-700">
+                        {formatPercent(insight.monthlyOccupancyRate)}
+                      </Badge>
+                    </div>
+
+                    <div className="mt-4 grid items-center gap-4 sm:grid-cols-[150px_minmax(0,1fr)]">
+                      <div className="relative h-[150px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={insight.weekdayOccupancyBreakdown}
+                              dataKey="value"
+                              innerRadius={44}
+                              outerRadius={64}
+                              paddingAngle={3}
+                              stroke="none"
+                            >
+                              {insight.weekdayOccupancyBreakdown.map((entry) => (
+                                <Cell key={entry.name} fill={entry.fill} />
+                              ))}
+                            </Pie>
+                          </PieChart>
+                        </ResponsiveContainer>
+                        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                          <span className="text-[24px] font-semibold tracking-tight text-slate-950">
+                            {formatPercent(insight.monthlyOccupancyRate)}
+                          </span>
+                          <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">
+                            Reserved
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="rounded-2xl border border-slate-100 bg-white/80 px-3 py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                              <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
+                              <span className="text-[11px] font-medium text-slate-600">Reserved</span>
+                            </div>
+                            <span className="text-[12px] font-semibold text-slate-900">
+                              {compactNumber(insight.roomDeskDaysInMonth)}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-slate-100 bg-white/80 px-3 py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                              <span className="h-2.5 w-2.5 rounded-full bg-slate-200" />
+                              <span className="text-[11px] font-medium text-slate-600">Open</span>
+                            </div>
+                            <span className="text-[12px] font-semibold text-slate-900">
+                              {compactNumber(Math.max(insight.totalPossibleDeskDays - insight.roomDeskDaysInMonth, 0))}
+                            </span>
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          {compactNumber(insight.roomDeskDaysInMonth)} reserved desk-days out of {compactNumber(insight.totalPossibleDeskDays)} possible.
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </CardContent>
