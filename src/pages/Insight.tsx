@@ -79,6 +79,12 @@ function compactNumber(value: number) {
   return new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
 }
 
+function formatSignedNumber(value: number, maximumFractionDigits = 0) {
+  const sign = value > 0 ? '+' : value < 0 ? '−' : '';
+  const absolute = Math.abs(value);
+  return `${sign}${absolute.toLocaleString('en-US', { maximumFractionDigits, minimumFractionDigits: maximumFractionDigits > 0 ? maximumFractionDigits : 0 })}`;
+}
+
 function buildDailyUniqueRows(rows: DailyOccupancyRow[]) {
   const uniqueMap = new Map<string, DailyOccupancyRow>();
 
@@ -188,20 +194,34 @@ function InsightMetric({
   value,
   detail,
   accent,
+  delta,
+  deltaCaption,
 }: {
   label: string;
   value: string;
   detail: string;
   accent: string;
+  delta?: string | null;
+  deltaCaption?: string | null;
 }) {
   return (
     <Card className="overflow-hidden border border-slate-200/80 bg-[linear-gradient(180deg,#ffffff_0%,#fbfdff_100%)] shadow-[0_18px_40px_rgba(15,23,42,0.06)]">
       <CardContent className="p-5">
-        <div className={`mb-4 inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] ${accent}`}>
-          {label}
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className={`inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] ${accent}`}>
+            {label}
+          </div>
+          {delta ? (
+            <div className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-medium tracking-[0.08em] text-slate-600">
+              {delta}
+            </div>
+          ) : null}
         </div>
         <div className="text-[28px] font-semibold tracking-tight text-slate-950 md:text-[30px]">{value}</div>
         <p className="mt-2 max-w-xs text-[12px] leading-5 text-slate-500">{detail}</p>
+        {deltaCaption ? (
+          <p className="mt-3 text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">{deltaCaption}</p>
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -375,6 +395,10 @@ export default function Insight() {
     const workingDaysInMonth = getBusinessDaysBetween(startOfMonth(selectedMonthDate), endOfMonth(selectedMonthDate));
     const elapsedWindowDays = workingDaysInMonth.length;
     const uniqueBookers = new Set(selectedMonthPeopleRows.map((row) => row.user_id).filter(Boolean)).size;
+    const previousMonthDate = startOfMonth(subMonths(selectedMonthDate, 1));
+    const hasPreviousMonth = previousMonthDate >= BUSINESS_CALENDAR_START;
+    const previousMonthValue = format(previousMonthDate, 'yyyy-MM');
+    const previousMonthLabel = format(previousMonthDate, 'MMM');
 
     const computeContextMetrics = (scopeRows: DailyOccupancyRow[], rangeStart: Date, rangeEnd: Date) => {
       const businessDays = getBusinessDaysBetween(rangeStart, rangeEnd);
@@ -542,6 +566,35 @@ export default function Insight() {
     const averageOpenDesks = Math.max(selectedTotalDesks - averageReservedDesks, 0);
     const monthlyOccupancyRate = selectedTotalDesks > 0 ? (averageReservedDesks / selectedTotalDesks) * 100 : 0;
 
+    const previousMonthRoomRows = hasPreviousMonth
+      ? roomFilteredRows.filter((row) => getOccupancyMonth(row) === previousMonthValue)
+      : [];
+    const previousMonthPeopleRows = hasPreviousMonth
+      ? peopleFilteredRows.filter((row) => getOccupancyMonth(row) === previousMonthValue)
+      : [];
+    const previousMonthRoomMetrics = hasPreviousMonth
+      ? computeContextMetrics(previousMonthRoomRows, startOfMonth(previousMonthDate), endOfMonth(previousMonthDate))
+      : null;
+    const previousMonthPeopleMetrics = hasPreviousMonth
+      ? computeContextMetrics(previousMonthPeopleRows, startOfMonth(previousMonthDate), endOfMonth(previousMonthDate))
+      : null;
+    const previousMonthUniqueBookers = hasPreviousMonth
+      ? new Set(previousMonthPeopleRows.map((row) => row.user_id).filter(Boolean)).size
+      : 0;
+
+    const metricDeltas = {
+      averageFullRoomDaysPercentage: previousMonthRoomMetrics
+        ? averageFullRoomDaysPercentage - previousMonthRoomMetrics.averageFullRoomDaysPercentage
+        : null,
+      uniqueBookers: previousMonthPeopleMetrics ? uniqueBookers - previousMonthUniqueBookers : null,
+      averagePersonOccupancyPercentage: previousMonthPeopleMetrics
+        ? averagePersonOccupancyPercentage - previousMonthPeopleMetrics.averagePersonOccupancyPercentage
+        : null,
+      averageBookedDaysPerPerson: previousMonthPeopleMetrics
+        ? averageBookedDaysPerPerson - previousMonthPeopleMetrics.averageBookedDaysPerPerson
+        : null,
+    };
+
     const roomMonthlySummaries = selectedRooms
       .map((room) => {
         const deskDays = roomMonthMap.get(room.id) || 0;
@@ -648,11 +701,147 @@ export default function Insight() {
       .map(([date, count]) => ({ date, count }))
       .sort((a, b) => b.count - a.count)[0];
 
+    const pressure80Days = workingDaysInMonth.reduce((count, day) => {
+      const dayKey = format(day, 'yyyy-MM-dd');
+      const occupiedDesks = dailyLoadMap.get(dayKey) || 0;
+      const utilization = selectedTotalDesks > 0 ? occupiedDesks / selectedTotalDesks : 0;
+      return count + (utilization >= 0.8 ? 1 : 0);
+    }, 0);
+    const pressure90Days = workingDaysInMonth.reduce((count, day) => {
+      const dayKey = format(day, 'yyyy-MM-dd');
+      const occupiedDesks = dailyLoadMap.get(dayKey) || 0;
+      const utilization = selectedTotalDesks > 0 ? occupiedDesks / selectedTotalDesks : 0;
+      return count + (utilization >= 0.9 ? 1 : 0);
+    }, 0);
+    const fullCapacityDays = workingDaysInMonth.reduce((count, day) => {
+      const dayKey = format(day, 'yyyy-MM-dd');
+      const occupiedDesks = dailyLoadMap.get(dayKey) || 0;
+      const utilization = selectedTotalDesks > 0 ? occupiedDesks / selectedTotalDesks : 0;
+      return count + (utilization >= 1 ? 1 : 0);
+    }, 0);
+
     const pressureRooms = roomMonthlySummaries.filter((room) => room.utilization >= 80).length;
     const activeRooms = roomMonthlySummaries.filter((room) => room.deskDays > 0).length;
     const averageDailyDemand = elapsedWindowDays > 0 ? selectedMonthRoomRows.length / elapsedWindowDays : 0;
     const primaryRoom = topRooms[0];
     const selectedEntityLabel = 'reserved desks';
+
+    const userDeskDayCounts = Array.from(
+      selectedMonthRoomRows.reduce<Map<string, { userId: string; label: string; count: number }>>((acc, row) => {
+        if (!row.user_id) return acc;
+        if (!acc.has(row.user_id)) {
+          acc.set(row.user_id, {
+            userId: row.user_id,
+            label: row.user_full_name?.trim() || row.username?.trim() || row.user_id,
+            count: 0,
+          });
+        }
+        const current = acc.get(row.user_id);
+        if (current) current.count += 1;
+        return acc;
+      }, new Map()).values(),
+    ).sort((a, b) => b.count - a.count);
+
+    const topFiveDeskDays = userDeskDayCounts.slice(0, 5).reduce((sum, userEntry) => sum + userEntry.count, 0);
+    const concentrationRiskShare = selectedMonthRoomRows.length > 0 ? (topFiveDeskDays / selectedMonthRoomRows.length) * 100 : 0;
+    const concentrationLeader = userDeskDayCounts[0];
+    const concentrationLeaderShare = concentrationLeader && selectedMonthRoomRows.length > 0
+      ? (concentrationLeader.count / selectedMonthRoomRows.length) * 100
+      : 0;
+
+    const executiveSignals = [
+      {
+        key: 'adoption',
+        label: 'Adoption',
+        status: adoptionCoverageRate >= 70 ? 'Healthy' : adoptionCoverageRate >= 50 ? 'Watch' : 'Action',
+        detail: `${formatPercent(adoptionCoverageRate)} of eligible people booked at least once in the selected rooms.`,
+        accent: adoptionCoverageRate >= 70 ? 'bg-emerald-50 text-emerald-700' : adoptionCoverageRate >= 50 ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700',
+      },
+      {
+        key: 'pressure',
+        label: 'Pressure',
+        status: fullCapacityDays > 0 ? 'Action' : pressure80Days >= Math.max(2, Math.ceil(elapsedWindowDays * 0.2)) ? 'Watch' : 'Stable',
+        detail: `${pressure80Days} days above 80% occupancy, with ${fullCapacityDays} days fully occupied.`,
+        accent: fullCapacityDays > 0 ? 'bg-rose-50 text-rose-700' : pressure80Days >= Math.max(2, Math.ceil(elapsedWindowDays * 0.2)) ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-700',
+      },
+      {
+        key: 'cold',
+        label: 'Cold footprint',
+        status: coldDeskCount >= Math.ceil(selectedTotalDesks * 0.35) ? 'Action' : coldDeskCount >= Math.ceil(selectedTotalDesks * 0.2) ? 'Watch' : 'Stable',
+        detail: `${coldDeskCount} desks are below ${coldDeskThreshold}% utilization, including ${idleDeskCount} idle desks.`,
+        accent: coldDeskCount >= Math.ceil(selectedTotalDesks * 0.35) ? 'bg-rose-50 text-rose-700' : coldDeskCount >= Math.ceil(selectedTotalDesks * 0.2) ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-700',
+      },
+      {
+        key: 'concentration',
+        label: 'Concentration',
+        status: concentrationRiskShare >= 45 ? 'Action' : concentrationRiskShare >= 30 ? 'Watch' : 'Stable',
+        detail: `${formatPercent(concentrationRiskShare)} of reserved desk-days come from the top 5 users in this room context.`,
+        accent: concentrationRiskShare >= 45 ? 'bg-rose-50 text-rose-700' : concentrationRiskShare >= 30 ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-700',
+      },
+    ];
+
+    const recommendedActions = [
+      {
+        key: 'adoption',
+        title:
+          adoptionCoverageRate < 55
+            ? 'Re-activate eligible people in low-adoption rooms'
+            : 'Keep adoption momentum in the current room set',
+        detail:
+          adoptionCoverageRate < 55
+            ? `${inactiveEligiblePeople} eligible people have not booked yet. Prioritize onboarding or nudges in rooms with the widest adoption gap.`
+            : `${formatPercent(adoptionCoverageRate)} of eligible people booked at least once. Protect this usage pattern with stable comms and room visibility.`,
+        metric: `${roomScopeUniqueBookers}/${eligiblePeopleCount} active`,
+        accent:
+          adoptionCoverageRate < 55 ? 'bg-rose-50 text-rose-700' : adoptionCoverageRate < 70 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700',
+      },
+      {
+        key: 'pressure',
+        title:
+          fullCapacityDays > 0
+            ? 'Mitigate full-capacity days in the selected month'
+            : pressure80Days >= Math.max(2, Math.ceil(elapsedWindowDays * 0.2))
+              ? 'Watch recurring high-pressure days'
+              : 'Capacity pressure is currently under control',
+        detail:
+          fullCapacityDays > 0
+            ? `${fullCapacityDays} working days hit full capacity and ${pressure90Days} days moved above 90%. Consider opening spillover rooms or redistributing demand.`
+            : pressure80Days >= Math.max(2, Math.ceil(elapsedWindowDays * 0.2))
+              ? `${pressure80Days} days crossed 80% occupancy. A light intervention on peak weekdays could smooth the load before it turns critical.`
+              : 'No sustained pressure pattern is visible. Keep monitoring the busiest weekdays and protect room balance.',
+        metric: `${pressure80Days} days >80%`,
+        accent:
+          fullCapacityDays > 0 ? 'bg-rose-50 text-rose-700' : pressure80Days >= Math.max(2, Math.ceil(elapsedWindowDays * 0.2)) ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-700',
+      },
+      {
+        key: 'cold',
+        title:
+          coldDeskCount >= Math.ceil(selectedTotalDesks * 0.25)
+            ? 'Review cold desks and room layout efficiency'
+            : 'Cold desk footprint is limited',
+        detail:
+          coldDeskCount >= Math.ceil(selectedTotalDesks * 0.25)
+            ? `${coldDeskCount} desks are below ${coldDeskThreshold}% utilization, including ${idleDeskCount} completely idle desks. Review visibility, proximity, and seat attractiveness.`
+            : `${coldDeskCount} desks sit below the cold threshold. Keep monitoring underused seats, but the footprint is not yet structurally problematic.`,
+        metric: `${coldDeskCount} cold desks`,
+        accent:
+          coldDeskCount >= Math.ceil(selectedTotalDesks * 0.25) ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-700',
+      },
+      {
+        key: 'concentration',
+        title:
+          concentrationRiskShare >= 40
+            ? 'Reduce reliance on a small group of heavy users'
+            : 'Demand is reasonably distributed across users',
+        detail:
+          concentrationRiskShare >= 40
+            ? `${formatPercent(concentrationRiskShare)} of reserved desk-days come from the top 5 users. This suggests a shared-capacity risk if those users dominate the best seats.`
+            : `${formatPercent(concentrationRiskShare)} of desk-days come from the top 5 users. The current demand mix looks broadly distributed.`,
+        metric: `Top 5 = ${formatPercent(concentrationRiskShare)}`,
+        accent:
+          concentrationRiskShare >= 40 ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-700',
+      },
+    ];
 
     const workingCalendarWeeksMap = new Map<string, {
       key: string;
@@ -727,6 +916,8 @@ export default function Insight() {
       averageReservedDesks,
       averageOpenDesks,
       monthlyOccupancyRate,
+      metricDeltas,
+      previousMonthLabel,
       averageFullRoomDaysPercentage,
       uniqueBookers,
       averagePersonOccupancyPercentage,
@@ -756,6 +947,14 @@ export default function Insight() {
       coldDeskCount,
       idleDeskCount,
       coldDeskLeaders,
+      executiveSignals,
+      recommendedActions,
+      concentrationRiskShare,
+      concentrationLeader,
+      concentrationLeaderShare,
+      pressure80Days,
+      pressure90Days,
+      fullCapacityDays,
       averageDailyDemand,
       workingCalendarWeeks,
       roomOpportunityMap,
@@ -1024,25 +1223,153 @@ export default function Insight() {
               value={formatPercent(insight.averageFullRoomDaysPercentage)}
               detail="Average share of working days with selected rooms fully occupied. With multiple rooms, the dashboard averages the room percentages."
               accent="bg-blue-50 text-blue-700"
+              delta={insight.metricDeltas.averageFullRoomDaysPercentage !== null ? `${formatSignedNumber(insight.metricDeltas.averageFullRoomDaysPercentage, 1)} pts` : null}
+              deltaCaption={insight.metricDeltas.averageFullRoomDaysPercentage !== null ? `vs ${insight.previousMonthLabel}` : null}
             />
             <InsightMetric
               label="Unique people"
               value={String(insight.uniqueBookers)}
               detail="Distinct people who made at least one booking inside the selected people filter."
               accent="bg-emerald-50 text-emerald-700"
+              delta={insight.metricDeltas.uniqueBookers !== null ? formatSignedNumber(insight.metricDeltas.uniqueBookers) : null}
+              deltaCaption={insight.metricDeltas.uniqueBookers !== null ? `vs ${insight.previousMonthLabel}` : null}
             />
             <InsightMetric
               label="Avg person occupancy"
               value={formatPercent(insight.averagePersonOccupancyPercentage)}
               detail="Average share of working days with a booked desk per active person inside the selected people filter."
               accent="bg-amber-50 text-amber-700"
+              delta={insight.metricDeltas.averagePersonOccupancyPercentage !== null ? `${formatSignedNumber(insight.metricDeltas.averagePersonOccupancyPercentage, 1)} pts` : null}
+              deltaCaption={insight.metricDeltas.averagePersonOccupancyPercentage !== null ? `vs ${insight.previousMonthLabel}` : null}
             />
             <InsightMetric
               label="Avg booked days / person"
               value={insight.averageBookedDaysPerPerson.toFixed(1)}
               detail="Average number of booked working days per active person inside the filtered month."
               accent="bg-violet-50 text-violet-700"
+              delta={insight.metricDeltas.averageBookedDaysPerPerson !== null ? `${formatSignedNumber(insight.metricDeltas.averageBookedDaysPerPerson, 1)} d` : null}
+              deltaCaption={insight.metricDeltas.averageBookedDaysPerPerson !== null ? `vs ${insight.previousMonthLabel}` : null}
             />
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.82fr)_minmax(320px,0.82fr)]">
+            <Card className="min-w-0 border-slate-200 bg-white shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center justify-between text-base">
+                  Executive signals
+                  <ShieldCheck className="h-5 w-5 text-slate-400" />
+                </CardTitle>
+                <p className="text-[12px] text-slate-500">
+                  Fast reads on adoption, pressure, cold footprint, and concentration for the selected month.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {insight.executiveSignals.map((signal) => (
+                    <div
+                      key={signal.key}
+                      className="rounded-[24px] border border-slate-100 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-4 shadow-[0_14px_32px_rgba(15,23,42,0.04)]"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{signal.label}</p>
+                          <p className="mt-2 text-[12px] leading-5 text-slate-600">{signal.detail}</p>
+                        </div>
+                        <Badge className={`rounded-full px-3 py-1 hover:bg-transparent ${signal.accent}`}>
+                          {signal.status}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="min-w-0 border-slate-200 bg-white shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center justify-between text-base">
+                  Concentration risk
+                  <Flame className="h-5 w-5 text-slate-400" />
+                </CardTitle>
+                <p className="text-[12px] text-slate-500">
+                  Share of reserved desk-days generated by the most active users in the selected rooms.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="rounded-[26px] border border-slate-100 bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.08),_transparent_34%),linear-gradient(180deg,#ffffff_0%,#fffaf3_100%)] p-5 shadow-[0_16px_36px_rgba(15,23,42,0.05)]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Top 5 share</p>
+                  <div className="mt-3 flex items-end justify-between gap-3">
+                    <p className="text-[34px] font-semibold tracking-tight text-slate-950">
+                      {formatPercent(insight.concentrationRiskShare)}
+                    </p>
+                    <Badge variant="secondary" className="rounded-full bg-amber-50 text-amber-700">
+                      {insight.concentrationLeader ? insight.concentrationLeader.label : 'No leader'}
+                    </Badge>
+                  </div>
+                  <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className="h-full rounded-full bg-[linear-gradient(90deg,#f59e0b_0%,#ef4444_100%)]"
+                      style={{ width: `${Math.min(insight.concentrationRiskShare, 100)}%` }}
+                    />
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-slate-100 bg-white/85 px-3 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Lead user share</p>
+                      <p className="mt-2 text-lg font-semibold text-slate-950">{formatPercent(insight.concentrationLeaderShare)}</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-100 bg-white/85 px-3 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Monthly desk-days</p>
+                      <p className="mt-2 text-lg font-semibold text-slate-950">{compactNumber(insight.roomDeskDaysInMonth)}</p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="min-w-0 border-slate-200 bg-white shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center justify-between text-base">
+                  Peak pressure days
+                  <Gauge className="h-5 w-5 text-slate-400" />
+                </CardTitle>
+                <p className="text-[12px] text-slate-500">
+                  Days where total occupancy in the selected rooms moved into high-pressure territory.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="rounded-[26px] border border-slate-100 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.08),_transparent_34%),linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-5 shadow-[0_16px_36px_rgba(15,23,42,0.05)]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Pressure spread</p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-2xl border border-slate-100 bg-white/85 px-3 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">80%+</p>
+                      <p className="mt-2 text-xl font-semibold text-slate-950">{insight.pressure80Days}</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-100 bg-white/85 px-3 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">90%+</p>
+                      <p className="mt-2 text-xl font-semibold text-slate-950">{insight.pressure90Days}</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-100 bg-white/85 px-3 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">100%</p>
+                      <p className="mt-2 text-xl font-semibold text-slate-950">{insight.fullCapacityDays}</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 rounded-2xl border border-slate-100 bg-white/80 px-3 py-3">
+                    <div className="flex items-center justify-between gap-3 text-[11px] text-slate-500">
+                      <span>Days above 80% occupancy</span>
+                      <span className="font-semibold text-slate-900">
+                        {insight.businessDaysInMonth > 0 ? formatPercent((insight.pressure80Days / insight.businessDaysInMonth) * 100) : '0%'}
+                      </span>
+                    </div>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className="h-full rounded-full bg-[linear-gradient(90deg,#60a5fa_0%,#2563eb_100%)]"
+                        style={{ width: `${insight.businessDaysInMonth > 0 ? Math.min((insight.pressure80Days / insight.businessDaysInMonth) * 100, 100) : 0}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.95fr)]">
@@ -1937,6 +2264,43 @@ export default function Insight() {
               </CardContent>
             </Card>
           </div>
+
+          <Card className="min-w-0 border-slate-200 bg-white shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center justify-between text-base">
+                Recommended actions
+                <Activity className="h-5 w-5 text-slate-400" />
+              </CardTitle>
+              <p className="text-[12px] text-slate-500">
+                Suggested next moves based on the current month, selected rooms, and the present pressure / adoption profile.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3 xl:grid-cols-2">
+                {insight.recommendedActions.map((action, index) => (
+                  <div
+                    key={action.key}
+                    className="rounded-[24px] border border-slate-100 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] p-4 shadow-[0_14px_32px_rgba(15,23,42,0.04)]"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl bg-slate-50 text-[11px] font-semibold tracking-[0.18em] text-slate-400">
+                            {String(index + 1).padStart(2, '0')}
+                          </span>
+                          <p className="text-[13px] font-semibold leading-5 text-slate-950">{action.title}</p>
+                        </div>
+                        <p className="mt-3 text-[12px] leading-5 text-slate-600">{action.detail}</p>
+                      </div>
+                      <Badge className={`shrink-0 rounded-full px-3 py-1 hover:bg-transparent ${action.accent}`}>
+                        {action.metric}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </>
       )}
     </div>
