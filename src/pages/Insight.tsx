@@ -14,62 +14,33 @@ import { supabase } from '@/integrations/supabase/client';
 import { authService } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import {
+  buildDailyUniqueRows,
+  buildDeskMonthlySummaries,
+  buildRoomAdoptionSummaries,
+  buildRoomEligibleUsersMap,
+  buildRoomMonthlySummaries,
+  buildRowsByMonthMap,
+  buildRowsByRangeMap,
+  buildSelectedMonthRoomIndexes,
+  buildWeekdayDemandSummary,
+  buildWorkingCalendarWeeks,
+  computeContextMetrics,
+  countUniqueUsers,
+  expandRawRowsToBusinessDaily,
+} from '@/features/insight/metrics';
+import {
+  FilterChip,
+  getHeatSurface,
+  getRoomBubbleColor,
+  InsightMetric,
+} from '@/features/insight/presentation';
+import type { InsightPayload } from '@/features/insight/types';
+import {
   BUSINESS_CALENDAR_END,
   BUSINESS_CALENDAR_START,
   getBusinessDaysBetween,
   INSIGHT_MONTH_OPTIONS,
-  isItalianBusinessDay,
 } from '@/lib/italianBusinessCalendar';
-
-interface RoomStructure {
-  id: string;
-  name: string;
-  desks: Array<{
-    id: string;
-    label: string;
-    room_id: string;
-  }>;
-}
-
-interface RawOccupancyRow {
-  reservation_id: string;
-  source_type: 'reservation' | 'fixed_assignment';
-  room_id: string;
-  room_name: string;
-  desk_id: string;
-  desk_label: string;
-  user_id: string;
-  user_full_name: string;
-  username: string;
-  status: string;
-  reservation_type: string;
-  time_segment: string;
-  date_start: string;
-  date_end: string;
-  month: string;
-  year: number;
-  created_at: string;
-  approved_at: string | null;
-  approved_by: string | null;
-  approved_by_name: string | null;
-}
-
-interface DailyOccupancyRow extends RawOccupancyRow {
-  occupancy_date: string;
-  weekday_index: number;
-  weekday_name: string;
-  is_weekend: boolean;
-}
-
-type InsightPayload = {
-  rooms: RoomStructure[];
-  rows: RawOccupancyRow[];
-  roomAccess: Array<{
-    room_id: string;
-    user_id: string;
-  }>;
-  generatedAt: string;
-};
 
 function formatPercent(value: number) {
   return `${Math.round(value)}%`;
@@ -85,161 +56,10 @@ function formatSignedNumber(value: number, maximumFractionDigits = 0) {
   return `${sign}${absolute.toLocaleString('en-US', { maximumFractionDigits, minimumFractionDigits: maximumFractionDigits > 0 ? maximumFractionDigits : 0 })}`;
 }
 
-function buildDailyUniqueRows(rows: DailyOccupancyRow[]) {
-  const uniqueMap = new Map<string, DailyOccupancyRow>();
-
-  rows.forEach((row) => {
-    const deskIdentity = row.desk_id || row.desk_label || row.reservation_id;
-    const key = `${row.room_id}-${deskIdentity}-${row.occupancy_date}`;
-    if (!uniqueMap.has(key)) {
-      uniqueMap.set(key, row);
-    }
-  });
-
-  return Array.from(uniqueMap.values());
-}
-
-function getOccupancyMonth(row: DailyOccupancyRow) {
-  return row.occupancy_date.slice(0, 7);
-}
-
-function expandRawRowsToBusinessDaily(rows: RawOccupancyRow[]) {
-  const weekdayLabels = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const expandedRows: DailyOccupancyRow[] = [];
-
-  rows.forEach((row) => {
-    let cursor = parseISO(row.date_start);
-    const end = parseISO(row.date_end);
-
-    while (cursor <= end) {
-      const occupancyDate = format(cursor, 'yyyy-MM-dd');
-      const weekdayIndex = cursor.getDay();
-
-      if (isItalianBusinessDay(occupancyDate)) {
-        expandedRows.push({
-          ...row,
-          occupancy_date: occupancyDate,
-          weekday_index: weekdayIndex,
-          weekday_name: weekdayLabels[weekdayIndex],
-          is_weekend: weekdayIndex === 0 || weekdayIndex === 6,
-          month: occupancyDate.slice(0, 7),
-          year: Number.parseInt(occupancyDate.slice(0, 4), 10),
-        });
-      }
-
-      cursor = new Date(cursor);
-      cursor.setDate(cursor.getDate() + 1);
-    }
-  });
-
-  return expandedRows;
-}
-
-function getHeatSurface(intensity: number) {
-  if (intensity >= 0.95) {
-    return {
-      background: 'linear-gradient(180deg, #1f1235 0%, #2b1750 100%)',
-      borderColor: '#241248',
-      textClassName: 'text-white',
-      captionClassName: 'text-violet-100/90',
-      shadow: '0 14px 28px rgba(43, 23, 80, 0.32)',
-    };
-  }
-  if (intensity >= 0.75) {
-    return {
-      background: 'linear-gradient(180deg, #5b21b6 0%, #7c3aed 100%)',
-      borderColor: '#6d28d9',
-      textClassName: 'text-white',
-      captionClassName: 'text-violet-100/90',
-      shadow: '0 12px 24px rgba(124, 58, 237, 0.28)',
-    };
-  }
-  if (intensity >= 0.5) {
-    return {
-      background: 'linear-gradient(180deg, #8b5cf6 0%, #a78bfa 100%)',
-      borderColor: '#8b5cf6',
-      textClassName: 'text-white',
-      captionClassName: 'text-violet-100/85',
-      shadow: '0 10px 20px rgba(139, 92, 246, 0.22)',
-    };
-  }
-  if (intensity > 0) {
-    return {
-      background: 'linear-gradient(180deg, #ede9fe 0%, #ddd6fe 100%)',
-      borderColor: '#d8b4fe',
-      textClassName: 'text-slate-900',
-      captionClassName: 'text-violet-900/65',
-      shadow: '0 8px 18px rgba(139, 92, 246, 0.12)',
-    };
-  }
-
-  return {
-    background: 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
-    borderColor: '#e2e8f0',
-    textClassName: 'text-slate-500',
-    captionClassName: 'text-slate-300',
-    shadow: 'none',
-  };
-}
-
-function getRoomBubbleColor(fixedShare: number, utilization: number) {
-  if (utilization >= 80) return '#4f46e5';
-  if (fixedShare >= 60) return '#7c3aed';
-  if (utilization >= 45) return '#8b5cf6';
-  return '#c4b5fd';
-}
-
-function InsightMetric({
-  label,
-  value,
-  detail,
-  accent,
-  delta,
-  deltaCaption,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  accent: string;
-  delta?: string | null;
-  deltaCaption?: string | null;
-}) {
-  return (
-    <Card className="overflow-hidden border border-slate-200/80 bg-[linear-gradient(180deg,#ffffff_0%,#fbfdff_100%)] shadow-[0_18px_40px_rgba(15,23,42,0.06)]">
-      <CardContent className="p-5">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div className={`inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] ${accent}`}>
-            {label}
-          </div>
-          {delta ? (
-            <div className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-medium tracking-[0.08em] text-slate-600">
-              {delta}
-            </div>
-          ) : null}
-        </div>
-        <div className="text-[28px] font-semibold tracking-tight text-slate-950 md:text-[30px]">{value}</div>
-        <p className="mt-2 max-w-xs text-[12px] leading-5 text-slate-500">{detail}</p>
-        {deltaCaption ? (
-          <p className="mt-3 text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">{deltaCaption}</p>
-        ) : null}
-      </CardContent>
-    </Card>
-  );
-}
-
-function FilterChip({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-[11px] text-slate-600 shadow-[0_6px_18px_rgba(15,23,42,0.04)]">
-      <span className="font-semibold uppercase tracking-[0.18em] text-slate-400">{label}</span>
-      <span className="max-w-[180px] truncate font-medium text-slate-900">{value}</span>
-    </div>
-  );
+function formatSignedDelta(value: number, maximumFractionDigits = 0) {
+  const sign = value > 0 ? '+' : value < 0 ? '-' : '';
+  const absolute = Math.abs(value);
+  return `${sign}${absolute.toLocaleString('en-US', { maximumFractionDigits, minimumFractionDigits: maximumFractionDigits > 0 ? maximumFractionDigits : 0 })}`;
 }
 
 export default function Insight() {
@@ -283,6 +103,8 @@ export default function Insight() {
         label: format(dateStart, 'dd MMM'),
         dateStart,
         dateEnd,
+        startValue: format(dateStart, 'yyyy-MM-dd'),
+        endValue: format(dateEnd, 'yyyy-MM-dd'),
       };
     });
   }, [selectedMonth]);
@@ -358,6 +180,67 @@ export default function Insight() {
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [data?.rows]);
 
+  const rooms = data?.rooms || [];
+  const roomAccess = data?.roomAccess || [];
+  const rawRows = data?.rows || [];
+  const selectedMonthDate = useMemo(() => parseISO(`${selectedMonth}-01`), [selectedMonth]);
+  const selectedMonthLabel = useMemo(() => format(selectedMonthDate, 'MMMM yyyy'), [selectedMonthDate]);
+  const uniqueRows = useMemo(() => buildDailyUniqueRows(expandRawRowsToBusinessDaily(rawRows)), [rawRows]);
+  const selectedRoomIdSet = useMemo(() => new Set(selectedRoomIds), [selectedRoomIds]);
+  const selectedUserIdSet = useMemo(() => new Set(selectedUserIds), [selectedUserIds]);
+  const selectedRooms = useMemo(
+    () => rooms.filter((room) => selectedRoomIdSet.has(room.id)),
+    [rooms, selectedRoomIdSet],
+  );
+  const selectedTotalDesks = useMemo(
+    () => selectedRooms.reduce((sum, room) => sum + room.desks.length, 0),
+    [selectedRooms],
+  );
+  const roomFilteredRows = useMemo(
+    () => uniqueRows.filter((row) => selectedRoomIdSet.has(row.room_id)),
+    [uniqueRows, selectedRoomIdSet],
+  );
+  const peopleFilteredRows = useMemo(
+    () => roomFilteredRows.filter((row) => selectedUserIdSet.has(row.user_id)),
+    [roomFilteredRows, selectedUserIdSet],
+  );
+  const roomRowsByMonth = useMemo(() => buildRowsByMonthMap(roomFilteredRows), [roomFilteredRows]);
+  const peopleRowsByMonth = useMemo(() => buildRowsByMonthMap(peopleFilteredRows), [peopleFilteredRows]);
+  const roomRowsByWeek = useMemo(() => buildRowsByRangeMap(roomFilteredRows, trendWeeks), [roomFilteredRows, trendWeeks]);
+  const peopleRowsByWeek = useMemo(() => buildRowsByRangeMap(peopleFilteredRows, trendWeeks), [peopleFilteredRows, trendWeeks]);
+  const selectedMonthRoomRows = useMemo(
+    () => roomRowsByMonth.get(selectedMonth) || [],
+    [roomRowsByMonth, selectedMonth],
+  );
+  const selectedMonthPeopleRows = useMemo(
+    () => peopleRowsByMonth.get(selectedMonth) || [],
+    [peopleRowsByMonth, selectedMonth],
+  );
+  const workingDaysInMonth = useMemo(
+    () => getBusinessDaysBetween(startOfMonth(selectedMonthDate), endOfMonth(selectedMonthDate)),
+    [selectedMonthDate],
+  );
+  const elapsedWindowDays = workingDaysInMonth.length;
+  const uniqueBookers = useMemo(
+    () => countUniqueUsers(selectedMonthPeopleRows),
+    [selectedMonthPeopleRows],
+  );
+  const selectedMonthRoomIndexes = useMemo(
+    () => buildSelectedMonthRoomIndexes(selectedMonthRoomRows),
+    [selectedMonthRoomRows],
+  );
+  const roomEligibleUsersMap = useMemo(
+    () => buildRoomEligibleUsersMap(roomAccess, selectedRoomIdSet),
+    [roomAccess, selectedRoomIdSet],
+  );
+  const eligiblePeopleCount = useMemo(
+    () =>
+      new Set(
+        Array.from(roomEligibleUsersMap.values()).flatMap((users) => Array.from(users)),
+      ).size,
+    [roomEligibleUsersMap],
+  );
+
   useEffect(() => {
     if (!roomsInitialized.current && roomOptions.length > 0) {
       setSelectedRoomIds(roomOptions.map((room) => room.value));
@@ -373,96 +256,28 @@ export default function Insight() {
   }, [userOptions]);
 
   const insight = useMemo(() => {
-    const rooms = data?.rooms || [];
-    const uniqueRows = buildDailyUniqueRows(expandRawRowsToBusinessDaily(data?.rows || []));
-    const selectedMonthDate = parseISO(`${selectedMonth}-01`);
-    const selectedMonthLabel = format(selectedMonthDate, 'MMMM yyyy');
-    const roomIdSet = new Set(selectedRoomIds);
-    const userIdSet = new Set(selectedUserIds);
-    const selectedRooms = rooms.filter((room) => roomIdSet.has(room.id));
-    const selectedTotalDesks = selectedRooms.reduce((sum, room) => sum + room.desks.length, 0);
-    const eligibleUsersForSelectedRooms = new Set(
-      (data?.roomAccess || [])
-        .filter((entry) => roomIdSet.has(entry.room_id))
-        .map((entry) => entry.user_id),
-    );
-    const eligiblePeopleCount = eligibleUsersForSelectedRooms.size;
-    const roomFilteredRows = uniqueRows.filter((row) => roomIdSet.has(row.room_id));
-    const peopleFilteredRows = roomFilteredRows.filter((row) => userIdSet.has(row.user_id));
-
-    const selectedMonthRoomRows = roomFilteredRows.filter((row) => getOccupancyMonth(row) === selectedMonth);
-    const selectedMonthPeopleRows = peopleFilteredRows.filter((row) => getOccupancyMonth(row) === selectedMonth);
-    const workingDaysInMonth = getBusinessDaysBetween(startOfMonth(selectedMonthDate), endOfMonth(selectedMonthDate));
-    const elapsedWindowDays = workingDaysInMonth.length;
-    const uniqueBookers = new Set(selectedMonthPeopleRows.map((row) => row.user_id).filter(Boolean)).size;
     const previousMonthDate = startOfMonth(subMonths(selectedMonthDate, 1));
     const hasPreviousMonth = previousMonthDate >= BUSINESS_CALENDAR_START;
     const previousMonthValue = format(previousMonthDate, 'yyyy-MM');
     const previousMonthLabel = format(previousMonthDate, 'MMM');
 
-    const computeContextMetrics = (scopeRows: DailyOccupancyRow[], rangeStart: Date, rangeEnd: Date) => {
-      const businessDays = getBusinessDaysBetween(rangeStart, rangeEnd);
-      const businessDayCount = businessDays.length;
-
-      const monthRoomDayOccupancyMap = new Map<string, number>();
-      scopeRows.forEach((row) => {
-        const key = `${row.room_id}-${row.occupancy_date}`;
-        monthRoomDayOccupancyMap.set(key, (monthRoomDayOccupancyMap.get(key) || 0) + 1);
-      });
-
-      const fullRoomPercentages = selectedRooms.map((room) => {
-        if (room.desks.length === 0 || businessDayCount === 0) return 0;
-
-        const fullyOccupiedDays = businessDays.reduce((count, day) => {
-          const dayKey = format(day, 'yyyy-MM-dd');
-          const occupiedDesks = monthRoomDayOccupancyMap.get(`${room.id}-${dayKey}`) || 0;
-          return count + (occupiedDesks >= room.desks.length ? 1 : 0);
-        }, 0);
-
-        return (fullyOccupiedDays / businessDayCount) * 100;
-      });
-
-      const activeUsers = Array.from(new Set(scopeRows.map((row) => row.user_id).filter(Boolean)));
-      const userMetrics = activeUsers.map((userId) => {
-        const bookedDays = new Set(
-          scopeRows
-            .filter((row) => row.user_id === userId)
-            .map((row) => row.occupancy_date),
-        ).size;
-
-        return {
-          bookedDays,
-          bookedDayPercentage: businessDayCount > 0 ? (bookedDays / businessDayCount) * 100 : 0,
-        };
-      });
-
-      return {
-        businessDayCount,
-        reservationRate:
-          selectedTotalDesks > 0 && businessDayCount > 0
-            ? (scopeRows.length / (selectedTotalDesks * businessDayCount)) * 100
-            : 0,
-        averageFullRoomDaysPercentage:
-          fullRoomPercentages.length > 0
-            ? fullRoomPercentages.reduce((sum, value) => sum + value, 0) / fullRoomPercentages.length
-            : 0,
-        uniquePeople: activeUsers.length,
-        averagePersonOccupancyPercentage:
-          userMetrics.length > 0
-            ? userMetrics.reduce((sum, item) => sum + item.bookedDayPercentage, 0) / userMetrics.length
-            : 0,
-        averageBookedDaysPerPerson:
-          userMetrics.length > 0
-            ? userMetrics.reduce((sum, item) => sum + item.bookedDays, 0) / userMetrics.length
-            : 0,
-      };
-    };
-
     const monthlyTrend = trendMonths.map((month) => {
-      const monthRoomRows = roomFilteredRows.filter((row) => getOccupancyMonth(row) === month.value);
-      const monthPeopleRows = peopleFilteredRows.filter((row) => getOccupancyMonth(row) === month.value);
-      const monthRoomMetrics = computeContextMetrics(monthRoomRows, startOfMonth(month.date), endOfMonth(month.date));
-      const monthPeopleMetrics = computeContextMetrics(monthPeopleRows, startOfMonth(month.date), endOfMonth(month.date));
+      const monthRoomRows = roomRowsByMonth.get(month.value) || [];
+      const monthPeopleRows = peopleRowsByMonth.get(month.value) || [];
+      const monthRoomMetrics = computeContextMetrics(
+        monthRoomRows,
+        selectedRooms,
+        selectedTotalDesks,
+        startOfMonth(month.date),
+        endOfMonth(month.date),
+      );
+      const monthPeopleMetrics = computeContextMetrics(
+        monthPeopleRows,
+        selectedRooms,
+        selectedTotalDesks,
+        startOfMonth(month.date),
+        endOfMonth(month.date),
+      );
 
       return {
         label: format(month.date, 'MMM'),
@@ -475,16 +290,16 @@ export default function Insight() {
     const weeklyTrend = trendWeeks.map((week) => {
       const weekStart = week.dateStart;
       const weekEnd = week.dateEnd;
-      const weekRoomRows = roomFilteredRows.filter((row) => {
-        const rowDate = parseISO(row.occupancy_date);
-        return rowDate >= weekStart && rowDate <= weekEnd;
-      });
-      const weekPeopleRows = peopleFilteredRows.filter((row) => {
-        const rowDate = parseISO(row.occupancy_date);
-        return rowDate >= weekStart && rowDate <= weekEnd;
-      });
-      const weekRoomMetrics = computeContextMetrics(weekRoomRows, weekStart, weekEnd);
-      const weekPeopleMetrics = computeContextMetrics(weekPeopleRows, weekStart, weekEnd);
+      const weekRoomRows = roomRowsByWeek.get(week.value) || [];
+      const weekPeopleRows = peopleRowsByWeek.get(week.value) || [];
+      const weekRoomMetrics = computeContextMetrics(weekRoomRows, selectedRooms, selectedTotalDesks, weekStart, weekEnd);
+      const weekPeopleMetrics = computeContextMetrics(
+        weekPeopleRows,
+        selectedRooms,
+        selectedTotalDesks,
+        weekStart,
+        weekEnd,
+      );
 
       return {
         label: week.label,
@@ -494,68 +309,33 @@ export default function Insight() {
       };
     });
 
-    const weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-    const weekdayOccurrences = workingDaysInMonth.reduce<Record<number, number>>((acc, day) => {
-      const weekday = day.getDay();
-      acc[weekday] = (acc[weekday] || 0) + 1;
-      return acc;
-    }, {});
+    const { weekdayData, busiestWeekday, weekdayAxisMax, weekdayAverage } = buildWeekdayDemandSummary(
+      workingDaysInMonth,
+      selectedMonthRoomRows,
+    );
 
-    const weekdayDemandMap = selectedMonthRoomRows.reduce<Record<number, number>>((acc, row) => {
-      const weekday = parseISO(row.occupancy_date).getDay();
-      acc[weekday] = (acc[weekday] || 0) + 1;
-      return acc;
-    }, {});
-
-    const weekdayIndexes = [1, 2, 3, 4, 5];
-    const weekdayData = weekdayIndexes.map((weekday, index) => {
-      const averageDeskDays = (weekdayDemandMap[weekday] || 0) / Math.max(weekdayOccurrences[weekday] || 1, 1);
-      return {
-        label: weekdayLabels[index],
-        averageDeskDays: Math.round(averageDeskDays * 10) / 10,
-      };
-    });
-
-    const busiestWeekday = [...weekdayData].sort((a, b) => b.averageDeskDays - a.averageDeskDays)[0];
-    const weekdayPeak = Math.max(...weekdayData.map((day) => day.averageDeskDays), 0);
-    const weekdayAxisMax = Math.max(5, Math.ceil((weekdayPeak + 1) / 5) * 5);
-    const weekdayAverage =
-      weekdayData.length > 0
-        ? weekdayData.reduce((sum, day) => sum + day.averageDeskDays, 0) / weekdayData.length
-        : 0;
-
-    const roomMonthMap = new Map<string, number>();
-    selectedMonthRoomRows.forEach((row) => {
-      roomMonthMap.set(row.room_id, (roomMonthMap.get(row.room_id) || 0) + 1);
-    });
-
-    const roomUniqueUsersMap = new Map<string, Set<string>>();
-    const roomFixedDeskDaysMap = new Map<string, number>();
-    selectedMonthRoomRows.forEach((row) => {
-      if (!roomUniqueUsersMap.has(row.room_id)) {
-        roomUniqueUsersMap.set(row.room_id, new Set());
-      }
-      if (row.user_id) {
-        roomUniqueUsersMap.get(row.room_id)?.add(row.user_id);
-      }
-      if (row.source_type === 'fixed_assignment') {
-        roomFixedDeskDaysMap.set(row.room_id, (roomFixedDeskDaysMap.get(row.room_id) || 0) + 1);
-      }
-    });
-
-    const roomDayOccupancyMap = new Map<string, number>();
-    selectedMonthRoomRows.forEach((row) => {
-      const key = `${row.room_id}-${row.occupancy_date}`;
-      roomDayOccupancyMap.set(key, (roomDayOccupancyMap.get(key) || 0) + 1);
-    });
+    const {
+      roomMonthMap,
+      roomUniqueUsersMap,
+      roomFixedDeskDaysMap,
+      roomDayOccupancyMap,
+      roomAdoptionBookedUsersMap,
+      deskReservedDaysMap,
+      dailyLoadMap,
+      userDeskDayCounts,
+    } = selectedMonthRoomIndexes;
 
     const selectedMonthRoomMetrics = computeContextMetrics(
       selectedMonthRoomRows,
+      selectedRooms,
+      selectedTotalDesks,
       startOfMonth(selectedMonthDate),
       endOfMonth(selectedMonthDate),
     );
     const selectedMonthPeopleMetrics = computeContextMetrics(
       selectedMonthPeopleRows,
+      selectedRooms,
+      selectedTotalDesks,
       startOfMonth(selectedMonthDate),
       endOfMonth(selectedMonthDate),
     );
@@ -566,20 +346,28 @@ export default function Insight() {
     const averageOpenDesks = Math.max(selectedTotalDesks - averageReservedDesks, 0);
     const monthlyOccupancyRate = selectedTotalDesks > 0 ? (averageReservedDesks / selectedTotalDesks) * 100 : 0;
 
-    const previousMonthRoomRows = hasPreviousMonth
-      ? roomFilteredRows.filter((row) => getOccupancyMonth(row) === previousMonthValue)
-      : [];
-    const previousMonthPeopleRows = hasPreviousMonth
-      ? peopleFilteredRows.filter((row) => getOccupancyMonth(row) === previousMonthValue)
-      : [];
+    const previousMonthRoomRows = hasPreviousMonth ? roomRowsByMonth.get(previousMonthValue) || [] : [];
+    const previousMonthPeopleRows = hasPreviousMonth ? peopleRowsByMonth.get(previousMonthValue) || [] : [];
     const previousMonthRoomMetrics = hasPreviousMonth
-      ? computeContextMetrics(previousMonthRoomRows, startOfMonth(previousMonthDate), endOfMonth(previousMonthDate))
+      ? computeContextMetrics(
+          previousMonthRoomRows,
+          selectedRooms,
+          selectedTotalDesks,
+          startOfMonth(previousMonthDate),
+          endOfMonth(previousMonthDate),
+        )
       : null;
     const previousMonthPeopleMetrics = hasPreviousMonth
-      ? computeContextMetrics(previousMonthPeopleRows, startOfMonth(previousMonthDate), endOfMonth(previousMonthDate))
+      ? computeContextMetrics(
+          previousMonthPeopleRows,
+          selectedRooms,
+          selectedTotalDesks,
+          startOfMonth(previousMonthDate),
+          endOfMonth(previousMonthDate),
+        )
       : null;
     const previousMonthUniqueBookers = hasPreviousMonth
-      ? new Set(previousMonthPeopleRows.map((row) => row.user_id).filter(Boolean)).size
+      ? countUniqueUsers(previousMonthPeopleRows)
       : 0;
 
     const metricDeltas = {
@@ -595,25 +383,13 @@ export default function Insight() {
         : null,
     };
 
-    const roomMonthlySummaries = selectedRooms
-      .map((room) => {
-        const deskDays = roomMonthMap.get(room.id) || 0;
-        const capacity = room.desks.length * elapsedWindowDays;
-        const fixedDeskDays = roomFixedDeskDaysMap.get(room.id) || 0;
-        const uniquePeople = roomUniqueUsersMap.get(room.id)?.size || 0;
-        return {
-          id: room.id,
-          name: room.name,
-          deskDays,
-          totalPossibleDeskDays: capacity,
-          utilization: capacity > 0 ? (deskDays / capacity) * 100 : 0,
-          avgDailyBooked: elapsedWindowDays > 0 ? deskDays / elapsedWindowDays : 0,
-          totalDesks: room.desks.length,
-          uniquePeople,
-          fixedShare: deskDays > 0 ? (fixedDeskDays / deskDays) * 100 : 0,
-        };
-      })
-      .sort((a, b) => b.utilization - a.utilization);
+    const roomMonthlySummaries = buildRoomMonthlySummaries(
+      selectedRooms,
+      elapsedWindowDays,
+      roomMonthMap,
+      roomFixedDeskDaysMap,
+      roomUniqueUsersMap,
+    );
 
     const topRooms = roomMonthlySummaries
       .slice(0, 5);
@@ -622,80 +398,22 @@ export default function Insight() {
       .sort((a, b) => a.utilization - b.utilization)
       .slice(0, 5);
 
-    const roomAdoptionBookedUsersMap = new Map<string, Set<string>>();
-    selectedMonthRoomRows.forEach((row) => {
-      if (!row.user_id) return;
-      if (!roomAdoptionBookedUsersMap.has(row.room_id)) {
-        roomAdoptionBookedUsersMap.set(row.room_id, new Set());
-      }
-      roomAdoptionBookedUsersMap.get(row.room_id)?.add(row.user_id);
-    });
+    const roomAdoptionSummaries = buildRoomAdoptionSummaries(
+      selectedRooms,
+      roomAdoptionBookedUsersMap,
+      roomEligibleUsersMap,
+    );
 
-    const roomEligibleUsersMap = new Map<string, Set<string>>();
-    (data?.roomAccess || []).forEach((entry) => {
-      if (!roomIdSet.has(entry.room_id)) return;
-      if (!roomEligibleUsersMap.has(entry.room_id)) {
-        roomEligibleUsersMap.set(entry.room_id, new Set());
-      }
-      roomEligibleUsersMap.get(entry.room_id)?.add(entry.user_id);
-    });
-
-    const roomAdoptionSummaries = selectedRooms
-      .map((room) => {
-        const bookedUsers = roomAdoptionBookedUsersMap.get(room.id)?.size || 0;
-        const eligibleUsers = roomEligibleUsersMap.get(room.id)?.size || 0;
-        return {
-          id: room.id,
-          name: room.name,
-          bookedUsers,
-          eligibleUsers,
-          adoptionRate: eligibleUsers > 0 ? (bookedUsers / eligibleUsers) * 100 : 0,
-        };
-      })
-      .sort((a, b) => b.adoptionRate - a.adoptionRate);
-
-    const roomScopeUniqueBookers = new Set(selectedMonthRoomRows.map((row) => row.user_id).filter(Boolean)).size;
+    const roomScopeUniqueBookers = countUniqueUsers(selectedMonthRoomRows);
     const adoptionCoverageRate = eligiblePeopleCount > 0 ? (roomScopeUniqueBookers / eligiblePeopleCount) * 100 : 0;
     const inactiveEligiblePeople = Math.max(eligiblePeopleCount - roomScopeUniqueBookers, 0);
 
-    const deskReservedDaysMap = new Map<string, number>();
-    selectedMonthRoomRows.forEach((row) => {
-      const deskIdentity = row.desk_id || row.desk_label || row.reservation_id;
-      const key = `${row.room_id}-${deskIdentity}`;
-      deskReservedDaysMap.set(key, (deskReservedDaysMap.get(key) || 0) + 1);
-    });
-
-    const deskMonthlySummaries = selectedRooms
-      .flatMap((room) =>
-        room.desks.map((desk) => {
-          const deskIdentity = desk.id || desk.label;
-          const key = `${room.id}-${deskIdentity}`;
-          const reservedDays = deskReservedDaysMap.get(key) || 0;
-          return {
-            id: key,
-            roomId: room.id,
-            roomName: room.name,
-            label: desk.label,
-            reservedDays,
-            utilization: elapsedWindowDays > 0 ? (reservedDays / elapsedWindowDays) * 100 : 0,
-          };
-        }),
-      )
-      .sort((a, b) => {
-        if (a.utilization !== b.utilization) return a.utilization - b.utilization;
-        if (a.reservedDays !== b.reservedDays) return a.reservedDays - b.reservedDays;
-        return a.label.localeCompare(b.label);
-      });
+    const deskMonthlySummaries = buildDeskMonthlySummaries(selectedRooms, elapsedWindowDays, deskReservedDaysMap);
 
     const coldDeskThreshold = 20;
     const idleDeskCount = deskMonthlySummaries.filter((desk) => desk.reservedDays === 0).length;
     const coldDeskCount = deskMonthlySummaries.filter((desk) => desk.utilization < coldDeskThreshold).length;
     const coldDeskLeaders = deskMonthlySummaries.slice(0, 6);
-
-    const dailyLoadMap = new Map<string, number>();
-    selectedMonthRoomRows.forEach((row) => {
-      dailyLoadMap.set(row.occupancy_date, (dailyLoadMap.get(row.occupancy_date) || 0) + 1);
-    });
 
     const peakDay = Array.from(dailyLoadMap.entries())
       .map(([date, count]) => ({ date, count }))
@@ -725,22 +443,6 @@ export default function Insight() {
     const averageDailyDemand = elapsedWindowDays > 0 ? selectedMonthRoomRows.length / elapsedWindowDays : 0;
     const primaryRoom = topRooms[0];
     const selectedEntityLabel = 'reserved desks';
-
-    const userDeskDayCounts = Array.from(
-      selectedMonthRoomRows.reduce<Map<string, { userId: string; label: string; count: number }>>((acc, row) => {
-        if (!row.user_id) return acc;
-        if (!acc.has(row.user_id)) {
-          acc.set(row.user_id, {
-            userId: row.user_id,
-            label: row.user_full_name?.trim() || row.username?.trim() || row.user_id,
-            count: 0,
-          });
-        }
-        const current = acc.get(row.user_id);
-        if (current) current.count += 1;
-        return acc;
-      }, new Map()).values(),
-    ).sort((a, b) => b.count - a.count);
 
     const topFiveDeskDays = userDeskDayCounts.slice(0, 5).reduce((sum, userEntry) => sum + userEntry.count, 0);
     const concentrationRiskShare = selectedMonthRoomRows.length > 0 ? (topFiveDeskDays / selectedMonthRoomRows.length) * 100 : 0;
@@ -843,48 +545,7 @@ export default function Insight() {
       },
     ];
 
-    const workingCalendarWeeksMap = new Map<string, {
-      key: string;
-      label: string;
-      days: Array<{
-        key: string;
-        date: string;
-        dayNumber: string;
-        occupancyCount: number;
-        utilization: number;
-      } | null>;
-    }>();
-
-    workingDaysInMonth.forEach((day) => {
-      const dayStr = format(day, 'yyyy-MM-dd');
-      const occupancyCount = dailyLoadMap.get(dayStr) || 0;
-      const utilization = selectedTotalDesks > 0 ? occupancyCount / selectedTotalDesks : 0;
-      const monday = new Date(day);
-      monday.setDate(day.getDate() - (day.getDay() - 1));
-      const weekKey = format(monday, 'yyyy-MM-dd');
-
-      if (!workingCalendarWeeksMap.has(weekKey)) {
-        workingCalendarWeeksMap.set(weekKey, {
-          key: weekKey,
-          label: format(monday, 'dd MMM'),
-          days: [null, null, null, null, null],
-        });
-      }
-
-      const week = workingCalendarWeeksMap.get(weekKey);
-      const weekdayIndex = day.getDay() - 1;
-      if (week && weekdayIndex >= 0 && weekdayIndex < 5) {
-        week.days[weekdayIndex] = {
-          key: dayStr,
-          date: dayStr,
-          dayNumber: format(day, 'd'),
-          occupancyCount,
-          utilization,
-        };
-      }
-    });
-
-    const workingCalendarWeeks = Array.from(workingCalendarWeeksMap.values());
+    const workingCalendarWeeks = buildWorkingCalendarWeeks(workingDaysInMonth, dailyLoadMap, selectedTotalDesks);
     const roomOpportunityMap = roomMonthlySummaries.map((room) => ({
       id: room.id,
       name: room.name,
@@ -967,7 +628,28 @@ export default function Insight() {
       hasRows: selectedMonthRoomRows.length > 0,
       businessDaysInMonth: elapsedWindowDays,
     };
-  }, [data?.generatedAt, data?.roomAccess, data?.rooms, data?.rows, selectedMonth, selectedRoomIds, selectedUserIds, trendMonths, trendWeeks]);
+  }, [
+    data?.generatedAt,
+    selectedMonth,
+    selectedMonthDate,
+    selectedMonthLabel,
+    selectedRooms,
+    selectedTotalDesks,
+    selectedMonthRoomRows,
+    selectedMonthPeopleRows,
+    roomRowsByMonth,
+    peopleRowsByMonth,
+    roomRowsByWeek,
+    peopleRowsByWeek,
+    workingDaysInMonth,
+    elapsedWindowDays,
+    uniqueBookers,
+    selectedMonthRoomIndexes,
+    eligiblePeopleCount,
+    roomEligibleUsersMap,
+    trendMonths,
+    trendWeeks,
+  ]);
 
   if (!user) return null;
 
@@ -1223,7 +905,7 @@ export default function Insight() {
               value={formatPercent(insight.averageFullRoomDaysPercentage)}
               detail="Average share of working days with selected rooms fully occupied. With multiple rooms, the dashboard averages the room percentages."
               accent="bg-blue-50 text-blue-700"
-              delta={insight.metricDeltas.averageFullRoomDaysPercentage !== null ? `${formatSignedNumber(insight.metricDeltas.averageFullRoomDaysPercentage, 1)} pts` : null}
+              delta={insight.metricDeltas.averageFullRoomDaysPercentage !== null ? `${formatSignedDelta(insight.metricDeltas.averageFullRoomDaysPercentage, 1)} pts` : null}
               deltaCaption={insight.metricDeltas.averageFullRoomDaysPercentage !== null ? `vs ${insight.previousMonthLabel}` : null}
             />
             <InsightMetric
@@ -1231,7 +913,7 @@ export default function Insight() {
               value={String(insight.uniqueBookers)}
               detail="Distinct people who made at least one booking inside the selected people filter."
               accent="bg-emerald-50 text-emerald-700"
-              delta={insight.metricDeltas.uniqueBookers !== null ? formatSignedNumber(insight.metricDeltas.uniqueBookers) : null}
+              delta={insight.metricDeltas.uniqueBookers !== null ? formatSignedDelta(insight.metricDeltas.uniqueBookers) : null}
               deltaCaption={insight.metricDeltas.uniqueBookers !== null ? `vs ${insight.previousMonthLabel}` : null}
             />
             <InsightMetric
@@ -1239,7 +921,7 @@ export default function Insight() {
               value={formatPercent(insight.averagePersonOccupancyPercentage)}
               detail="Average share of working days with a booked desk per active person inside the selected people filter."
               accent="bg-amber-50 text-amber-700"
-              delta={insight.metricDeltas.averagePersonOccupancyPercentage !== null ? `${formatSignedNumber(insight.metricDeltas.averagePersonOccupancyPercentage, 1)} pts` : null}
+              delta={insight.metricDeltas.averagePersonOccupancyPercentage !== null ? `${formatSignedDelta(insight.metricDeltas.averagePersonOccupancyPercentage, 1)} pts` : null}
               deltaCaption={insight.metricDeltas.averagePersonOccupancyPercentage !== null ? `vs ${insight.previousMonthLabel}` : null}
             />
             <InsightMetric
@@ -1247,7 +929,7 @@ export default function Insight() {
               value={insight.averageBookedDaysPerPerson.toFixed(1)}
               detail="Average number of booked working days per active person inside the filtered month."
               accent="bg-violet-50 text-violet-700"
-              delta={insight.metricDeltas.averageBookedDaysPerPerson !== null ? `${formatSignedNumber(insight.metricDeltas.averageBookedDaysPerPerson, 1)} d` : null}
+              delta={insight.metricDeltas.averageBookedDaysPerPerson !== null ? `${formatSignedDelta(insight.metricDeltas.averageBookedDaysPerPerson, 1)} d` : null}
               deltaCaption={insight.metricDeltas.averageBookedDaysPerPerson !== null ? `vs ${insight.previousMonthLabel}` : null}
             />
           </div>
