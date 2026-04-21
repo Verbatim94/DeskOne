@@ -1,71 +1,40 @@
-import { Suspense, lazy, type ReactNode } from "react";
+import { Suspense, lazy } from "react";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Layout } from "./components/Layout";
 
-const queryClient = new QueryClient();
-const Login = lazy(() => import("./pages/Login"));
-const Dashboard = lazy(() => import("./pages/Dashboard"));
-const Users = lazy(() => import("./pages/Users"));
-const MyCalendar = lazy(() => import("./pages/MyCalendar"));
-const Rooms = lazy(() => import("./pages/Rooms"));
-const RoomEditor = lazy(() => import("./pages/RoomEditor"));
-const RoomViewer = lazy(() => import("./pages/RoomViewer"));
-const MyReservations = lazy(() => import("./pages/MyReservations"));
-const PendingApprovals = lazy(() => import("./pages/PendingApprovals"));
-const ReservationsCalendar = lazy(() => import("./pages/ReservationsCalendar"));
-const SharedRooms = lazy(() => import("./pages/SharedRooms"));
-const Planner = lazy(() => import("./pages/Planner"));
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
+import Users from "./pages/Users";
+import MyCalendar from "./pages/MyCalendar";
+import Rooms from "./pages/Rooms";
+import RoomEditor from "./pages/RoomEditor";
+import RoomViewer from "./pages/RoomViewer";
+import MyReservations from "./pages/MyReservations";
+import PendingApprovals from "./pages/PendingApprovals";
+import ReservationsCalendar from "./pages/ReservationsCalendar";
+import SharedRooms from "./pages/SharedRooms";
+import Planner from "./pages/Planner";
+import NotFound from "./pages/NotFound";
+
 const Insight = lazy(() => import("./pages/Insight"));
-const NotFound = lazy(() => import("./pages/NotFound"));
+const queryClient = new QueryClient();
 
-const routeFallback = (
-  <div className="flex min-h-[40vh] items-center justify-center text-sm text-slate-500">
-    Loading page...
-  </div>
-);
-
-function RouteBoundary({ children }: { children: ReactNode }) {
-  return <Suspense fallback={routeFallback}>{children}</Suspense>;
-}
-
-function ProtectedPage({
-  children,
-  requiredRole,
-}: {
-  children: ReactNode;
-  requiredRole?: "user" | "admin" | "super_admin";
-}) {
+function LoadingInsightFallback() {
   return (
-    <ProtectedRoute requiredRole={requiredRole}>
-      <Layout>
-        <RouteBoundary>{children}</RouteBoundary>
-      </Layout>
-    </ProtectedRoute>
+    <div className="flex min-h-[40vh] items-center justify-center text-sm text-slate-500">
+      Loading insight dashboard...
+    </div>
   );
 }
 
-const protectedRoutes = [
-  { path: "/", element: Dashboard },
-  { path: "/calendar", requiredRole: "user" as const, element: MyCalendar },
-  { path: "/shared-rooms", requiredRole: "user" as const, element: SharedRooms },
-  { path: "/rooms", requiredRole: "user" as const, element: Rooms },
-  { path: "/rooms/:roomId/edit", requiredRole: "user" as const, element: RoomEditor },
-  { path: "/rooms/:roomId/view", requiredRole: "user" as const, element: RoomViewer },
-  { path: "/reservations", requiredRole: "user" as const, element: MyReservations },
-  { path: "/calendar-view", requiredRole: "user" as const, element: ReservationsCalendar },
-  { path: "/approvals", requiredRole: "admin" as const, element: PendingApprovals },
-  { path: "/planner", requiredRole: "admin" as const, element: Planner },
-  { path: "/insight", requiredRole: "admin" as const, element: Insight },
-  { path: "/users", requiredRole: "admin" as const, element: Users },
-];
-
-const App = () => {
+function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -73,29 +42,150 @@ const App = () => {
         <Sonner />
         <BrowserRouter>
           <AuthProvider>
-            <RouteBoundary>
-              <Routes>
-                <Route path="/login" element={<Login />} />
-                {protectedRoutes.map(({ path, requiredRole, element: Page }) => (
-                  <Route
-                    key={path}
-                    path={path}
-                    element={
-                      <ProtectedPage requiredRole={requiredRole}>
-                        <Page />
-                      </ProtectedPage>
-                    }
-                  />
-                ))}
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </RouteBoundary>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Dashboard />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/calendar"
+                element={
+                  <ProtectedRoute requiredRole="user">
+                    <Layout>
+                      <MyCalendar />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/shared-rooms"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <SharedRooms />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/rooms"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Rooms />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/rooms/:roomId/edit"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <RoomEditor />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/rooms/:roomId/view"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <RoomViewer />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/reservations"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <MyReservations />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/calendar-view"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <ReservationsCalendar />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/approvals"
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <Layout>
+                      <PendingApprovals />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/planner"
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <Layout>
+                      <Planner />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/insight"
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <Layout>
+                      <Suspense fallback={<LoadingInsightFallback />}>
+                        <Insight />
+                      </Suspense>
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/users"
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <Layout>
+                      <Users />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route path="*" element={<NotFound />} />
+            </Routes>
           </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>
   );
-};
+}
 
 export default App;
