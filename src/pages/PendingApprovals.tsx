@@ -1,6 +1,4 @@
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { authService } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,22 +8,12 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { CheckCircle, XCircle, Loader2, Calendar, User, Clock, Filter, X } from 'lucide-react';
 import { format, isAfter, isBefore, startOfDay } from 'date-fns';
-
-interface Reservation {
-  id: string;
-  room: { id: string; name: string };
-  user: { id: string; username: string; full_name: string };
-  cell: { id: string; label: string | null; type: string };
-  type: string;
-  status: string;
-  date_start: string;
-  date_end: string;
-  time_segment: string;
-  created_at: string;
-}
+import { getEdgeErrorMessage } from '@/lib/edge-functions';
+import { approveReservation, listPendingApprovals, rejectReservation } from '@/features/reservations/api';
+import type { ReservationRecord } from '@/features/reservations/types';
 
 export default function PendingApprovals() {
-  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [reservations, setReservations] = useState<ReservationRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -40,39 +28,15 @@ export default function PendingApprovals() {
     loadPendingReservations();
   }, []);
 
-  const callReservationFunction = async (operation: string, data?: any) => {
-    const session = authService.getSession();
-    if (!session) throw new Error('No session');
-
-    const response = await supabase.functions.invoke('manage-reservations', {
-      body: { operation, data },
-      headers: {
-        'x-session-token': session.token
-      }
-    });
-
-    if (response.error) throw response.error;
-    return response.data;
-  };
-
   const loadPendingReservations = async () => {
     setLoading(true);
     try {
-      const data = await callReservationFunction('list_pending_approvals');
-      // Map the data structure from edge function response
-      const mappedReservations = (data || [])
-        .filter((r: any) => r.rooms && r.users && r.room_cells) // Filter out incomplete data
-        .map((r: any) => ({
-          ...r,
-          room: r.rooms,
-          user: r.users,
-          cell: r.room_cells
-        }));
-      setReservations(mappedReservations);
-    } catch (error: any) {
+      const data = await listPendingApprovals();
+      setReservations(data);
+    } catch (error: unknown) {
       toast({
         title: 'Error loading pending reservations',
-        description: error.message,
+        description: getEdgeErrorMessage(error),
         variant: 'destructive'
       });
     }
@@ -81,13 +45,13 @@ export default function PendingApprovals() {
 
   const handleApprove = async (reservationId: string) => {
     try {
-      await callReservationFunction('approve', { reservationId });
+      await approveReservation(reservationId);
       toast({ title: 'Reservation approved' });
       loadPendingReservations();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Error approving reservation',
-        description: error.message,
+        description: getEdgeErrorMessage(error),
         variant: 'destructive'
       });
     }
@@ -97,13 +61,13 @@ export default function PendingApprovals() {
     if (!confirm('Are you sure you want to reject this reservation?')) return;
 
     try {
-      await callReservationFunction('reject', { reservationId });
+      await rejectReservation(reservationId);
       toast({ title: 'Reservation rejected' });
       loadPendingReservations();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Error rejecting reservation',
-        description: error.message,
+        description: getEdgeErrorMessage(error),
         variant: 'destructive'
       });
     }
@@ -244,7 +208,7 @@ export default function PendingApprovals() {
 
             <div className="space-y-2">
               <Label>Sort By</Label>
-              <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+              <Select value={sortBy} onValueChange={(value: 'requested' | 'start_date' | 'user') => setSortBy(value)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { authService } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,22 +12,14 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, Pencil, Trash2, Grid3x3, Loader2, Users, Settings } from 'lucide-react';
 import RoomAccessDialog from '@/components/RoomAccessDialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-
-interface Room {
-  id: string;
-  name: string;
-  description: string | null;
-  grid_width: number;
-  grid_height: number;
-  created_at: string;
-  created_by: string;
-}
+import { createRoom, deleteRoom, listRooms, updateRoom } from '@/features/rooms/api';
+import type { RoomSummary } from '@/features/rooms/types';
 
 export default function Rooms() {
-  const [rooms, setRooms] = useState<Room[]>([]);
+  const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingRoom, setEditingRoom] = useState<Room | null>(null);
+  const [editingRoom, setEditingRoom] = useState<RoomSummary | null>(null);
   const [accessDialogOpen, setAccessDialogOpen] = useState(false);
   const [selectedRoomForAccess, setSelectedRoomForAccess] = useState<{ id: string; name: string } | null>(null);
   const [roomAdminMap, setRoomAdminMap] = useState<Record<string, boolean>>({});
@@ -47,25 +38,10 @@ export default function Rooms() {
     loadRooms();
   }, []);
 
-  const callRoomFunction = async (operation: string, data?: Record<string, unknown>) => {
-    const session = authService.getSession();
-    if (!session) throw new Error('No session');
-
-    const response = await supabase.functions.invoke('manage-rooms', {
-      body: { operation, data },
-      headers: {
-        'x-session-token': session.token
-      }
-    });
-
-    if (response.error) throw response.error;
-    return response.data;
-  };
-
   const loadRooms = async () => {
     setLoading(true);
     try {
-      const data = await callRoomFunction('list');
+      const data = await listRooms();
       setRooms(data || []);
 
       // Load room access permissions
@@ -83,7 +59,7 @@ export default function Rooms() {
       } else if (user?.role === 'admin') {
         // Admin has admin rights on all rooms
         const adminMap: Record<string, boolean> = {};
-        data?.forEach((room: Room) => {
+        data?.forEach((room: RoomSummary) => {
           adminMap[room.id] = true;
         });
         setRoomAdminMap(adminMap);
@@ -107,14 +83,11 @@ export default function Rooms() {
     if (editingRoom) {
       // Update room
       try {
-        await callRoomFunction('update', {
-          id: editingRoom.id,
-          updates: {
-            name: formData.name,
-            description: formData.description || null,
-            grid_width: formData.grid_width,
-            grid_height: formData.grid_height
-          }
+        await updateRoom(editingRoom.id, {
+          name: formData.name,
+          description: formData.description || null,
+          grid_width: formData.grid_width,
+          grid_height: formData.grid_height
         });
         toast({ title: 'Room updated successfully' });
         setDialogOpen(false);
@@ -133,7 +106,7 @@ export default function Rooms() {
     } else {
       // Create new room
       try {
-        await callRoomFunction('create', {
+        await createRoom({
           name: formData.name,
           description: formData.description || null,
           grid_width: formData.grid_width,
@@ -160,7 +133,7 @@ export default function Rooms() {
     if (!confirm('Are you sure you want to delete this room?')) return;
 
     try {
-      await callRoomFunction('delete', { id });
+      await deleteRoom(id);
       toast({ title: 'Room deleted successfully' });
       loadRooms();
     } catch (error: unknown) {
@@ -185,7 +158,7 @@ export default function Rooms() {
     setEditingRoom(null);
   };
 
-  const openEditDialog = (room: Room) => {
+  const openEditDialog = (room: RoomSummary) => {
     setEditingRoom(room);
     setFormData({
       name: room.name,
@@ -205,7 +178,7 @@ export default function Rooms() {
     navigate(`/rooms/${roomId}/edit`);
   };
 
-  const openAccessDialog = (room: Room) => {
+  const openAccessDialog = (room: RoomSummary) => {
     setSelectedRoomForAccess({ id: room.id, name: room.name });
     setAccessDialogOpen(true);
   };

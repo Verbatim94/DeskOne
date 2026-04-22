@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
-import { authService } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -14,24 +12,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-
-interface Reservation {
-  id: string;
-  room_id: string;
-  cell_id: string;
-  room: { id: string; name: string };
-  user: { id: string; username: string; full_name: string };
-  cell: { id: string; label: string | null; type: string };
-  type: string;
-  status: string;
-  date_start: string;
-  date_end: string;
-  time_segment: string;
-  created_at: string;
-}
+import { getEdgeErrorMessage } from '@/lib/edge-functions';
+import { cancelReservation, deleteFixedAssignment, listMyReservations } from '@/features/reservations/api';
+import type { ReservationRecord } from '@/features/reservations/types';
 
 export default function MyReservations() {
-  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [reservations, setReservations] = useState<ReservationRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
@@ -41,46 +27,36 @@ export default function MyReservations() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     loadReservations();
-  }, []);
-
-  const callReservationFunction = async (operation: string, data?: any) => {
-    const session = authService.getSession();
-    if (!session) throw new Error('No session');
-
-    const response = await supabase.functions.invoke('manage-reservations', {
-      body: { operation, data },
-      headers: {
-        'x-session-token': session.token,
-      },
-    });
-
-    if (response.error) throw response.error;
-    return response.data;
-  };
+  }, [user]);
 
   const loadReservations = async () => {
     setLoading(true);
     try {
-      const data = await callReservationFunction('list_my_reservations');
-      const mappedReservations = (data || [])
-        .filter((r: any) => r.rooms && r.room_cells)
-        .map((r: any) => ({
-          ...r,
-          room_id: r.room_id,
-          cell_id: r.cell_id,
-          room: r.rooms,
-          cell: r.room_cells,
-        }));
-      setReservations(mappedReservations);
-    } catch (error: any) {
+      if (!user) {
+        setReservations([]);
+        return;
+      }
+
+      const data = await listMyReservations({
+        id: user.id,
+        username: user.username,
+        full_name: user.full_name,
+      });
+      setReservations(data);
+    } catch (error: unknown) {
       toast({
         title: 'Error loading reservations',
-        description: error.message,
+        description: getEdgeErrorMessage(error),
         variant: 'destructive',
       });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const getReservationsForDay = (day: Date) => {
@@ -107,23 +83,23 @@ export default function MyReservations() {
 
     try {
       if (reservationType === 'fixed_assignment') {
-        await callReservationFunction('delete_fixed_assignment', { assignmentId: reservationId });
+        await deleteFixedAssignment(reservationId);
         toast({
           title: 'Assignment cancelled',
           description: 'Your fixed desk assignment has been cancelled'
         });
       } else {
-        await callReservationFunction('cancel', { reservationId });
+        await cancelReservation(reservationId);
         toast({
           title: 'Reservation cancelled',
           description: 'Your desk reservation has been cancelled'
         });
       }
       loadReservations();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Error cancelling reservation',
-        description: error.message,
+        description: getEdgeErrorMessage(error),
         variant: 'destructive',
       });
     }

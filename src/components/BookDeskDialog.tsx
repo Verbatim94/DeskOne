@@ -1,8 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { differenceInDays, addYears, format } from 'date-fns';
+import { AlertCircle, CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { authService } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -11,28 +21,20 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
+} from '@/components/ui/alert-dialog';
+import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { CalendarIcon, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
-import { format, differenceInDays, addYears } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { createReservation } from '@/features/reservations/api';
+import { listRoomUsers } from '@/features/rooms/api';
+import type { ReservationMutationResult } from '@/features/reservations/types';
+import type { RoomUserSummary } from '@/features/rooms/types';
+import { getEdgeErrorMessage, getSessionOrThrow } from '@/lib/edge-functions';
 
-interface Reservation {
-  id: string;
-  room_id: string;
-  cell_id: string;
-  user_id: string;
-  date_start: string;
-  date_end: string;
-  status: string;
-  type: string;
-}
+type Reservation = ReservationMutationResult;
 
 interface BookDeskDialogProps {
   open: boolean;
@@ -45,10 +47,14 @@ interface BookDeskDialogProps {
   onBookingComplete?: (reservation?: Reservation) => void;
 }
 
-interface User {
-  id: string;
-  username: string;
-  full_name: string;
+function isOneDeskPerDayError(message: string) {
+  return (
+    message.includes("That's two!") ||
+    message.includes('limit reservations to one') ||
+    message.includes('Non puoi prenotare') ||
+    message.includes('Hai gi') ||
+    message.includes('nello stesso periodo')
+  );
 }
 
 export default function BookDeskDialog({
@@ -59,7 +65,7 @@ export default function BookDeskDialog({
   cellId,
   cellLabel,
   initialDate,
-  onBookingComplete
+  onBookingComplete,
 }: BookDeskDialogProps) {
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
@@ -69,7 +75,7 @@ export default function BookDeskDialog({
   const [startDate, setStartDate] = useState<Date>(new Date());
   const [endDate, setEndDate] = useState<Date>(new Date());
   const [selectedUserId, setSelectedUserId] = useState<string>('');
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<RoomUserSummary[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<'booking' | 'assignment'>('booking');
   const [showErrorDialog, setShowErrorDialog] = useState(false);
@@ -81,89 +87,26 @@ export default function BookDeskDialog({
       setStartDate(initialDate);
       setEndDate(initialDate);
     }
+
     if (open && isAdmin) {
       loadUsers();
     }
   }, [open, initialDate, isAdmin]);
 
-  const callRoomFunction = async (operation: string, data?: Record<string, unknown>) => {
-    const session = authService.getSession();
-    if (!session) throw new Error('No session');
-
-    const response = await supabase.functions.invoke('manage-rooms', {
-      body: { operation, data },
-      headers: {
-        'x-session-token': session.token,
-      },
-    });
-
-    if (response.error) throw response.error;
-    return response.data;
-  };
-
   const loadUsers = async () => {
     try {
-      // Use Edge Function to bypass client-side RLS limitations
-      const data = await callRoomFunction('list_room_users', { roomId });
+      const data = await listRoomUsers(roomId);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mappedUsers = (data || [])
-        .map((item: any) => item.users)
-        .filter((u: any) => !!u && u.is_active !== false) // Basic filtering, though edge function usually handles this
-        .sort((a: any, b: any) => (a.full_name || '').localeCompare(b.full_name || ''));
+        .map((item) => item.users)
+        .filter((roomUser): roomUser is RoomUserSummary & { is_active?: boolean } => !!roomUser && roomUser.is_active !== false)
+        .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
 
       setUsers(mappedUsers);
     } catch (error) {
       console.error('Error loading users:', error);
       setUsers([]);
     }
-  };
-
-  const callReservationFunction = async (operation: string, data?: Record<string, unknown>) => {
-    const session = authService.getSession();
-    if (!session) throw new Error('No session');
-
-    const response = await supabase.functions.invoke('manage-reservations', {
-      body: { operation, data },
-      headers: {
-        'x-session-token': session.token
-      }
-    });
-
-    // When Edge Functions return HTTP errors, the actual error message is in response.data
-    if (response.error) {
-      let errorMessage = '';
-
-      // FIRST: Check response.data for the actual backend error message (most common)
-      if (response.data && typeof response.data === 'object') {
-        const dataError = response.data as { error?: string; message?: string };
-        errorMessage = dataError.error || dataError.message || '';
-      }
-
-      // FALLBACK: Check response.error if nothing in response.data
-      if (!errorMessage) {
-        if (typeof response.error === 'string') {
-          errorMessage = response.error;
-        } else if (response.error && typeof response.error === 'object') {
-          const errorData = response.error as { message?: string; error?: string; msg?: string };
-          errorMessage = errorData.message || errorData.error || errorData.msg || JSON.stringify(errorData);
-        }
-      }
-
-      console.log('Error from backend:', errorMessage);
-
-      // Check for "one desk per day" rule violation in both English and Italian
-      if (errorMessage.includes("That's two!") ||
-        errorMessage.includes('limit reservations to one') ||
-        errorMessage.includes('Non puoi prenotare più di una scrivania') ||
-        errorMessage.includes('Hai già una scrivania assegnata') ||
-        errorMessage.includes('nello stesso periodo')) {
-        throw new Error('ONE_PER_DAY:' + errorMessage);
-      }
-
-      throw new Error(errorMessage || 'Unknown error');
-    }
-    return response.data;
   };
 
   const handleBooking = async (e: React.FormEvent) => {
@@ -173,42 +116,34 @@ export default function BookDeskDialog({
       toast({
         title: 'Missing date',
         description: 'Please select a date',
-        variant: 'destructive'
+        variant: 'destructive',
       });
       return;
     }
 
     setSubmitting(true);
     try {
-      const newReservation = await callReservationFunction('create', {
+      const newReservation = await createReservation({
         room_id: roomId,
         cell_id: cellId,
         type: 'day',
         date_start: format(selectedDate, 'yyyy-MM-dd'),
         date_end: format(selectedDate, 'yyyy-MM-dd'),
-        time_segment: 'FULL'
+        time_segment: 'FULL',
       });
 
       toast({
         title: 'Desk booked',
-        description: `${cellLabel || 'Desk'} booked for ${format(selectedDate, 'EEEE, MMMM d, yyyy')}.`
+        description: `${cellLabel || 'Desk'} booked for ${format(selectedDate, 'EEEE, MMMM d, yyyy')}.`,
       });
 
       onOpenChange(false);
-      if (onBookingComplete) onBookingComplete(newReservation);
-
-      setSelectedDate(new Date());
+      onBookingComplete?.(newReservation);
       setSelectedDate(new Date());
     } catch (error: unknown) {
-      let message = 'Unknown error';
-      if (error instanceof Error) {
-        message = error.message;
-      } else if (typeof error === 'object' && error !== null) {
-        const e = error as { message?: string; error?: string };
-        message = e.message || e.error || 'Unknown error';
-      }
+      const message = getEdgeErrorMessage(error);
 
-      if (message.startsWith('ONE_PER_DAY:')) {
+      if (isOneDeskPerDayError(message)) {
         setErrorDialogMessage('You already have a desk for this date. Cancel the existing booking before reserving another one.');
         setShowErrorDialog(true);
         onOpenChange(false);
@@ -221,7 +156,7 @@ export default function BookDeskDialog({
           description: message || 'This desk is no longer available for the selected date.',
           variant: 'destructive',
         });
-        if (onBookingComplete) onBookingComplete();
+        onBookingComplete?.();
       } else {
         toast({
           title: 'Booking failed',
@@ -229,8 +164,9 @@ export default function BookDeskDialog({
           variant: 'destructive',
         });
       }
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
   };
 
   const handleAssignment = async (e: React.FormEvent) => {
@@ -240,7 +176,7 @@ export default function BookDeskDialog({
       toast({
         title: 'Missing dates',
         description: 'Please select start and end dates',
-        variant: 'destructive'
+        variant: 'destructive',
       });
       return;
     }
@@ -249,18 +185,17 @@ export default function BookDeskDialog({
       toast({
         title: 'Missing user',
         description: 'Please select a user to assign the desk to',
-        variant: 'destructive'
+        variant: 'destructive',
       });
       return;
     }
 
-    // Validate date range
     const daysDiff = differenceInDays(endDate, startDate);
     if (daysDiff < 0) {
       toast({
         title: 'Invalid date range',
         description: 'End date must be after start date',
-        variant: 'destructive'
+        variant: 'destructive',
       });
       return;
     }
@@ -269,18 +204,15 @@ export default function BookDeskDialog({
       toast({
         title: 'Period too long',
         description: 'Assignment period cannot exceed 1 year',
-        variant: 'destructive'
+        variant: 'destructive',
       });
       return;
     }
 
     setSubmitting(true);
     try {
-      const session = authService.getSession();
-      if (!session) throw new Error('No session');
+      const session = getSessionOrThrow();
 
-      // Use direct client-side insertion to ensure reliability
-      // This bypasses potentially outdated Edge Function logic
       const { data: newAssignment, error } = await supabase
         .from('fixed_assignments')
         .insert({
@@ -289,21 +221,22 @@ export default function BookDeskDialog({
           assigned_to: selectedUserId,
           created_by: session.user.id,
           date_start: format(startDate, 'yyyy-MM-dd'),
-          date_end: format(endDate, 'yyyy-MM-dd')
+          date_end: format(endDate, 'yyyy-MM-dd'),
         })
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
 
-      const assignedUser = users.find(u => u.id === selectedUserId);
+      const assignedUser = users.find((roomUser) => roomUser.id === selectedUserId);
       toast({
         title: 'Desk assigned',
-        description: `Desk successfully assigned to ${assignedUser?.full_name} from ${format(startDate, 'PP')} to ${format(endDate, 'PP')}`
+        description: `Desk successfully assigned to ${assignedUser?.full_name} from ${format(startDate, 'PP')} to ${format(endDate, 'PP')}`,
       });
 
       onOpenChange(false);
-      // Pass optimistic update
       if (onBookingComplete && assignedUser) {
         onBookingComplete({
           id: newAssignment.id,
@@ -313,31 +246,22 @@ export default function BookDeskDialog({
           date_start: format(startDate, 'yyyy-MM-dd'),
           date_end: format(endDate, 'yyyy-MM-dd'),
           status: 'approved',
-          type: 'fixed_assignment', // Use explicit type expected by viewer
-          // @ts-ignore
-          user: assignedUser
-        } as unknown as Reservation);
+          type: 'fixed_assignment',
+        });
       }
 
       setStartDate(new Date());
       setEndDate(new Date());
       setSelectedUserId('');
-      setSelectedUserId('');
     } catch (error: unknown) {
-      let message = 'Unknown error';
-      if (error instanceof Error) {
-        message = error.message;
-      } else if (typeof error === 'object' && error !== null) {
-        const e = error as { message?: string; error?: string };
-        message = e.message || e.error || 'Unknown error';
-      }
       toast({
         title: 'Assignment failed',
-        description: message,
+        description: getEdgeErrorMessage(error),
         variant: 'destructive',
       });
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
   };
 
   const maxEndDate = addYears(startDate, 1);
@@ -353,7 +277,7 @@ export default function BookDeskDialog({
         </DialogHeader>
 
         {isAdmin ? (
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'booking' | 'assignment')}>
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'booking' | 'assignment')}>
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="booking">Book Desk</TabsTrigger>
               <TabsTrigger value="assignment">Assign Desk</TabsTrigger>
@@ -389,7 +313,7 @@ export default function BookDeskDialog({
                           variant="outline"
                           className={cn(
                             'min-w-[240px] justify-start text-left font-normal',
-                            !selectedDate && 'text-muted-foreground'
+                            !selectedDate && 'text-muted-foreground',
                           )}
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
@@ -452,9 +376,9 @@ export default function BookDeskDialog({
                       </SelectTrigger>
                       <SelectContent>
                         {users.length > 0 ? (
-                          users.map((user) => (
-                            <SelectItem key={user.id} value={user.id}>
-                              {user.full_name} (@{user.username})
+                          users.map((roomUser) => (
+                            <SelectItem key={roomUser.id} value={roomUser.id}>
+                              {roomUser.full_name} (@{roomUser.username})
                             </SelectItem>
                           ))
                         ) : (
@@ -475,7 +399,7 @@ export default function BookDeskDialog({
                           variant="outline"
                           className={cn(
                             'w-full justify-start text-left font-normal',
-                            !startDate && 'text-muted-foreground'
+                            !startDate && 'text-muted-foreground',
                           )}
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
@@ -489,7 +413,6 @@ export default function BookDeskDialog({
                           onSelect={(date) => {
                             if (date) {
                               setStartDate(date);
-                              // If end date is before new start date, adjust it
                               if (endDate < date) {
                                 setEndDate(date);
                               }
@@ -512,7 +435,7 @@ export default function BookDeskDialog({
                           variant="outline"
                           className={cn(
                             'w-full justify-start text-left font-normal',
-                            !endDate && 'text-muted-foreground'
+                            !endDate && 'text-muted-foreground',
                           )}
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
@@ -581,7 +504,7 @@ export default function BookDeskDialog({
                       variant="outline"
                       className={cn(
                         'min-w-[240px] justify-start text-left font-normal',
-                        !selectedDate && 'text-muted-foreground'
+                        !selectedDate && 'text-muted-foreground',
                       )}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />

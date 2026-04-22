@@ -21,67 +21,21 @@ import {
   TooltipProvider,
 } from "@/components/ui/tooltip";
 import { format, parseISO, isWithinInterval, addDays, isEqual } from 'date-fns';
-
-
-type DeskType = 'desk';
-
-interface Cell {
-  id: string;
-  x: number;
-  y: number;
-  type: DeskType;
-  label: string | null;
-}
-
-interface Room {
-  id: string;
-  name: string;
-  grid_width: number;
-  grid_height: number;
-}
-
-interface Reservation {
-  id: string;
-  cell_id: string;
-  user_id: string;
-  status: string;
-  date_start: string;
-  date_end: string;
-  time_segment: string;
-  user: { id: string; username: string; full_name: string };
-  type: string;
-  room?: { id: string; name: string };
-  cell?: { id: string; label: string | null; type: string; x?: number; y?: number };
-  created_at: string;
-}
-
-interface FixedAssignment {
-  id: string;
-  cell_id: string;
-  assigned_to: string;
-  date_start: string;
-  date_end: string;
-  assigned_user: {
-    id: string;
-    username: string;
-    full_name: string;
-  } | null;
-  created_at?: string;
-}
-
-interface Wall {
-  id: string;
-  room_id: string;
-  start_row: number;
-  start_col: number;
-  end_row: number;
-  end_col: number;
-  orientation: 'horizontal' | 'vertical';
-  type: 'wall' | 'entrance';
-}
+import { invokeReservationFunction } from '@/lib/edge-functions';
+import { getRoomLayout, listRooms } from '@/features/rooms/api';
+import type {
+  DeskType,
+  FixedAssignment,
+  RoomCell,
+  RoomDayStateResponse,
+  RoomLayoutDetails,
+  RoomReservation,
+  RoomSummary,
+  RoomWall,
+} from '@/features/rooms/types';
 
 type DeskStatus = 'available' | 'reserved' | 'my-reservation';
-type DeskStatusDetails = { status: DeskStatus; reservation?: Reservation; assignedTo?: string };
+type DeskStatusDetails = { status: DeskStatus; reservation?: RoomReservation; assignedTo?: string };
 
 const CELL_SIZE = 50;
 
@@ -107,21 +61,21 @@ export default function RoomViewer() {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const [room, setRoom] = useState<Room | null>(null);
-  const [cells, setCells] = useState<Cell[]>([]);
-  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [room, setRoom] = useState<RoomSummary | null>(null);
+  const [cells, setCells] = useState<RoomCell[]>([]);
+  const [reservations, setReservations] = useState<RoomReservation[]>([]);
   const [fixedAssignments, setFixedAssignments] = useState<FixedAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [bookingDialogOpen, setBookingDialogOpen] = useState(false);
   const [reservationDetailsOpen, setReservationDetailsOpen] = useState(false);
-  const [selectedCell, setSelectedCell] = useState<Cell | null>(null);
-  const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
+  const [selectedCell, setSelectedCell] = useState<RoomCell | null>(null);
+  const [selectedReservation, setSelectedReservation] = useState<RoomReservation | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [isRoomAdmin, setIsRoomAdmin] = useState(false);
 
 
-  const [walls, setWalls] = useState<Wall[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
+  const [walls, setWalls] = useState<RoomWall[]>([]);
+  const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [activeTab, setActiveTab] = useState<'desks' | 'rooms'>('desks');
   const [refreshingColors, setRefreshingColors] = useState(false);
   const [deskSearch, setDeskSearch] = useState('');
@@ -209,43 +163,13 @@ export default function RoomViewer() {
     }
   }, [cells, selectedDeskId]);
 
-  const callRoomFunction = async (operation: string, data?: Record<string, unknown>) => {
-    const session = authService.getSession();
-    if (!session) throw new Error('No session');
-
-    const response = await supabase.functions.invoke('manage-rooms', {
-      body: { operation, data },
-      headers: {
-        'x-session-token': session.token,
-      },
-    });
-
-    if (response.error) throw response.error;
-    return response.data;
-  };
-
-  const callReservationFunction = async (operation: string, data?: Record<string, unknown>) => {
-    const session = authService.getSession();
-    if (!session) throw new Error('No session');
-
-    const response = await supabase.functions.invoke('manage-reservations', {
-      body: { operation, data },
-      headers: {
-        'x-session-token': session.token,
-      },
-    });
-
-    if (response.error) throw response.error;
-    return response.data;
-  };
-
   const loadRoom = async () => {
     if (!roomId) return;
 
     setLoading(true);
 
     try {
-      const result = await callRoomFunction('get', { roomId });
+      const result = await getRoomLayout(roomId);
       setRoom(result.room);
       setCells(result.cells || []);
       setWalls(result.walls || []);
@@ -285,7 +209,7 @@ export default function RoomViewer() {
 
   const loadRooms = async () => {
     try {
-      const result = await callRoomFunction('list');
+      const result = await listRooms();
       setRooms(result || []);
     } catch (error) {
       console.error('Error loading rooms:', error);
@@ -297,13 +221,12 @@ export default function RoomViewer() {
     const requestId = ++latestAvailabilityRequestRef.current;
 
     try {
-      const roomDayState = await callReservationFunction('get_room_day_state', {
+      const roomDayState = await invokeReservationFunction<RoomDayStateResponse, { roomId: string; date: string }>('get_room_day_state', {
         roomId,
         date: format(selectedDateRef.current, 'yyyy-MM-dd'),
       });
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mappedReservations = (roomDayState?.reservations || []).map((r: any): Reservation => ({
+      const mappedReservations = (roomDayState?.reservations || []).map((r): RoomReservation => ({
         id: r.id,
         cell_id: r.cell_id,
         user_id: r.user_id,
@@ -316,8 +239,7 @@ export default function RoomViewer() {
         created_at: r.created_at
       }));
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mappedAssignments = (roomDayState?.fixed_assignments || []).map((assignment: any): FixedAssignment => ({
+      const mappedAssignments = (roomDayState?.fixed_assignments || []).map((assignment): FixedAssignment => ({
         id: assignment.id,
         cell_id: assignment.cell_id,
         assigned_to: assignment.assigned_to,
@@ -376,7 +298,7 @@ export default function RoomViewer() {
     }
   };
 
-  const getReservationDisplayName = (reservation?: Reservation | null, assignedTo?: string) => {
+  const getReservationDisplayName = (reservation?: RoomReservation | null, assignedTo?: string) => {
     const fullName = reservation?.user?.full_name?.trim();
     const username = reservation?.user?.username?.trim();
     const assignedName = assignedTo?.trim();
@@ -405,7 +327,7 @@ export default function RoomViewer() {
     if (activeAssignment) {
       const isMyAssignment = activeAssignment.assigned_to === user?.id;
       // Convert fixed assignment to reservation format for consistent handling
-      const assignmentAsReservation: Reservation = {
+      const assignmentAsReservation: RoomReservation = {
         id: activeAssignment.id,
         cell_id: activeAssignment.cell_id,
         user_id: activeAssignment.assigned_to,
@@ -465,11 +387,11 @@ export default function RoomViewer() {
     }
   };
 
-  const getCellAt = (x: number, y: number): Cell | undefined => {
+  const getCellAt = (x: number, y: number): RoomCell | undefined => {
     return cells.find((c) => c.x === x && c.y === y);
   };
 
-  const handleCellClick = (cell: Cell) => {
+  const handleCellClick = (cell: RoomCell) => {
     setSelectedDeskId(cell.id);
     const { status, reservation, assignedTo } = getDeskStatus(cell.id);
     const canManageReservedDesk = user?.role === 'admin' || user?.role === 'super_admin';
@@ -510,7 +432,7 @@ export default function RoomViewer() {
     setBookingDialogOpen(true);
   };
 
-  const handleDeskListClick = (cell: Cell) => {
+  const handleDeskListClick = (cell: RoomCell) => {
     setSelectedDeskId(cell.id);
     const canManageReservedDesk = user?.role === 'admin' || user?.role === 'super_admin';
     const { status } = getDeskStatus(cell.id);
@@ -901,7 +823,7 @@ export default function RoomViewer() {
                       const isBookable = !!cell;
                       const { status, reservation, assignedTo } = cell
                         ? getDeskStatus(cell.id)
-                        : ({ status: 'available' as DeskStatus } as { status: DeskStatus; reservation?: Reservation; assignedTo?: string });
+                        : ({ status: 'available' as DeskStatus } as { status: DeskStatus; reservation?: RoomReservation; assignedTo?: string });
 
                       if (cell) {
                         const isSelected = selectedDeskId === cell.id;
@@ -1223,8 +1145,8 @@ export default function RoomViewer() {
             initialDate={selectedDate}
             onBookingComplete={(newReservation) => {
               if (newReservation && user) {
-                const nr = newReservation as unknown as Reservation;
-                const optimisticReservation: Reservation = {
+                const nr = newReservation as unknown as RoomReservation;
+                const optimisticReservation: RoomReservation = {
                   ...nr,
                   time_segment: nr.time_segment || 'FULL',
                   created_at: nr.created_at || new Date().toISOString(),
@@ -1249,7 +1171,7 @@ export default function RoomViewer() {
             <ReservationDetailsDialog
               open={reservationDetailsOpen}
               onOpenChange={setReservationDetailsOpen}
-              reservation={selectedReservation as unknown as (Reservation & { room: { id: string; name: string }; cell: { id: string; label: string | null; type: string; x?: number; y?: number }; })}
+              reservation={selectedReservation as unknown as (RoomReservation & { room: { id: string; name: string }; cell: { id: string; label: string | null; type: string; x?: number; y?: number }; })}
               isAdmin={isRoomAdmin}
               onDelete={
                 isRoomAdmin || (user && selectedReservation.user_id === user.id)
@@ -1311,7 +1233,7 @@ export default function RoomViewer() {
 
                         toast({ title: 'Availability updated', description: 'Selected day removed from assignment.' });
                       } else {
-                        await callReservationFunction('cancel', {
+                        await invokeReservationFunction('cancel', {
                           reservationId: selectedReservation.id
                         });
                         toast({

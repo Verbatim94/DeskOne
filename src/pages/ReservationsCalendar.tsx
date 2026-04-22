@@ -1,6 +1,4 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { authService } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,28 +9,15 @@ import { useToast } from '@/hooks/use-toast';
 import { Calendar as CalendarIcon, Loader2, User, MapPin, Filter } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, isSameDay, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-
-interface Reservation {
-  id: string;
-  room: { id: string; name: string };
-  user: { id: string; username: string; full_name: string };
-  cell: { id: string; label: string | null; type: string; x: number; y: number };
-  type: string;
-  status: string;
-  date_start: string;
-  date_end: string;
-  time_segment: string;
-  created_at: string;
-}
-
-interface Room {
-  id: string;
-  name: string;
-}
+import { getEdgeErrorMessage } from '@/lib/edge-functions';
+import { listRoomReservations } from '@/features/reservations/api';
+import { listRooms } from '@/features/rooms/api';
+import type { ReservationRecord } from '@/features/reservations/types';
+import type { RoomSummary } from '@/features/rooms/types';
 
 export default function ReservationsCalendar() {
-  const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
+  const [reservations, setReservations] = useState<ReservationRecord[]>([]);
+  const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedRoom, setSelectedRoom] = useState<string>('all');
@@ -44,67 +29,32 @@ export default function ReservationsCalendar() {
     loadData();
   }, []);
 
-  const callRoomFunction = async (operation: string, data?: any) => {
-    const session = authService.getSession();
-    if (!session) throw new Error('No session');
-
-    const response = await supabase.functions.invoke('manage-rooms', {
-      body: { operation, data },
-      headers: {
-        'x-session-token': session.token
-      }
-    });
-
-    if (response.error) throw response.error;
-    return response.data;
-  };
-
-  const callReservationFunction = async (operation: string, data?: any) => {
-    const session = authService.getSession();
-    if (!session) throw new Error('No session');
-
-    const response = await supabase.functions.invoke('manage-reservations', {
-      body: { operation, data },
-      headers: {
-        'x-session-token': session.token
-      }
-    });
-
-    if (response.error) throw response.error;
-    return response.data;
-  };
-
   const loadData = async () => {
     setLoading(true);
     try {
       // Load rooms
-      const roomsData = await callRoomFunction('list');
+      const roomsData = await listRooms();
       setRooms(roomsData || []);
 
       // Load all reservations for rooms user has access to
-      const allReservations: Reservation[] = [];
-      for (const room of roomsData || []) {
-        try {
-          const roomReservations = await callReservationFunction('list_room_reservations', {
-            roomId: room.id
-          });
-          // Map the data structure from edge function response
-          const mappedReservations = (roomReservations || []).map((r: any) => ({
-            ...r,
-            room: { id: room.id, name: room.name },
-            user: r.users,
-            cell: r.room_cells
-          }));
-          allReservations.push(...mappedReservations);
-        } catch (error) {
-          console.error(`Failed to load reservations for room ${room.id}:`, error);
-        }
-      }
-      setReservations(allReservations);
-    } catch (error: any) {
+      const roomReservationGroups = await Promise.all(
+        (roomsData || []).map(async (room) => {
+          try {
+            return await listRoomReservations(room.id, {
+              id: room.id,
+              name: room.name,
+            });
+          } catch (error) {
+            console.error(`Failed to load reservations for room ${room.id}:`, error);
+            return [];
+          }
+        }),
+      );
+      setReservations(roomReservationGroups.flat());
+    } catch (error: unknown) {
       toast({
         title: 'Error loading data',
-        description: error.message,
+        description: getEdgeErrorMessage(error),
         variant: 'destructive'
       });
     }

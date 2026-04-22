@@ -1,29 +1,15 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { authService } from '@/lib/auth';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Trash2, UserPlus, Loader2, Shield, User } from 'lucide-react';
+import { addRoomUser, listAvailableRoomUsers, listRoomUsers, removeRoomUser } from '@/features/rooms/api';
+import type { RoomAccessEntry, RoomUserSummary } from '@/features/rooms/types';
 
-interface RoomUser {
-  id: string;
-  role: 'admin' | 'member';
-  user_id: string;
-  users: {
-    id: string;
-    username: string;
-    full_name: string;
-  };
-}
-
-interface AvailableUser {
-  id: string;
-  username: string;
-  full_name: string;
-}
+type RoomUser = RoomAccessEntry;
+type AvailableUser = RoomUserSummary;
 
 interface RoomAccessDialogProps {
   roomId: string;
@@ -48,25 +34,10 @@ export default function RoomAccessDialog({ roomId, roomName, open, onOpenChange 
     }
   }, [open, roomId]);
 
-  const callRoomFunction = async (operation: string, data?: Record<string, unknown>) => {
-    const session = authService.getSession();
-    if (!session) throw new Error('No session');
-
-    const response = await supabase.functions.invoke('manage-rooms', {
-      body: { operation, data },
-      headers: {
-        'x-session-token': session.token
-      }
-    });
-
-    if (response.error) throw response.error;
-    return response.data;
-  };
-
   const loadRoomUsers = async () => {
     setLoading(true);
     try {
-      const data = await callRoomFunction('list_room_users', { roomId });
+      const data = await listRoomUsers(roomId);
       if (data) {
         data.sort((a: RoomUser, b: RoomUser) =>
           a.users.full_name.localeCompare(b.users.full_name)
@@ -88,7 +59,7 @@ export default function RoomAccessDialog({ roomId, roomName, open, onOpenChange 
 
   const loadAvailableUsers = async () => {
     try {
-      const data = await callRoomFunction('list_available_users', { roomId });
+      const data = await listAvailableRoomUsers(roomId);
       if (data) {
         data.sort((a: AvailableUser, b: AvailableUser) =>
           a.full_name.localeCompare(b.full_name)
@@ -112,11 +83,7 @@ export default function RoomAccessDialog({ roomId, roomName, open, onOpenChange 
 
     setAdding(true);
     try {
-      await callRoomFunction('add_room_user', {
-        roomId,
-        userId: selectedUserId,
-        role: selectedRole
-      });
+      await addRoomUser(roomId, selectedUserId, selectedRole);
 
       toast({ title: 'User added successfully' });
       setSelectedUserId('');
@@ -140,10 +107,7 @@ export default function RoomAccessDialog({ roomId, roomName, open, onOpenChange 
     if (!confirm(`Remove ${userName} from this room?`)) return;
 
     try {
-      await callRoomFunction('remove_room_user', {
-        roomId,
-        accessId
-      });
+      await removeRoomUser(roomId, accessId);
 
       toast({ title: 'User removed successfully' });
       loadRoomUsers();

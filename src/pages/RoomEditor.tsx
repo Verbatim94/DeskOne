@@ -24,23 +24,23 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-
-type DeskType = 'desk';
-
-interface Cell {
-  id: string;
-  x: number;
-  y: number;
-  type: DeskType;
-  label: string | null;
-}
-
-interface Room {
-  id: string;
-  name: string;
-  grid_width: number;
-  grid_height: number;
-}
+import {
+  createRoomCell,
+  createRoomWall,
+  deleteAllRoomCells,
+  deleteRoomCell,
+  deleteRoomWall,
+  getRoomLayout,
+  listRooms,
+  updateRoomCell,
+} from '@/features/rooms/api';
+import type {
+  DeskType,
+  RoomCell,
+  RoomLayoutDetails,
+  RoomSummary,
+  RoomWall,
+} from '@/features/rooms/types';
 
 const CELL_SIZE = 50;
 
@@ -60,39 +60,27 @@ const DESK_TYPES: {
     }
   ];
 
-interface Wall {
-  id: string;
-  room_id: string;
-  start_row: number;
-  start_col: number;
-  end_row: number;
-  end_col: number;
-  orientation: 'horizontal' | 'vertical';
-  type: 'wall' | 'entrance';
-}
-
-
 export default function RoomEditor() {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const [room, setRoom] = useState<Room | null>(null);
-  const [cells, setCells] = useState<Cell[]>([]);
+  const [room, setRoom] = useState<RoomSummary | null>(null);
+  const [cells, setCells] = useState<RoomCell[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedType, setSelectedType] = useState<DeskType>('desk');
   const [isRoomAdmin, setIsRoomAdmin] = useState(false);
-  const [renamingCell, setRenamingCell] = useState<Cell | null>(null);
+  const [renamingCell, setRenamingCell] = useState<RoomCell | null>(null);
   const [customName, setCustomName] = useState('');
   const [cellOperationInProgress, setCellOperationInProgress] = useState(false);
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
   const [wallOperationInProgress, setWallOperationInProgress] = useState(false);
 
   const [isWallMode, setIsWallMode] = useState(false);
-  const [walls, setWalls] = useState<Wall[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
+  const [walls, setWalls] = useState<RoomWall[]>([]);
+  const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [activeTab, setActiveTab] = useState<'desks' | 'rooms'>('desks');
 
 
@@ -105,28 +93,13 @@ export default function RoomEditor() {
     loadRooms();
   }, [roomId]);
 
-  const callRoomFunction = async (operation: string, data?: Record<string, unknown>) => {
-    const session = authService.getSession();
-    if (!session) throw new Error('No session');
-
-    const response = await supabase.functions.invoke('manage-rooms', {
-      body: { operation, data },
-      headers: {
-        'x-session-token': session.token
-      }
-    });
-
-    if (response.error) throw response.error;
-    return response.data;
-  };
-
   const loadRoom = async () => {
     if (!roomId) return;
 
     setLoading(true);
 
     try {
-      const result = await callRoomFunction('get', { roomId });
+      const result = await getRoomLayout(roomId);
       setRoom(result.room);
       setCells(result.cells || []);
       setWalls(result.walls || []);
@@ -170,14 +143,14 @@ export default function RoomEditor() {
 
   const loadRooms = async () => {
     try {
-      const result = await callRoomFunction('list');
+      const result = await listRooms();
       setRooms(result || []);
     } catch (error) {
       console.error('Error loading rooms:', error);
     }
   };
 
-  const getCellAt = (x: number, y: number): Cell | undefined => {
+  const getCellAt = (x: number, y: number): RoomCell | undefined => {
     return cells.find(c => c.x === x && c.y === y);
   };
 
@@ -202,15 +175,8 @@ export default function RoomEditor() {
     try {
       if (!existingCell) {
         setCellOperationInProgress(true);
-        const newCell = await callRoomFunction('create_cell', {
-          cell: {
-            room_id: roomId!,
-            x,
-            y,
-            type: selectedType
-          }
-        });
-        setCells([...cells, newCell]);
+        const newCell = await createRoomCell(roomId!, x, y, selectedType);
+        setCells((previousCells) => [...previousCells, newCell]);
         setSelectedCell(newCell);
       }
     } catch (error: unknown) {
@@ -227,10 +193,10 @@ export default function RoomEditor() {
     }
   };
 
-  const [selectedCell, setSelectedCell] = useState<Cell | null>(null);
+  const [selectedCell, setSelectedCell] = useState<RoomCell | null>(null);
 
   // Drag and Drop Handlers
-  const handleDragStart = (e: React.DragEvent, type: DeskType, source: 'palette' | 'grid', cell?: Cell) => {
+  const handleDragStart = (e: React.DragEvent, type: DeskType, source: 'palette' | 'grid', cell?: RoomCell) => {
     e.dataTransfer.setData('type', type);
     e.dataTransfer.setData('source', source);
     if (cell) {
@@ -255,15 +221,8 @@ export default function RoomEditor() {
       // Create new cell
       try {
         setCellOperationInProgress(true);
-        const newCell = await callRoomFunction('create_cell', {
-          cell: {
-            room_id: roomId!,
-            x,
-            y,
-            type
-          }
-        });
-        setCells([...cells, newCell]);
+        const newCell = await createRoomCell(roomId!, x, y, type);
+        setCells((previousCells) => [...previousCells, newCell]);
       } catch (error: unknown) {
         let message = 'Unknown error';
         if (error instanceof Error) message = error.message;
@@ -283,13 +242,9 @@ export default function RoomEditor() {
         // Optimistic update
         const movedCell = cells.find(c => c.id === cellId);
         if (movedCell) {
-          const updatedCells = cells.map(c => c.id === cellId ? { ...c, x, y } : c);
-          setCells(updatedCells);
+          setCells((previousCells) => previousCells.map(c => c.id === cellId ? { ...c, x, y } : c));
 
-          await callRoomFunction('update_cell', {
-            cellId,
-            updates: { x, y }
-          });
+          await updateRoomCell(cellId, { x, y });
         }
       } catch (error: unknown) {
         // Revert on error
@@ -308,7 +263,7 @@ export default function RoomEditor() {
     }
   };
 
-  const handleRenameClick = (cell: Cell) => {
+  const handleRenameClick = (cell: RoomCell) => {
     setRenamingCell(cell);
     setCustomName(cell.label || '');
     setIsRenameDialogOpen(true);
@@ -318,16 +273,12 @@ export default function RoomEditor() {
     if (!renamingCell) return;
 
     try {
-      const updatedCell = await callRoomFunction('update_cell', {
-        cellId: renamingCell.id,
-        updates: { label: customName || null }
-      });
-      setCells(cells.map(c =>
-        c.id === renamingCell.id ? updatedCell : c
+      const updatedCell = await updateRoomCell(renamingCell.id, { label: customName || null });
+      setCells((previousCells) => previousCells.map((cell) =>
+        cell.id === renamingCell.id ? updatedCell : cell
       ));
       setIsRenameDialogOpen(false);
       setRenamingCell(null);
-      setCustomName('');
       setCustomName('');
       toast({ title: 'Desk name updated successfully' });
     } catch (error: unknown) {
@@ -342,13 +293,12 @@ export default function RoomEditor() {
     }
   };
 
-  const handleDeleteCell = async (cell: Cell) => {
+  const handleDeleteCell = async (cell: RoomCell) => {
     if (!confirm('Are you sure you want to delete this desk?')) return;
 
     try {
-      await callRoomFunction('delete_cell', { cellId: cell.id });
-      setCells(cells.filter(c => c.id !== cell.id));
-      setCells(cells.filter(c => c.id !== cell.id));
+      await deleteRoomCell(cell.id);
+      setCells((previousCells) => previousCells.filter((currentCell) => currentCell.id !== cell.id));
       if (selectedCell?.id === cell.id) setSelectedCell(null);
       toast({ title: 'Desk deleted successfully' });
     } catch (error: unknown) {
@@ -367,9 +317,8 @@ export default function RoomEditor() {
     if (!confirm('Are you sure you want to clear all cells?')) return;
 
     try {
-      await callRoomFunction('delete_all_cells', { roomId: roomId! });
+      await deleteAllRoomCells(roomId!);
       setCells([]);
-      setWalls([]);
       setWalls([]);
       setSelectedCell(null);
       toast({ title: 'All cells cleared' });
@@ -416,7 +365,7 @@ export default function RoomEditor() {
       }
     } else {
       // Create new wall
-      const tempWall: Wall = {
+      const tempWall: RoomWall = {
         id: tempId,
         room_id: roomId!,
         start_row,
@@ -435,28 +384,12 @@ export default function RoomEditor() {
       if (existingWall) {
         if (existingWall.type === wallType) {
           // Delete exactly
-          await callRoomFunction('delete_wall', { wallId: existingWall.id });
+          await deleteRoomWall(existingWall.id);
         } else {
           // Update type essentially means delete and recreate in this simple model if backend doesn't support update_wall
           // Or we can delete old and create new. Let's assume delete then create.
-          await callRoomFunction('delete_wall', { wallId: existingWall.id });
-          const newWall = await callRoomFunction('create_wall', {
-            wall: {
-              room_id: roomId!,
-              start_row,
-              start_col,
-              end_row,
-              end_col,
-              orientation,
-              type: wallType
-            }
-          });
-          setWalls(prev => prev.map(w => w.id === existingWall.id ? newWall : w)); // Assuming we updated the local object in place previously
-        }
-      } else {
-        // Create wall
-        const newWall = await callRoomFunction('create_wall', {
-          wall: {
+          await deleteRoomWall(existingWall.id);
+          const newWall = await createRoomWall({
             room_id: roomId!,
             start_row,
             start_col,
@@ -464,7 +397,19 @@ export default function RoomEditor() {
             end_col,
             orientation,
             type: wallType
-          }
+          });
+          setWalls(prev => prev.map(w => w.id === existingWall.id ? newWall : w)); // Assuming we updated the local object in place previously
+        }
+      } else {
+        // Create wall
+        const newWall = await createRoomWall({
+          room_id: roomId!,
+          start_row,
+          start_col,
+          end_row,
+          end_col,
+          orientation,
+          type: wallType
         });
         // Replace the specific temp wall with real one
         setWalls(prev => prev.map(w => w.id === tempId ? newWall : w));
