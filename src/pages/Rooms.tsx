@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -12,12 +12,12 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, Pencil, Trash2, Grid3x3, Loader2, Users, Settings } from 'lucide-react';
 import RoomAccessDialog from '@/components/RoomAccessDialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { createRoom, deleteRoom, listRooms, updateRoom } from '@/features/rooms/api';
+import { createRoom, deleteRoom, updateRoom } from '@/features/rooms/api';
+import { useRoomsList } from '@/features/rooms/hooks/useRoomsList';
 import type { RoomSummary } from '@/features/rooms/types';
+import { getEdgeErrorMessage } from '@/lib/edge-functions';
 
 export default function Rooms() {
-  const [rooms, setRooms] = useState<RoomSummary[]>([]);
-  const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRoom, setEditingRoom] = useState<RoomSummary | null>(null);
   const [accessDialogOpen, setAccessDialogOpen] = useState(false);
@@ -34,48 +34,43 @@ export default function Rooms() {
     grid_height: 10
   });
 
-  useEffect(() => {
-    loadRooms();
-  }, []);
-
-  const loadRooms = async () => {
-    setLoading(true);
-    try {
-      const data = await listRooms();
-      setRooms(data || []);
-
-      // Load room access permissions
-      if (user && user.role !== 'admin') {
-        const { data: accessData } = await supabase
-          .from('room_access')
-          .select('room_id, role')
-          .eq('user_id', user.id);
-
-        const adminMap: Record<string, boolean> = {};
-        accessData?.forEach(access => {
-          adminMap[access.room_id] = access.role === 'admin';
-        });
-        setRoomAdminMap(adminMap);
-      } else if (user?.role === 'admin') {
-        // Admin has admin rights on all rooms
-        const adminMap: Record<string, boolean> = {};
-        data?.forEach((room: RoomSummary) => {
-          adminMap[room.id] = true;
-        });
-        setRoomAdminMap(adminMap);
-      }
-    } catch (error: unknown) {
-      let message = 'Unknown error';
-      if (error instanceof Error) message = error.message;
-      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
+  const { rooms, loadRooms, loading } = useRoomsList({
+    autoload: false,
+    onError: (error) => {
       toast({
         title: 'Error loading rooms',
-        description: message,
+        description: getEdgeErrorMessage(error),
         variant: 'destructive'
       });
+    },
+  });
+
+  const refreshRooms = useCallback(async () => {
+    const data = await loadRooms();
+
+    if (user && user.role !== 'admin') {
+      const { data: accessData } = await supabase
+        .from('room_access')
+        .select('room_id, role')
+        .eq('user_id', user.id);
+
+      const adminMap: Record<string, boolean> = {};
+      accessData?.forEach(access => {
+        adminMap[access.room_id] = access.role === 'admin';
+      });
+      setRoomAdminMap(adminMap);
+    } else if (user?.role === 'admin') {
+      const adminMap: Record<string, boolean> = {};
+      data.forEach((room: RoomSummary) => {
+        adminMap[room.id] = true;
+      });
+      setRoomAdminMap(adminMap);
     }
-    setLoading(false);
-  };
+  }, [loadRooms, user]);
+
+  useEffect(() => {
+    refreshRooms();
+  }, [refreshRooms]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,15 +86,12 @@ export default function Rooms() {
         });
         toast({ title: 'Room updated successfully' });
         setDialogOpen(false);
-        loadRooms();
+        refreshRooms();
         resetForm();
       } catch (error: unknown) {
-        let message = 'Unknown error';
-        if (error instanceof Error) message = error.message;
-        else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
         toast({
           title: 'Error updating room',
-          description: message,
+          description: getEdgeErrorMessage(error),
           variant: 'destructive'
         });
       }
@@ -114,15 +106,12 @@ export default function Rooms() {
         });
         toast({ title: 'Room created successfully' });
         setDialogOpen(false);
-        loadRooms();
+        refreshRooms();
         resetForm();
       } catch (error: unknown) {
-        let message = 'Unknown error';
-        if (error instanceof Error) message = error.message;
-        else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
         toast({
           title: 'Error creating room',
-          description: message,
+          description: getEdgeErrorMessage(error),
           variant: 'destructive'
         });
       }
@@ -135,14 +124,11 @@ export default function Rooms() {
     try {
       await deleteRoom(id);
       toast({ title: 'Room deleted successfully' });
-      loadRooms();
+      refreshRooms();
     } catch (error: unknown) {
-      let message = 'Unknown error';
-      if (error instanceof Error) message = error.message;
-      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
       toast({
         title: 'Error deleting room',
-        description: message,
+        description: getEdgeErrorMessage(error),
         variant: 'destructive'
       });
     }

@@ -1,7 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
-import { authService } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -30,17 +28,28 @@ import {
   deleteAllRoomCells,
   deleteRoomCell,
   deleteRoomWall,
-  getRoomLayout,
-  listRooms,
   updateRoomCell,
 } from '@/features/rooms/api';
+import {
+  applyOptimisticWallState,
+  buildTempWall,
+  findMatchingWall,
+  findRoomCell,
+  insertRoomCell,
+  moveRoomCell,
+  removeRoomCell,
+  replaceRoomCell,
+  replaceWallById,
+  sortDeskCells,
+} from '@/features/rooms/editor-state';
+import { useRoomLayout } from '@/features/rooms/hooks/useRoomLayout';
+import { useRoomsList } from '@/features/rooms/hooks/useRoomsList';
 import type {
   DeskType,
   RoomCell,
-  RoomLayoutDetails,
-  RoomSummary,
   RoomWall,
 } from '@/features/rooms/types';
+import { getEdgeErrorMessage } from '@/lib/edge-functions';
 
 const CELL_SIZE = 50;
 
@@ -66,12 +75,8 @@ export default function RoomEditor() {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const [room, setRoom] = useState<RoomSummary | null>(null);
-  const [cells, setCells] = useState<RoomCell[]>([]);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedType, setSelectedType] = useState<DeskType>('desk');
-  const [isRoomAdmin, setIsRoomAdmin] = useState(false);
   const [renamingCell, setRenamingCell] = useState<RoomCell | null>(null);
   const [customName, setCustomName] = useState('');
   const [cellOperationInProgress, setCellOperationInProgress] = useState(false);
@@ -79,79 +84,51 @@ export default function RoomEditor() {
   const [wallOperationInProgress, setWallOperationInProgress] = useState(false);
 
   const [isWallMode, setIsWallMode] = useState(false);
-  const [walls, setWalls] = useState<RoomWall[]>([]);
-  const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [activeTab, setActiveTab] = useState<'desks' | 'rooms'>('desks');
 
 
   const [wallType, setWallType] = useState<'wall' | 'entrance'>('wall');
 
+  const handleUnauthorized = useCallback(() => {
+    toast({
+      title: 'Access Denied',
+      description: 'Only room admins can edit the layout',
+      variant: 'destructive'
+    });
+    navigate('/rooms');
+  }, [navigate, toast]);
 
+  const handleLoadError = useCallback((error: unknown) => {
+    toast({
+      title: 'Error loading room',
+      description: getEdgeErrorMessage(error),
+      variant: 'destructive'
+    });
+    navigate('/rooms');
+  }, [navigate, toast]);
 
-  useEffect(() => {
-    loadRoom();
-    loadRooms();
-  }, [roomId]);
-
-  const loadRoom = async () => {
-    if (!roomId) return;
-
-    setLoading(true);
-
-    try {
-      const result = await getRoomLayout(roomId);
-      setRoom(result.room);
-      setCells(result.cells || []);
-      setWalls(result.walls || []);
-
-      const session = authService.getSession();
-      if (session?.user.role === 'admin') {
-        setIsRoomAdmin(true);
-      } else {
-        const { data: access } = await supabase
-          .from('room_access')
-          .select('role')
-          .eq('room_id', roomId)
-          .eq('user_id', session?.user.id)
-          .single();
-
-        if (access?.role === 'admin') {
-          setIsRoomAdmin(true);
-        } else {
-          toast({
-            title: 'Access Denied',
-            description: 'Only room admins can edit the layout',
-            variant: 'destructive'
-          });
-          navigate('/rooms');
-        }
-      }
-    } catch (error: unknown) {
-      let message = 'Unknown error';
-      if (error instanceof Error) message = error.message;
-      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
-      toast({
-        title: 'Error loading room',
-        description: message,
-        variant: 'destructive'
-      });
-      navigate('/rooms');
-    }
-
-    setLoading(false);
-  };
-
-  const loadRooms = async () => {
-    try {
-      const result = await listRooms();
-      setRooms(result || []);
-    } catch (error) {
-      console.error('Error loading rooms:', error);
-    }
-  };
+  const {
+    room,
+    cells,
+    setCells,
+    walls,
+    setWalls,
+    loading,
+    isRoomAdmin,
+    loadRoom,
+  } = useRoomLayout({
+    roomId,
+    user,
+    requireAdmin: true,
+    onUnauthorized: handleUnauthorized,
+    onError: handleLoadError,
+  });
+  const { rooms } = useRoomsList({
+    onError: (error) => console.error('Error loading rooms:', error),
+  });
 
   const getCellAt = (x: number, y: number): RoomCell | undefined => {
-    return cells.find(c => c.x === x && c.y === y);
+    return findRoomCell(cells, x, y);
   };
 
   const handleCellClick = async (x: number, y: number) => {
@@ -176,7 +153,7 @@ export default function RoomEditor() {
       if (!existingCell) {
         setCellOperationInProgress(true);
         const newCell = await createRoomCell(roomId!, x, y, selectedType);
-        setCells((previousCells) => [...previousCells, newCell]);
+        setCells((previousCells) => insertRoomCell(previousCells, newCell));
         setSelectedCell(newCell);
       }
     } catch (error: unknown) {
@@ -222,14 +199,11 @@ export default function RoomEditor() {
       try {
         setCellOperationInProgress(true);
         const newCell = await createRoomCell(roomId!, x, y, type);
-        setCells((previousCells) => [...previousCells, newCell]);
+        setCells((previousCells) => insertRoomCell(previousCells, newCell));
       } catch (error: unknown) {
-        let message = 'Unknown error';
-        if (error instanceof Error) message = error.message;
-        else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
         toast({
           title: 'Error creating cell',
-          description: message,
+          description: getEdgeErrorMessage(error),
           variant: 'destructive'
         });
       } finally {
@@ -242,19 +216,16 @@ export default function RoomEditor() {
         // Optimistic update
         const movedCell = cells.find(c => c.id === cellId);
         if (movedCell) {
-          setCells((previousCells) => previousCells.map(c => c.id === cellId ? { ...c, x, y } : c));
+          setCells((previousCells) => moveRoomCell(previousCells, cellId, x, y));
 
           await updateRoomCell(cellId, { x, y });
         }
       } catch (error: unknown) {
         // Revert on error
         loadRoom();
-        let message = 'Unknown error';
-        if (error instanceof Error) message = error.message;
-        else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
         toast({
           title: 'Error moving cell',
-          description: message,
+          description: getEdgeErrorMessage(error),
           variant: 'destructive'
         });
       } finally {
@@ -274,20 +245,15 @@ export default function RoomEditor() {
 
     try {
       const updatedCell = await updateRoomCell(renamingCell.id, { label: customName || null });
-      setCells((previousCells) => previousCells.map((cell) =>
-        cell.id === renamingCell.id ? updatedCell : cell
-      ));
+      setCells((previousCells) => replaceRoomCell(previousCells, updatedCell));
       setIsRenameDialogOpen(false);
       setRenamingCell(null);
       setCustomName('');
       toast({ title: 'Desk name updated successfully' });
     } catch (error: unknown) {
-      let message = 'Unknown error';
-      if (error instanceof Error) message = error.message;
-      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
       toast({
         title: 'Error updating desk name',
-        description: message,
+        description: getEdgeErrorMessage(error),
         variant: 'destructive'
       });
     }
@@ -298,16 +264,13 @@ export default function RoomEditor() {
 
     try {
       await deleteRoomCell(cell.id);
-      setCells((previousCells) => previousCells.filter((currentCell) => currentCell.id !== cell.id));
+      setCells((previousCells) => removeRoomCell(previousCells, cell.id));
       if (selectedCell?.id === cell.id) setSelectedCell(null);
       toast({ title: 'Desk deleted successfully' });
     } catch (error: unknown) {
-      let message = 'Unknown error';
-      if (error instanceof Error) message = error.message;
-      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
       toast({
         title: 'Error deleting desk',
-        description: message,
+        description: getEdgeErrorMessage(error),
         variant: 'destructive'
       });
     }
@@ -323,12 +286,9 @@ export default function RoomEditor() {
       setSelectedCell(null);
       toast({ title: 'All cells cleared' });
     } catch (error: unknown) {
-      let message = 'Unknown error';
-      if (error instanceof Error) message = error.message;
-      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
       toast({
         title: 'Error clearing cells',
-        description: message,
+        description: getEdgeErrorMessage(error),
         variant: 'destructive'
       });
     }
@@ -339,12 +299,13 @@ export default function RoomEditor() {
     if (wallOperationInProgress) return;
 
     // Check if wall exists
-    const existingWall = walls.find(w =>
-      w.start_row === start_row &&
-      w.start_col === start_col &&
-      w.end_row === end_row &&
-      w.end_col === end_col
-    );
+    const existingWall = findMatchingWall(walls, {
+      start_row,
+      start_col,
+      end_row,
+      end_col,
+      orientation,
+    });
 
     // Generate unique temp ID for this specific wall
     const tempId = `temp-${start_row}-${start_col}-${end_row}-${end_col}-${Date.now()}`;
@@ -352,31 +313,17 @@ export default function RoomEditor() {
     // Store previous state for rollback
     const previousWalls = [...walls];
 
-    // Optimistic update logic
-    if (existingWall) {
-      // If wall exists, check if it's the same type
-      if (existingWall.type === wallType) {
-        // Same type, delete it
-        setWalls(walls.filter(w => w.id !== existingWall.id));
-      } else {
-        // Different type, update it (optimistically delete + create new local one for now)
-        // Ideally we'd map it to a new type, but since we treat ID as immutable usually, let's just swap properly
-        setWalls(prev => prev.map(w => w.id === existingWall.id ? { ...w, type: wallType } : w));
-      }
-    } else {
-      // Create new wall
-      const tempWall: RoomWall = {
-        id: tempId,
-        room_id: roomId!,
-        start_row,
-        start_col,
-        end_row,
-        end_col,
-        orientation,
-        type: wallType
-      };
-      setWalls([...walls, tempWall]);
-    }
+    const tempWall = buildTempWall({
+      roomId: roomId!,
+      tempId,
+      start_row,
+      start_col,
+      end_row,
+      end_col,
+      orientation,
+      type: wallType,
+    });
+    setWalls(applyOptimisticWallState(walls, existingWall, wallType, tempWall));
 
     setWallOperationInProgress(true);
 
@@ -398,7 +345,7 @@ export default function RoomEditor() {
             orientation,
             type: wallType
           });
-          setWalls(prev => prev.map(w => w.id === existingWall.id ? newWall : w)); // Assuming we updated the local object in place previously
+          setWalls(prev => replaceWallById(prev, existingWall.id, newWall));
         }
       } else {
         // Create wall
@@ -412,20 +359,16 @@ export default function RoomEditor() {
           type: wallType
         });
         // Replace the specific temp wall with real one
-        setWalls(prev => prev.map(w => w.id === tempId ? newWall : w));
+        setWalls(prev => replaceWallById(prev, tempId, newWall));
       }
     } catch (error: unknown) {
       // Revert to previous state instead of reloading entire room
       console.error('Error toggling wall:', error);
       setWalls(previousWalls);
 
-      let message = 'Failed to update wall. Please try again.';
-      if (error instanceof Error) message = error.message || message;
-      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || message;
-
       toast({
         title: 'Error updating wall',
-        description: message,
+        description: getEdgeErrorMessage(error) || 'Failed to update wall. Please try again.',
         variant: 'destructive'
       });
     } finally {
@@ -460,6 +403,7 @@ export default function RoomEditor() {
   // Safety checks for arrays
   const safeWalls = Array.isArray(walls) ? walls : [];
   const safeCells = Array.isArray(cells) ? cells : [];
+  const sortedDeskCells = useMemo(() => sortDeskCells(cells), [cells]);
 
   return (
     <div className="h-full flex flex-col space-y-4">
@@ -823,13 +767,7 @@ export default function RoomEditor() {
                 </h3>
 
                 <div className="space-y-3 lg:overflow-y-auto lg:pr-2 custom-scrollbar lg:flex-1">
-                  {cells
-                    .filter((cell) => cell.type === 'desk')
-                    .sort((a, b) => {
-                      const aLabel = a.label || `${a.x}-${a.y}`;
-                      const bLabel = b.label || `${b.x}-${b.y}`;
-                      return aLabel.localeCompare(bLabel);
-                    })
+                  {sortedDeskCells
                     .map((cell) => {
                       const deskInfo = DESK_TYPES.find((d) => d.type === cell.type);
                       const Icon = deskInfo?.icon;
@@ -859,7 +797,7 @@ export default function RoomEditor() {
                       );
                     })}
 
-                  {cells.filter(c => c.type === 'desk').length === 0 && (
+                  {sortedDeskCells.length === 0 && (
                     <div className="text-center py-10 text-gray-400">
                       <Armchair className="h-12 w-12 mx-auto mb-3 opacity-20" />
                       <p>No desks created yet.</p>

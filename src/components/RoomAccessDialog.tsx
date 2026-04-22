@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Trash2, UserPlus, Loader2, Shield, User } from 'lucide-react';
 import { addRoomUser, listAvailableRoomUsers, listRoomUsers, removeRoomUser } from '@/features/rooms/api';
 import type { RoomAccessEntry, RoomUserSummary } from '@/features/rooms/types';
+import { getEdgeErrorMessage } from '@/lib/edge-functions';
 
 type RoomUser = RoomAccessEntry;
 type AvailableUser = RoomUserSummary;
@@ -45,12 +46,9 @@ export default function RoomAccessDialog({ roomId, roomName, open, onOpenChange 
       }
       setRoomUsers(data || []);
     } catch (error: unknown) {
-      let message = 'Unknown error';
-      if (error instanceof Error) message = error.message;
-      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
       toast({
         title: 'Error loading users',
-        description: message,
+        description: getEdgeErrorMessage(error),
         variant: 'destructive'
       });
     }
@@ -91,12 +89,9 @@ export default function RoomAccessDialog({ roomId, roomName, open, onOpenChange 
       loadRoomUsers();
       loadAvailableUsers();
     } catch (error: unknown) {
-      let message = 'Unknown error';
-      if (error instanceof Error) message = error.message;
-      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
       toast({
         title: 'Error adding user',
-        description: message,
+        description: getEdgeErrorMessage(error),
         variant: 'destructive'
       });
     }
@@ -113,12 +108,9 @@ export default function RoomAccessDialog({ roomId, roomName, open, onOpenChange 
       loadRoomUsers();
       loadAvailableUsers();
     } catch (error: unknown) {
-      let message = 'Unknown error';
-      if (error instanceof Error) message = error.message;
-      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
       toast({
         title: 'Error removing user',
-        description: message,
+        description: getEdgeErrorMessage(error),
         variant: 'destructive'
       });
     }

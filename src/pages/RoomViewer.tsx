@@ -1,7 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { authService } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -20,22 +19,22 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from "@/components/ui/tooltip";
-import { format, parseISO, isWithinInterval, addDays, isEqual } from 'date-fns';
-import { invokeReservationFunction } from '@/lib/edge-functions';
-import { getRoomLayout, listRooms } from '@/features/rooms/api';
+import { format, addDays, isEqual } from 'date-fns';
+import { getEdgeErrorMessage } from '@/lib/edge-functions';
+import {
+  buildDeskStatusMap,
+  getReservationDisplayName,
+  type DeskStatus,
+} from '@/features/rooms/availability';
+import { useRoomAvailability } from '@/features/rooms/hooks/useRoomAvailability';
+import { useRoomLayout } from '@/features/rooms/hooks/useRoomLayout';
+import { useRoomsList } from '@/features/rooms/hooks/useRoomsList';
 import type {
   DeskType,
-  FixedAssignment,
   RoomCell,
-  RoomDayStateResponse,
-  RoomLayoutDetails,
   RoomReservation,
   RoomSummary,
-  RoomWall,
 } from '@/features/rooms/types';
-
-type DeskStatus = 'available' | 'reserved' | 'my-reservation';
-type DeskStatusDetails = { status: DeskStatus; reservation?: RoomReservation; assignedTo?: string };
 
 const CELL_SIZE = 50;
 
@@ -61,212 +60,50 @@ export default function RoomViewer() {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const [room, setRoom] = useState<RoomSummary | null>(null);
-  const [cells, setCells] = useState<RoomCell[]>([]);
-  const [reservations, setReservations] = useState<RoomReservation[]>([]);
-  const [fixedAssignments, setFixedAssignments] = useState<FixedAssignment[]>([]);
-  const [loading, setLoading] = useState(true);
   const [bookingDialogOpen, setBookingDialogOpen] = useState(false);
   const [reservationDetailsOpen, setReservationDetailsOpen] = useState(false);
   const [selectedCell, setSelectedCell] = useState<RoomCell | null>(null);
   const [selectedReservation, setSelectedReservation] = useState<RoomReservation | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [isRoomAdmin, setIsRoomAdmin] = useState(false);
-
-
-  const [walls, setWalls] = useState<RoomWall[]>([]);
-  const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [activeTab, setActiveTab] = useState<'desks' | 'rooms'>('desks');
   const [refreshingColors, setRefreshingColors] = useState(false);
   const [deskSearch, setDeskSearch] = useState('');
   const [deskFilter, setDeskFilter] = useState<'all' | 'available' | 'reserved' | 'mine'>('all');
   const [selectedDeskId, setSelectedDeskId] = useState<string | null>(null);
-  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
-  const latestAvailabilityRequestRef = useRef(0);
-  const selectedDateRef = useRef(selectedDate);
+  const handleRoomLoadError = useCallback((error: unknown) => {
+    toast({
+      title: 'Error loading room',
+      description: getEdgeErrorMessage(error),
+      variant: 'destructive',
+    });
+    navigate('/rooms');
+  }, [navigate, toast]);
 
-  useEffect(() => {
-    selectedDateRef.current = selectedDate;
-  }, [selectedDate]);
+  const { room, cells, setCells, walls, loading, isRoomAdmin, loadRoom } = useRoomLayout({
+    roomId,
+    user,
+    onError: handleRoomLoadError,
+  });
 
-
-
-  useEffect(() => {
-    loadRoom();
-    loadRooms();
-
-    const channel = supabase
-      .channel(`room-viewer-${roomId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'reservations',
-          filter: `room_id=eq.${roomId}`,
-        },
-        () => {
-          console.log('Reservation changed, reloading...');
-          loadAvailabilityState();
-        },
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'fixed_assignments',
-          filter: `room_id=eq.${roomId}`,
-        },
-        () => {
-          console.log('Fixed assignment changed, reloading...');
-          loadAvailabilityState();
-        },
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [roomId]);
-
-  useEffect(() => {
-    if (room) {
-      loadAvailabilityState();
-    }
-  }, [selectedDate, room]);
-
-  useEffect(() => {
-    if (!roomId) return;
-
-    const intervalId = window.setInterval(() => {
-      loadAvailabilityState();
-    }, 30000);
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        loadAvailabilityState();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      window.clearInterval(intervalId);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [roomId, selectedDate]);
+  const {
+    reservations,
+    setReservations,
+    fixedAssignments,
+    availabilityError,
+    loadAvailabilityState,
+  } = useRoomAvailability({
+    roomId,
+    selectedDate,
+  });
+  const { rooms, loadRooms } = useRoomsList({
+    onError: (error) => console.error('Error loading rooms:', error),
+  });
 
   useEffect(() => {
     if (!selectedDeskId && cells.length > 0) {
       setSelectedDeskId(cells[0].id);
     }
   }, [cells, selectedDeskId]);
-
-  const loadRoom = async () => {
-    if (!roomId) return;
-
-    setLoading(true);
-
-    try {
-      const result = await getRoomLayout(roomId);
-      setRoom(result.room);
-      setCells(result.cells || []);
-      setWalls(result.walls || []);
-      setIsRoomAdmin(false);
-
-      // Check if user is room admin
-      const session = authService.getSession();
-      if (session?.user.role === 'admin' || session?.user.role === 'super_admin') {
-        setIsRoomAdmin(true);
-      } else {
-        const { data: access } = await supabase
-          .from('room_access')
-          .select('role')
-          .eq('room_id', roomId)
-          .eq('user_id', session?.user.id)
-          .single();
-
-        if (access?.role === 'admin') {
-          setIsRoomAdmin(true);
-        }
-      }
-      await loadAvailabilityState();
-    } catch (error: unknown) {
-      let message = 'Unknown error';
-      if (error instanceof Error) message = error.message;
-      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
-      toast({
-        title: 'Error loading room',
-        description: message,
-        variant: 'destructive',
-      });
-      navigate('/rooms');
-    }
-
-    setLoading(false);
-  };
-
-  const loadRooms = async () => {
-    try {
-      const result = await listRooms();
-      setRooms(result || []);
-    } catch (error) {
-      console.error('Error loading rooms:', error);
-    }
-  };
-
-  const loadAvailabilityState = async () => {
-    if (!roomId) return;
-    const requestId = ++latestAvailabilityRequestRef.current;
-
-    try {
-      const roomDayState = await invokeReservationFunction<RoomDayStateResponse, { roomId: string; date: string }>('get_room_day_state', {
-        roomId,
-        date: format(selectedDateRef.current, 'yyyy-MM-dd'),
-      });
-
-      const mappedReservations = (roomDayState?.reservations || []).map((r): RoomReservation => ({
-        id: r.id,
-        cell_id: r.cell_id,
-        user_id: r.user_id,
-        status: r.status,
-        date_start: r.date_start,
-        date_end: r.date_end,
-        time_segment: r.time_segment,
-        user: r.users,
-        type: 'reservation',
-        created_at: r.created_at
-      }));
-
-      const mappedAssignments = (roomDayState?.fixed_assignments || []).map((assignment): FixedAssignment => ({
-        id: assignment.id,
-        cell_id: assignment.cell_id,
-        assigned_to: assignment.assigned_to,
-        date_start: assignment.date_start,
-        date_end: assignment.date_end,
-        created_at: assignment.created_at,
-        assigned_user: assignment.assigned_user
-          ? {
-              id: assignment.assigned_user.id,
-              full_name: assignment.assigned_user.full_name,
-              username: assignment.assigned_user.username,
-            }
-          : null,
-      }));
-
-      if (requestId === latestAvailabilityRequestRef.current) {
-        setReservations(mappedReservations);
-        setFixedAssignments(mappedAssignments);
-        setAvailabilityError(null);
-      }
-    } catch (error: unknown) {
-      if (requestId === latestAvailabilityRequestRef.current) {
-        console.error('Error loading room availability:', error);
-        setAvailabilityError('Availability could not be synchronized. Showing the latest loaded state.');
-      }
-    }
-  };
 
   const handleAdminRefresh = async () => {
     setRefreshingColors(true);
@@ -284,8 +121,9 @@ export default function RoomViewer() {
       });
     } catch (error: unknown) {
       let message = 'Unable to refresh room availability.';
-      if (error instanceof Error && error.message) {
-        message = error.message;
+      const normalizedMessage = getEdgeErrorMessage(error);
+      if (normalizedMessage) {
+        message = normalizedMessage;
       }
 
       toast({
@@ -296,84 +134,6 @@ export default function RoomViewer() {
     } finally {
       setRefreshingColors(false);
     }
-  };
-
-  const getReservationDisplayName = (reservation?: RoomReservation | null, assignedTo?: string) => {
-    const fullName = reservation?.user?.full_name?.trim();
-    const username = reservation?.user?.username?.trim();
-    const assignedName = assignedTo?.trim();
-
-    return fullName || username || assignedName || 'another user';
-  };
-
-  const buildDeskStatus = (cellId: string, dayToCheck: Date): DeskStatusDetails => {
-    // Check for fixed assignments first
-    const activeAssignment = fixedAssignments.find((a) => {
-      if (a.cell_id !== cellId) return false;
-
-      try {
-        const startDate = parseISO(a.date_start);
-        const endDate = parseISO(a.date_end);
-        startDate.setHours(0, 0, 0, 0);
-        endDate.setHours(0, 0, 0, 0);
-
-        return isWithinInterval(dayToCheck, { start: startDate, end: endDate });
-      } catch (e) {
-        console.error('Error parsing date for assignment:', a, e);
-        return false;
-      }
-    });
-
-    if (activeAssignment) {
-      const isMyAssignment = activeAssignment.assigned_to === user?.id;
-      // Convert fixed assignment to reservation format for consistent handling
-      const assignmentAsReservation: RoomReservation = {
-        id: activeAssignment.id,
-        cell_id: activeAssignment.cell_id,
-        user_id: activeAssignment.assigned_to,
-        status: 'approved',
-        date_start: activeAssignment.date_start,
-        date_end: activeAssignment.date_end,
-        time_segment: 'FULL',
-        type: 'fixed_assignment', // Mark as fixed assignment for proper deletion
-        user: activeAssignment.assigned_user || { id: activeAssignment.assigned_to, username: '', full_name: 'Unknown User' },
-        created_at: activeAssignment.created_at || new Date().toISOString()
-      };
-      return {
-        status: isMyAssignment ? 'my-reservation' : 'reserved',
-        reservation: assignmentAsReservation,
-        assignedTo: activeAssignment.assigned_user?.full_name || 'Unknown User',
-      };
-    }
-
-    // Check for regular reservations
-    const activeReservations = reservations.filter((r) => {
-      if (r.cell_id !== cellId) return false;
-      if (r.status === 'cancelled' || r.status === 'rejected') return false;
-
-      try {
-        const startDate = parseISO(r.date_start);
-        const endDate = parseISO(r.date_end);
-        startDate.setHours(0, 0, 0, 0);
-        endDate.setHours(0, 0, 0, 0);
-
-        return isWithinInterval(dayToCheck, { start: startDate, end: endDate });
-      } catch (e) {
-        console.error('Error parsing date for reservation:', r, e);
-        return false;
-      }
-    });
-
-    const activeReservation = activeReservations[0];
-    if (activeReservation) {
-      const isMyReservation = activeReservation.user_id === user?.id;
-      return {
-        status: isMyReservation ? 'my-reservation' : 'reserved',
-        reservation: activeReservation,
-      };
-    }
-
-    return { status: 'available' };
   };
 
   const getDeskBackgroundColor = (status: DeskStatus, baseColor: string) => {
@@ -473,46 +233,56 @@ export default function RoomViewer() {
   // Safety checks for arrays
   const safeWalls = Array.isArray(walls) ? walls : [];
   const safeCells = Array.isArray(cells) ? cells : [];
-  const dayToCheck = new Date(selectedDate);
-  dayToCheck.setHours(0, 0, 0, 0);
+  const dayToCheck = useMemo(() => {
+    const currentDay = new Date(selectedDate);
+    currentDay.setHours(0, 0, 0, 0);
+    return currentDay;
+  }, [selectedDate]);
 
-  const deskStatuses = safeCells.reduce<Record<string, DeskStatusDetails>>((acc, cell) => {
-    acc[cell.id] = buildDeskStatus(cell.id, dayToCheck);
-    return acc;
-  }, {});
+  const deskStatuses = useMemo(
+    () => buildDeskStatusMap(safeCells, reservations, fixedAssignments, dayToCheck, user?.id),
+    [safeCells, reservations, fixedAssignments, dayToCheck, user?.id],
+  );
 
-  const getDeskStatus = (cellId: string): DeskStatusDetails => deskStatuses[cellId] || { status: 'available' };
+  const getDeskStatus = (cellId: string) => deskStatuses[cellId] || { status: 'available' as const };
 
-  const sortedCells = [...safeCells].sort((a, b) => {
-    const aLabel = a.label || `${a.x}-${a.y}`;
-    const bLabel = b.label || `${b.x}-${b.y}`;
-    return aLabel.localeCompare(bLabel);
-  });
+  const sortedCells = useMemo(() => {
+    return [...safeCells].sort((a, b) => {
+      const aLabel = a.label || `${a.x}-${a.y}`;
+      const bLabel = b.label || `${b.x}-${b.y}`;
+      return aLabel.localeCompare(bLabel);
+    });
+  }, [safeCells]);
 
-  const availableDeskCount = sortedCells.reduce((count, cell) => {
-    return count + (getDeskStatus(cell.id).status === 'available' ? 1 : 0);
-  }, 0);
-  const reservedDeskCount = sortedCells.reduce((count, cell) => {
-    return count + (getDeskStatus(cell.id).status === 'reserved' ? 1 : 0);
-  }, 0);
-  const myDeskCount = sortedCells.reduce((count, cell) => {
-    return count + (getDeskStatus(cell.id).status === 'my-reservation' ? 1 : 0);
-  }, 0);
+  const availableDeskCount = useMemo(
+    () => sortedCells.reduce((count, cell) => count + (getDeskStatus(cell.id).status === 'available' ? 1 : 0), 0),
+    [sortedCells, deskStatuses],
+  );
+  const reservedDeskCount = useMemo(
+    () => sortedCells.reduce((count, cell) => count + (getDeskStatus(cell.id).status === 'reserved' ? 1 : 0), 0),
+    [sortedCells, deskStatuses],
+  );
+  const myDeskCount = useMemo(
+    () => sortedCells.reduce((count, cell) => count + (getDeskStatus(cell.id).status === 'my-reservation' ? 1 : 0), 0),
+    [sortedCells, deskStatuses],
+  );
   const selectedDateLabel = format(selectedDate, 'EEEE, MMMM d, yyyy');
   const selectedDesk = sortedCells.find((cell) => cell.id === selectedDeskId) || null;
   const selectedDeskStatus = selectedDesk ? getDeskStatus(selectedDesk.id) : null;
   const normalizedDeskSearch = deskSearch.trim().toLowerCase();
-  const visibleCells = sortedCells.filter((cell) => {
-    const matchesSearch = !normalizedDeskSearch
-      || (cell.label || `Desk ${cell.x}-${cell.y}`).toLowerCase().includes(normalizedDeskSearch);
-    if (!matchesSearch) return false;
+  const visibleCells = useMemo(() => {
+    return sortedCells.filter((cell) => {
+      const matchesSearch = !normalizedDeskSearch
+        || (cell.label || `Desk ${cell.x}-${cell.y}`).toLowerCase().includes(normalizedDeskSearch);
+      if (!matchesSearch) return false;
 
-    const status = getDeskStatus(cell.id).status;
-    if (deskFilter === 'all') return true;
-    if (deskFilter === 'available') return status === 'available';
-    if (deskFilter === 'reserved') return status === 'reserved';
-    return status === 'my-reservation';
-  });
+      const status = getDeskStatus(cell.id).status;
+      if (deskFilter === 'all') return true;
+      if (deskFilter === 'available') return status === 'available';
+      if (deskFilter === 'reserved') return status === 'reserved';
+      return status === 'my-reservation';
+    });
+  }, [sortedCells, normalizedDeskSearch, deskFilter, deskStatuses]);
   const visibleDeskCount = visibleCells.length;
 
   return (
@@ -1245,12 +1015,9 @@ export default function RoomViewer() {
                       setSelectedReservation(null);
                       loadAvailabilityState();
                     } catch (error: unknown) {
-                      let message = 'Unknown error';
-                      if (error instanceof Error) message = error.message;
-                      else if (typeof error === 'object' && error !== null) message = (error as { message?: string }).message || 'Unknown error';
                       toast({
                         title: 'Error',
-                        description: message,
+                        description: getEdgeErrorMessage(error),
                         variant: 'destructive'
                       });
                     }
