@@ -204,35 +204,11 @@ export default function RoomViewer() {
 
 
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-      </div>
-    );
-  }
-
-  if (!room) return null;
-
-  // Safety check for grid dimensions
-  if (typeof room.grid_width !== 'number' || typeof room.grid_height !== 'number') {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="p-8 text-center bg-white rounded-lg shadow-sm border">
-          <h2 className="text-lg font-semibold text-destructive mb-2">Error: Invalid Room Configuration</h2>
-          <p className="text-muted-foreground mb-4">The room data is incomplete (missing grid dimensions).</p>
-          <Button variant="outline" onClick={() => navigate('/rooms')}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Rooms
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
   // Safety checks for arrays
   const safeWalls = Array.isArray(walls) ? walls : [];
   const safeCells = Array.isArray(cells) ? cells : [];
+  const roomGridWidth = typeof room?.grid_width === 'number' ? room.grid_width : 0;
+  const roomGridHeight = typeof room?.grid_height === 'number' ? room.grid_height : 0;
   const dayToCheck = useMemo(() => {
     const currentDay = new Date(selectedDate);
     currentDay.setHours(0, 0, 0, 0);
@@ -284,6 +260,31 @@ export default function RoomViewer() {
     });
   }, [sortedCells, normalizedDeskSearch, deskFilter, deskStatuses]);
   const visibleDeskCount = visibleCells.length;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  if (!room) return null;
+
+  if (roomGridWidth === 0 || roomGridHeight === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="p-8 text-center bg-white rounded-lg shadow-sm border">
+          <h2 className="text-lg font-semibold text-destructive mb-2">Error: Invalid Room Configuration</h2>
+          <p className="text-muted-foreground mb-4">The room data is incomplete (missing grid dimensions).</p>
+          <Button variant="outline" onClick={() => navigate('/rooms')}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Rooms
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <TooltipProvider>
