@@ -80,10 +80,11 @@ Deno.serve(async (req) => {
 
     const { operation, data } = await req.json();
     console.log(`User ${user.id} (${user.role}) performing operation: ${operation}`);
+    const isGlobalAdmin = user.role === 'admin' || user.role === 'super_admin';
 
     // Helper function to check room admin access
     const isRoomAdmin = async (roomId: string): Promise<boolean> => {
-      if (user.role === 'super_admin') return true;
+      if (isGlobalAdmin) return true;
 
       const { data: access } = await supabase
         .from('room_access')
@@ -97,7 +98,7 @@ Deno.serve(async (req) => {
 
     // Helper function to check room access (any level)
     const hasRoomAccess = async (roomId: string): Promise<boolean> => {
-      if (user.role === 'super_admin') return true;
+      if (isGlobalAdmin) return true;
 
       const { data: access } = await supabase
         .from('room_access')
@@ -208,7 +209,7 @@ Deno.serve(async (req) => {
 
       case 'list': {
         // Get only rooms where user has access
-        if (user.role === 'super_admin') {
+        if (isGlobalAdmin) {
           const { data: allRooms, error: roomsError } = await supabase
             .from('rooms')
             .select('*')

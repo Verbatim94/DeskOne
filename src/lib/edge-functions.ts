@@ -9,6 +9,15 @@ interface EdgeErrorPayload {
   msg?: string;
 }
 
+function isSessionErrorMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("missing session token") ||
+    normalized.includes("invalid or expired session") ||
+    normalized.includes("user not found or inactive")
+  );
+}
+
 function getEdgeErrorMessage(error: unknown): string {
   if (typeof error === "string") return error;
 
@@ -46,7 +55,19 @@ async function invokeEdgeFunction<TResult, TData extends Record<string, unknown>
   });
 
   if (response.error) {
-    throw new Error(getEdgeErrorMessage(response.data) || getEdgeErrorMessage(response.error));
+    const message = getEdgeErrorMessage(response.data) || getEdgeErrorMessage(response.error);
+
+    if (isSessionErrorMessage(message)) {
+      await authService.logout();
+
+      if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+        window.location.assign("/login");
+      }
+
+      throw new Error("Session expired. Please sign in again.");
+    }
+
+    throw new Error(message);
   }
 
   return response.data as TResult;
