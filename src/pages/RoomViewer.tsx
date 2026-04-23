@@ -20,7 +20,7 @@ import {
   TooltipProvider,
 } from "@/components/ui/tooltip";
 import { format, addDays, isEqual } from 'date-fns';
-import { getEdgeErrorMessage } from '@/lib/edge-functions';
+import { getEdgeErrorMessage, invokeReservationFunction } from '@/lib/edge-functions';
 import {
   buildDeskStatusMap,
   getReservationDisplayName,

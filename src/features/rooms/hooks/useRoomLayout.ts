@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getRoomLayout } from "../api";
 import { isUserRoomAdmin } from "../access";
 import type { RoomCell, RoomSummary, RoomWall } from "../types";
@@ -28,6 +28,16 @@ export function useRoomLayout({
   const [walls, setWalls] = useState<RoomWall[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRoomAdmin, setIsRoomAdmin] = useState(false);
+  const onUnauthorizedRef = useRef(onUnauthorized);
+  const onErrorRef = useRef(onError);
+
+  useEffect(() => {
+    onUnauthorizedRef.current = onUnauthorized;
+  }, [onUnauthorized]);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
 
   const loadRoom = useCallback(async () => {
     if (!roomId) return;
@@ -43,14 +53,14 @@ export function useRoomLayout({
       setIsRoomAdmin(canManageRoom);
 
       if (requireAdmin && !canManageRoom) {
-        onUnauthorized?.();
+        onUnauthorizedRef.current?.();
       }
     } catch (error) {
-      onError?.(error);
+      onErrorRef.current?.(error);
     } finally {
       setLoading(false);
     }
-  }, [roomId, user, requireAdmin, onUnauthorized, onError]);
+  }, [roomId, user, requireAdmin]);
 
   useEffect(() => {
     loadRoom();

@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format, eachDayOfInterval, isAfter, startOfDay, subMonths, isSameMonth } from 'date-fns';
+import { authService } from '@/lib/auth';
 import { invokeReservationFunction, invokeRoomFunction } from '@/lib/edge-functions';
 import { DashboardStats } from '@/components/DashboardStats';
 import { DashboardChart } from '@/components/DashboardChart';

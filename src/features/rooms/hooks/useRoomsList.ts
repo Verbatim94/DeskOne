@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { listRooms } from "../api";
 import type { RoomSummary } from "../types";
 
@@ -11,6 +11,11 @@ export function useRoomsList(options: UseRoomsListOptions = {}) {
   const { onError, autoload = true } = options;
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [loading, setLoading] = useState(autoload);
+  const onErrorRef = useRef(onError);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
 
   const loadRooms = useCallback(async () => {
     setLoading(true);
@@ -19,12 +24,12 @@ export function useRoomsList(options: UseRoomsListOptions = {}) {
       setRooms(result || []);
       return result || [];
     } catch (error) {
-      onError?.(error);
+      onErrorRef.current?.(error);
       return [];
     } finally {
       setLoading(false);
     }
-  }, [onError]);
+  }, []);
 
   useEffect(() => {
     if (!autoload) return;
