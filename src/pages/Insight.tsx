@@ -10,9 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MultiSelectFilter } from '@/components/MultiSelectFilter';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { supabase } from '@/integrations/supabase/client';
-import { authService } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
+import { invokeReservationFunction, invokeRoomFunction } from '@/lib/edge-functions';
 import {
   buildDailyUniqueRows,
   buildDeskMonthlySummaries,
@@ -112,9 +111,6 @@ export default function Insight() {
   const { data, isLoading, isError, refetch, isFetching } = useQuery<InsightPayload>({
     queryKey: ['admin-insight-dashboard', selectedMonth],
     queryFn: async () => {
-      const session = authService.getSession();
-      if (!session) throw new Error('No session');
-
       const selectedMonthDate = parseISO(`${selectedMonth}-01`);
       const desiredRangeStart = startOfMonth(subMonths(selectedMonthDate, 5));
       const desiredRangeEnd = endOfMonth(selectedMonthDate);
@@ -122,36 +118,24 @@ export default function Insight() {
       const rangeEnd = desiredRangeEnd > BUSINESS_CALENDAR_END ? BUSINESS_CALENDAR_END : desiredRangeEnd;
 
       const [roomsResponse, accessResponse, reportResponse] = await Promise.all([
-        supabase.functions.invoke('manage-rooms', {
-          body: { operation: 'list_all_desks' },
-          headers: { 'x-session-token': session.token },
-        }),
-        supabase.functions.invoke('manage-rooms', {
-          body: { operation: 'list_all_room_access' },
-          headers: { 'x-session-token': session.token },
-        }),
-        supabase.functions.invoke('manage-reservations', {
-          body: {
-            operation: 'export_bi_report',
-            data: {
-              date_start: format(rangeStart, 'yyyy-MM-dd'),
-              date_end: format(rangeEnd, 'yyyy-MM-dd'),
-              report_type: 'raw',
-            },
-          },
-          headers: { 'x-session-token': session.token },
+        invokeRoomFunction<any[]>('list_all_desks'),
+        invokeRoomFunction<any[]>('list_all_room_access'),
+        invokeReservationFunction<{ rows?: any[]; generated_at?: string }, {
+          date_start: string;
+          date_end: string;
+          report_type: 'raw';
+        }>('export_bi_report', {
+          date_start: format(rangeStart, 'yyyy-MM-dd'),
+          date_end: format(rangeEnd, 'yyyy-MM-dd'),
+          report_type: 'raw',
         }),
       ]);
 
-      if (roomsResponse.error) throw roomsResponse.error;
-      if (accessResponse.error) throw accessResponse.error;
-      if (reportResponse.error) throw reportResponse.error;
-
       return {
-        rooms: roomsResponse.data || [],
-        rows: reportResponse.data?.rows || [],
-        roomAccess: accessResponse.data || [],
-        generatedAt: reportResponse.data?.generated_at || new Date().toISOString(),
+        rooms: roomsResponse || [],
+        rows: reportResponse?.rows || [],
+        roomAccess: accessResponse || [],
+        generatedAt: reportResponse?.generated_at || new Date().toISOString(),
       };
     },
     enabled: !!user && user.role === 'admin',

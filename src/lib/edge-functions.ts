@@ -9,6 +9,10 @@ interface EdgeErrorPayload {
   msg?: string;
 }
 
+interface EdgeFunctionErrorWithContext {
+  context?: Response;
+}
+
 function isSessionErrorMessage(message: string): boolean {
   const normalized = message.toLowerCase();
   return (
@@ -29,6 +33,50 @@ function getEdgeErrorMessage(error: unknown): string {
   }
 
   return "Unknown error";
+}
+
+function getErrorResponse(error: unknown): Response | undefined {
+  if (typeof error !== "object" || error === null || !("context" in error)) {
+    return undefined;
+  }
+
+  return (error as EdgeFunctionErrorWithContext).context;
+}
+
+async function getHttpErrorMessage(response: Response | undefined): Promise<string | null> {
+  if (!response) {
+    return null;
+  }
+
+  try {
+    const clonedResponse = response.clone();
+    const contentType = clonedResponse.headers.get("Content-Type")?.split(";")[0].trim();
+
+    if (contentType === "application/json") {
+      const payload = await clonedResponse.json();
+      const message = getEdgeErrorMessage(payload);
+      if (message !== "Unknown error") {
+        return message;
+      }
+    } else {
+      const text = (await clonedResponse.text()).trim();
+      if (text) {
+        return text;
+      }
+    }
+  } catch {
+    // Fall back to the HTTP status details below if the body cannot be parsed.
+  }
+
+  if (response.status === 401) {
+    return "Invalid or expired session";
+  }
+
+  if (response.statusText) {
+    return response.statusText;
+  }
+
+  return `Request failed with status ${response.status}`;
 }
 
 export function getSessionOrThrow(): Session {
@@ -55,7 +103,10 @@ async function invokeEdgeFunction<TResult, TData extends Record<string, unknown>
   });
 
   if (response.error) {
-    const message = getEdgeErrorMessage(response.data) || getEdgeErrorMessage(response.error);
+    const httpMessage = await getHttpErrorMessage(response.response || getErrorResponse(response.error));
+    const fallbackMessage =
+      (response.data ? getEdgeErrorMessage(response.data) : null) || getEdgeErrorMessage(response.error);
+    const message = httpMessage || fallbackMessage;
 
     if (isSessionErrorMessage(message)) {
       await authService.logout();

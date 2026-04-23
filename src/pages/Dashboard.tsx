@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format, eachDayOfInterval, isAfter, startOfDay, subMonths, isSameMonth } from 'date-fns';
-import { authService } from '@/lib/auth';
+import { invokeReservationFunction, invokeRoomFunction } from '@/lib/edge-functions';
 import { DashboardStats } from '@/components/DashboardStats';
 import { DashboardChart } from '@/components/DashboardChart';
 import { DashboardCalendar } from '@/components/DashboardCalendar';
@@ -35,21 +35,7 @@ export default function Dashboard() {
     queryKey: ['user-rooms', user?.id, user?.role],
     queryFn: async () => {
       if (!user) return [];
-      const session = authService.getSession();
-      if (!session) throw new Error('No session');
-
-      const response = await supabase.functions.invoke('manage-rooms', {
-        body: { operation: 'list' },
-        headers: {
-          'x-session-token': session.token,
-        },
-      });
-
-      if (response.error) {
-        throw response.error;
-      }
-
-      return response.data || [];
+      return await invokeRoomFunction<Room[]>('list');
     },
     enabled: !!user,
   });
@@ -61,26 +47,14 @@ export default function Dashboard() {
       // Admins don't need reservations
       if (user.role === 'admin') return [];
 
-      const session = authService.getSession();
-      if (!session) return [];
-
-      const response = await supabase.functions.invoke('manage-reservations', {
-        body: {
-          operation: 'list_my_reservations'
-        },
-        headers: {
-          'x-session-token': session.token,
-        },
-      });
-
-      if (response.error) {
+      try {
+        const reservations = await invokeReservationFunction<Reservation[]>('list_my_reservations');
+        return reservations.filter((r: Reservation) =>
+          r.status === 'approved' || r.status === 'pending'
+        );
+      } catch {
         return [];
       }
-
-      const reservations = response.data || [];
-      return reservations.filter((r: Reservation) =>
-        r.status === 'approved' || r.status === 'pending'
-      );
     },
     enabled: !!user,
   });

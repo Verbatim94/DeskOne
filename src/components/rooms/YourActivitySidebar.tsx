@@ -1,13 +1,12 @@
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Calendar, Armchair } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { format, isAfter, parseISO } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
-import { authService } from '@/lib/auth';
+import { invokeReservationFunction } from '@/lib/edge-functions';
 
 interface Reservation {
     id: string;
@@ -44,15 +43,7 @@ export function YourActivitySidebar() {
     const loadActivity = async () => {
         setLoading(true);
         try {
-            const session = authService.getSession();
-            if (!session) return;
-
-            const { data: reservations, error } = await supabase.functions.invoke('manage-reservations', {
-                body: { operation: 'list_my_reservations' },
-                headers: { 'x-session-token': session.token }
-            });
-
-            if (error) throw error;
+            const reservations = await invokeReservationFunction<Reservation[]>('list_my_reservations');
             if (reservations) {
                 processStats(reservations);
             }

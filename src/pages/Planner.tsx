@@ -3,8 +3,7 @@ import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterv
 import { ChevronLeft, ChevronRight, Download, Loader2, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { supabase } from '@/integrations/supabase/client';
-import { authService } from '@/lib/auth';
+import { getEdgeErrorMessage, invokeReservationFunction, invokeRoomFunction } from '@/lib/edge-functions';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import {
@@ -75,17 +74,8 @@ export default function Planner() {
     const loadData = async () => {
         setLoading(true);
         try {
-            const session = authService.getSession();
-            if (!session) throw new Error('No session');
-
             // 1. Fetch Structure (Rooms + Desks)
-            const roomsResponse = await supabase.functions.invoke('manage-rooms', {
-                body: { operation: 'list_all_desks' },
-                headers: { 'x-session-token': session.token }
-            });
-            if (roomsResponse.error) throw roomsResponse.error;
-
-            const fetchedRooms = roomsResponse.data || [];
+            const fetchedRooms = await invokeRoomFunction<RoomWithDesks[]>('list_all_desks');
             console.log('Planner rooms structure:', fetchedRooms);
             setRooms(fetchedRooms);
             // Select all rooms by default
@@ -95,28 +85,22 @@ export default function Planner() {
             const start = format(startOfMonth(date), 'yyyy-MM-dd');
             const end = format(endOfMonth(date), 'yyyy-MM-dd');
 
-            const resResponse = await supabase.functions.invoke('manage-reservations', {
-                body: {
-                    operation: 'list_all_reservations',
-                    data: { date_start: start, date_end: end }
-                },
-                headers: { 'x-session-token': session.token }
-            });
-
-            if (resResponse.error) throw resResponse.error;
-            console.log('Planner reservations:', resResponse.data);
-            const fetchedReservations = resResponse.data || [];
+            const fetchedReservations = await invokeReservationFunction<Reservation[], { date_start: string; date_end: string }>(
+                'list_all_reservations',
+                { date_start: start, date_end: end }
+            );
+            console.log('Planner reservations:', fetchedReservations);
             setReservations(fetchedReservations);
 
             // Select all users by default
             const allUserIds = Array.from(new Set(fetchedReservations.filter((r: any) => r.user_id).map((r: any) => r.user_id))) as string[];
             setSelectedUserIds(allUserIds);
 
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error(error);
             toast({
                 title: 'Error loading planner',
-                description: error.message || 'Failed to load data',
+                description: getEdgeErrorMessage(error),
                 variant: 'destructive'
             });
         }
@@ -186,26 +170,21 @@ export default function Planner() {
     const handleExportReport = async (reportType: 'raw' | 'daily') => {
         setExportingReport(reportType);
         try {
-            const session = authService.getSession();
-            if (!session) throw new Error('No session');
-
-            const response = await supabase.functions.invoke('manage-reservations', {
-                body: {
-                    operation: 'export_bi_report',
-                    data: {
-                        date_start: format(startOfMonth(date), 'yyyy-MM-dd'),
-                        date_end: format(endOfMonth(date), 'yyyy-MM-dd'),
-                        report_type: reportType,
-                        room_ids: selectedRoomIds,
-                        user_ids: selectedUserIds,
-                    },
-                },
-                headers: { 'x-session-token': session.token },
+            const response = await invokeReservationFunction<{ rows?: Record<string, unknown>[] }, {
+                date_start: string;
+                date_end: string;
+                report_type: 'raw' | 'daily';
+                room_ids: string[];
+                user_ids: string[];
+            }>('export_bi_report', {
+                date_start: format(startOfMonth(date), 'yyyy-MM-dd'),
+                date_end: format(endOfMonth(date), 'yyyy-MM-dd'),
+                report_type: reportType,
+                room_ids: selectedRoomIds,
+                user_ids: selectedUserIds,
             });
 
-            if (response.error) throw response.error;
-
-            const rows = response.data?.rows || [];
+            const rows = response?.rows || [];
             const monthLabel = format(date, 'yyyy-MM');
             const filename = reportType === 'raw'
                 ? `deskone-room-reservations-${monthLabel}.csv`
@@ -216,10 +195,10 @@ export default function Planner() {
                 title: 'CSV exported',
                 description: `${rows.length} rows exported for ${format(date, 'MMMM yyyy')}.`,
             });
-        } catch (error: any) {
+        } catch (error: unknown) {
             toast({
                 title: 'Export failed',
-                description: error?.message || 'Unable to export the CSV report.',
+                description: getEdgeErrorMessage(error),
                 variant: 'destructive',
             });
         } finally {

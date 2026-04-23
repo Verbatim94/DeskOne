@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { authService } from '@/lib/auth';
+import { invokeReservationFunction } from '@/lib/edge-functions';
 import { format, startOfWeek, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -16,9 +15,7 @@ export function RoomWeeklyAvailability({ roomId, totalDesks }: RoomWeeklyAvailab
   const { data: weeklyOccupancy = {}, isLoading } = useQuery({
     queryKey: ['room-weekly-occupancy', roomId],
     queryFn: async () => {
-      const session = authService.getSession();
-      if (!session || totalDesks === 0) {
-        console.log('No session or no desks for room', roomId);
+      if (totalDesks === 0) {
         return {};
       }
 
@@ -28,39 +25,28 @@ export function RoomWeeklyAvailability({ roomId, totalDesks }: RoomWeeklyAvailab
       });
 
       console.log('Fetching weekly occupancy for room:', roomId);
+      try {
+        const reservations = await invokeReservationFunction<any[], { roomId: string }>('list_room_reservations', { roomId });
+        console.log('Reservations for room', roomId, ':', reservations.length);
 
-      const response = await supabase.functions.invoke('manage-reservations', {
-        body: {
-          operation: 'list_room_reservations',
-          data: { roomId }
-        },
-        headers: {
-          'x-session-token': session.token,
-        },
-      });
+        const occupancyMap: Record<string, number> = {};
 
-      if (response.error) {
-        console.error('Error fetching room reservations:', response.error);
+        days.forEach(day => {
+          const bookedCount = reservations.filter((r: any) =>
+            r.status === 'approved' &&
+            r.date_start <= day &&
+            r.date_end >= day
+          ).length;
+
+          occupancyMap[day] = bookedCount;
+        });
+
+        console.log('Occupancy map:', occupancyMap);
+        return occupancyMap;
+      } catch (error) {
+        console.error('Error fetching room reservations:', error);
         return {};
       }
-
-      const reservations = response.data || [];
-      console.log('Reservations for room', roomId, ':', reservations.length);
-      
-      const occupancyMap: Record<string, number> = {};
-
-      days.forEach(day => {
-        const bookedCount = reservations.filter((r: any) => 
-          r.status === 'approved' &&
-          r.date_start <= day &&
-          r.date_end >= day
-        ).length;
-        
-        occupancyMap[day] = bookedCount;
-      });
-
-      console.log('Occupancy map:', occupancyMap);
-      return occupancyMap;
     },
   });
 

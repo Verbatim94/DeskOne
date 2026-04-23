@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { authService } from '@/lib/auth';
+import { getEdgeErrorMessage, invokeRoomFunction } from '@/lib/edge-functions';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -91,24 +92,10 @@ export default function SharedRooms() {
         const requestId = ++latestRequestRef.current;
         setLoading(true);
         try {
-            const session = authService.getSession();
-            if (!session) throw new Error('No session');
-
             const dateStr = format(date, 'yyyy-MM-dd');
-
-            const response = await supabase.functions.invoke('manage-rooms', {
-                body: {
-                    operation: 'list',
-                    data: { date: dateStr }
-                },
-                headers: {
-                    'x-session-token': session.token
-                }
-            });
-
-            if (response.error) throw response.error;
+            const response = await invokeRoomFunction<Room[], { date: string }>('list', { date: dateStr });
             if (requestId === latestRequestRef.current) {
-                setRooms(response.data || []);
+                setRooms(response || []);
             }
 
         } catch (error: unknown) {
@@ -116,7 +103,7 @@ export default function SharedRooms() {
             if (requestId === latestRequestRef.current) {
                 toast({
                     title: 'Error loading rooms',
-                    description: 'Failed to load shared rooms availability',
+                    description: getEdgeErrorMessage(error),
                     variant: 'destructive'
                 });
             }

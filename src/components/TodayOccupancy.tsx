@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { authService } from '@/lib/auth';
+import { invokeReservationFunction } from '@/lib/edge-functions';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -15,37 +14,26 @@ export function TodayOccupancy({ roomId, totalDesks }: TodayOccupancyProps) {
   const { data: occupancy, isLoading } = useQuery({
     queryKey: ['room-today-occupancy', roomId, today],
     queryFn: async () => {
-      const session = authService.getSession();
-      if (!session || totalDesks === 0) {
+      if (totalDesks === 0) {
         return { booked: 0, available: totalDesks, percentage: 100 };
       }
 
-      const response = await supabase.functions.invoke('manage-reservations', {
-        body: {
-          operation: 'list_room_reservations',
-          data: { roomId }
-        },
-        headers: {
-          'x-session-token': session.token,
-        },
-      });
+      try {
+        const reservations = await invokeReservationFunction<any[], { roomId: string }>('list_room_reservations', { roomId });
+        const bookedCount = reservations.filter((r: any) =>
+          r.status === 'approved' &&
+          r.date_start <= today &&
+          r.date_end >= today
+        ).length;
 
-      if (response.error) {
-        console.error('Error fetching today occupancy:', response.error);
+        const available = Math.max(0, totalDesks - bookedCount);
+        const percentage = totalDesks > 0 ? Math.round((available / totalDesks) * 100) : 0;
+
+        return { booked: bookedCount, available, percentage };
+      } catch (error) {
+        console.error('Error fetching today occupancy:', error);
         return { booked: 0, available: totalDesks, percentage: 100 };
       }
-
-      const reservations = response.data || [];
-      const bookedCount = reservations.filter((r: any) => 
-        r.status === 'approved' &&
-        r.date_start <= today &&
-        r.date_end >= today
-      ).length;
-
-      const available = Math.max(0, totalDesks - bookedCount);
-      const percentage = totalDesks > 0 ? Math.round((available / totalDesks) * 100) : 0;
-
-      return { booked: bookedCount, available, percentage };
     },
   });
 
