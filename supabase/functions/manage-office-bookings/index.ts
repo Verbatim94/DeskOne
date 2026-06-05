@@ -85,6 +85,52 @@ Deno.serve(async (req) => {
             return Boolean(access);
         };
 
+        const withUsers = async (bookings: OfficeBooking[]) => {
+            const userIds = Array.from(new Set(
+                bookings
+                    .map((booking) => booking.user_id)
+                    .filter((userId): userId is string => Boolean(userId))
+            ));
+
+            if (userIds.length === 0) {
+                return bookings.map((booking) => ({ ...booking, users: null }));
+            }
+
+            const { data: bookingUsers, error } = await supabase
+                .from('users')
+                .select('id, username, full_name')
+                .in('id', userIds);
+
+            if (error) throw error;
+
+            const usersById = new Map((bookingUsers || []).map((bookingUser) => [bookingUser.id, bookingUser]));
+            return bookings.map((booking) => ({
+                ...booking,
+                users: booking.user_id ? usersById.get(booking.user_id) || null : null,
+            }));
+        };
+
+        const withOffices = async (bookings: OfficeBooking[]) => {
+            const officeIds = Array.from(new Set(bookings.map((booking) => booking.office_id)));
+
+            if (officeIds.length === 0) {
+                return bookings.map((booking) => ({ ...booking, offices: null }));
+            }
+
+            const { data: offices, error } = await supabase
+                .from('offices')
+                .select('id, name, location')
+                .in('id', officeIds);
+
+            if (error) throw error;
+
+            const officesById = new Map((offices || []).map((office) => [office.id, office]));
+            return bookings.map((booking) => ({
+                ...booking,
+                offices: officesById.get(booking.office_id) || null,
+            }));
+        };
+
         // Helper to check for booking conflicts
         const hasConflict = async (officeId: string, startTime: string, endTime: string, excludeBookingId?: string): Promise<boolean> => {
             let query = supabase
@@ -123,13 +169,14 @@ Deno.serve(async (req) => {
 
                 const { data: bookings, error } = await supabase
                     .from('office_bookings')
-                    .select('*, users(id, username, full_name)')
+                    .select('*')
                     .eq('office_id', officeId)
                     .gte('start_time', startDate)
                     .lt('start_time', endDate)
                     .order('start_time', { ascending: true });
 
-                result = { data: bookings, error };
+                if (error) throw error;
+                result = { data: await withUsers(bookings || []), error: null };
                 break;
             }
 
@@ -137,11 +184,12 @@ Deno.serve(async (req) => {
                 // Get all bookings for the current user
                 const { data: bookings, error } = await supabase
                     .from('office_bookings')
-                    .select('*, offices(id, name, location)')
+                    .select('*')
                     .eq('user_id', user.id)
                     .order('start_time', { ascending: true });
 
-                result = { data: bookings, error };
+                if (error) throw error;
+                result = { data: await withOffices(bookings || []), error: null };
                 break;
             }
 
@@ -206,10 +254,12 @@ Deno.serve(async (req) => {
                         is_admin_block: false,
                         created_by: user.id
                     })
-                    .select('*, users(id, username, full_name)')
+                    .select('*')
                     .single();
 
-                result = { data: booking, error };
+                if (error) throw error;
+                const [bookingWithUser] = await withUsers([booking]);
+                result = { data: bookingWithUser, error: null };
                 break;
             }
 
