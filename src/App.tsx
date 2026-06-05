@@ -20,6 +20,7 @@ import MyReservations from "./pages/MyReservations";
 import PendingApprovals from "./pages/PendingApprovals";
 import ReservationsCalendar from "./pages/ReservationsCalendar";
 import SharedRooms from "./pages/SharedRooms";
+import Offices from "./pages/Offices";
 import Planner from "./pages/Planner";
 import NotFound from "./pages/NotFound";
 
@@ -84,6 +85,17 @@ function App() {
                   <ProtectedRoute>
                     <Layout>
                       <Rooms />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/offices"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Offices />
                     </Layout>
                   </ProtectedRoute>
                 }

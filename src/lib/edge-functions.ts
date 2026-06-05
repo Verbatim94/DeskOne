@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { authService, type Session } from "@/lib/auth";
 
-type EdgeFunctionName = "manage-rooms" | "manage-reservations";
+type EdgeFunctionName = "manage-rooms" | "manage-reservations" | "manage-offices" | "manage-office-bookings";
 
 interface EdgeErrorPayload {
   error?: string;
@@ -136,6 +136,20 @@ export function invokeReservationFunction<TResult, TData extends Record<string, 
   data?: TData,
 ): Promise<TResult> {
   return invokeEdgeFunction<TResult, TData>("manage-reservations", operation, data);
+}
+
+export function invokeOfficeFunction<TResult, TData extends Record<string, unknown> | undefined = Record<string, unknown>>(
+  operation: string,
+  data?: TData,
+): Promise<TResult> {
+  return invokeEdgeFunction<TResult, TData>("manage-offices", operation, data);
+}
+
+export function invokeOfficeBookingFunction<TResult, TData extends Record<string, unknown> | undefined = Record<string, unknown>>(
+  operation: string,
+  data?: TData,
+): Promise<TResult> {
+  return invokeEdgeFunction<TResult, TData>("manage-office-bookings", operation, data);
 }
 
 export { getEdgeErrorMessage };

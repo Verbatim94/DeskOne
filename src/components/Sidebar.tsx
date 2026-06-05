@@ -2,7 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
-import { LogOut, LayoutGrid, Building2, BookCheck, Users, CalendarDays, ChartColumnBig } from 'lucide-react';
+import { LogOut, LayoutGrid, Building2, BookCheck, Users, CalendarDays, ChartColumnBig, BriefcaseBusiness } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import deskOneLogo from '@/assets/deskone-logo.png';
 
@@ -18,11 +18,13 @@ export function Sidebar({ className, compact = false }: { className?: string; co
             { name: 'Insight', href: '/insight', icon: ChartColumnBig, roles: ['admin'] },
             { name: 'Planner', href: '/planner', icon: CalendarDays, roles: ['admin'] },
             { name: 'Manage Rooms', href: '/rooms', icon: Building2, roles: ['admin'] },
+            { name: 'Offices', href: '/offices', icon: BriefcaseBusiness, roles: ['admin'] },
             { name: 'Users', href: '/users', icon: Users, roles: ['admin'] },
         ]
         : [
             { name: 'Dashboard', href: '/', icon: LayoutGrid, roles: ['user'] },
             { name: 'Rooms', href: '/shared-rooms', icon: Building2, roles: ['user'] },
+            { name: 'Offices', href: '/offices', icon: BriefcaseBusiness, roles: ['user'] },
             { name: 'My Reservations', href: '/reservations', icon: BookCheck, roles: ['user'] },
         ];
 

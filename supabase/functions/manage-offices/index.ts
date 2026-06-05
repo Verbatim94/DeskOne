@@ -5,15 +5,6 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-session-token',
 };
 
-interface Office {
-    id: string;
-    name: string;
-    location: string;
-    is_shared: boolean;
-    created_by: string;
-    created_at: string;
-}
-
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });
@@ -32,7 +23,6 @@ Deno.serve(async (req) => {
             );
         }
 
-        // Verify session and get user
         const { data: session } = await supabase
             .from('user_sessions')
             .select('user_id')
@@ -47,7 +37,6 @@ Deno.serve(async (req) => {
             );
         }
 
-        // Get user info
         const { data: user } = await supabase
             .from('users')
             .select('role, id')
@@ -65,26 +54,83 @@ Deno.serve(async (req) => {
         const { operation, data } = await req.json();
         console.log(`User ${user.id} (${user.role}) performing office operation: ${operation}`);
 
-        // Helper to check if user is admin
-        const isAdmin = (): boolean => {
-            return user.role === 'admin' || user.role === 'super_admin';
+        const isAdmin = (): boolean => user.role === 'admin' || user.role === 'super_admin';
+
+        const assertAdmin = () => {
+            if (!isAdmin()) {
+                return new Response(
+                    JSON.stringify({ error: 'Only admins can manage offices' }),
+                    { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+            }
+            return null;
+        };
+
+        const getOfficeAccessIds = async (officeId: string): Promise<string[]> => {
+            const { data: access, error } = await supabase
+                .from('office_access')
+                .select('user_id')
+                .eq('office_id', officeId);
+
+            if (error) throw error;
+            return (access || []).map((row: { user_id: string }) => row.user_id);
+        };
+
+        const replaceOfficeAccess = async (officeId: string, userIds: string[]) => {
+            const uniqueUserIds = Array.from(new Set((userIds || []).filter(Boolean)));
+
+            const { error: deleteError } = await supabase
+                .from('office_access')
+                .delete()
+                .eq('office_id', officeId);
+
+            if (deleteError) throw deleteError;
+
+            if (uniqueUserIds.length === 0) return;
+
+            const { error: insertError } = await supabase
+                .from('office_access')
+                .insert(uniqueUserIds.map((userId) => ({
+                    office_id: officeId,
+                    user_id: userId,
+                    created_by: user.id,
+                })));
+
+            if (insertError) throw insertError;
         };
 
         let result;
         switch (operation) {
             case 'list': {
-                // Admins see all offices, users see only shared offices
-                let query = supabase
-                    .from('offices')
-                    .select('*')
-                    .order('created_at', { ascending: false });
+                if (isAdmin()) {
+                    const { data: offices, error } = await supabase
+                        .from('offices')
+                        .select('*, office_access(user_id)')
+                        .order('created_at', { ascending: false });
 
-                if (!isAdmin()) {
-                    query = query.eq('is_shared', true);
+                    result = {
+                        data: (offices || []).map((office: Record<string, unknown>) => ({
+                            ...office,
+                            access_count: Array.isArray(office.office_access) ? office.office_access.length : 0,
+                            office_access: undefined,
+                        })),
+                        error,
+                    };
+                } else {
+                    const { data: accessRows, error } = await supabase
+                        .from('office_access')
+                        .select('offices(*)')
+                        .eq('user_id', user.id);
+
+                    if (error) throw error;
+
+                    result = {
+                        data: (accessRows || [])
+                            .map((row: { offices: unknown }) => row.offices)
+                            .filter(Boolean),
+                        error: null,
+                    };
                 }
-
-                const { data: offices, error } = await query;
-                result = { data: offices, error };
                 break;
             }
 
@@ -95,12 +141,14 @@ Deno.serve(async (req) => {
                     .eq('id', data.officeId)
                     .single();
 
-                // Check access: admins can see all, users can only see shared
-                if (office && !isAdmin() && !office.is_shared) {
-                    return new Response(
-                        JSON.stringify({ error: 'You do not have access to this office' }),
-                        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-                    );
+                if (office && !isAdmin()) {
+                    const accessIds = await getOfficeAccessIds(data.officeId);
+                    if (!accessIds.includes(user.id)) {
+                        return new Response(
+                            JSON.stringify({ error: 'You do not have access to this office' }),
+                            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                        );
+                    }
                 }
 
                 result = { data: office, error };
@@ -108,57 +156,49 @@ Deno.serve(async (req) => {
             }
 
             case 'create': {
-                // Only admins can create offices
-                if (!isAdmin()) {
-                    return new Response(
-                        JSON.stringify({ error: 'Only admins can create offices' }),
-                        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-                    );
-                }
+                const adminResponse = assertAdmin();
+                if (adminResponse) return adminResponse;
 
                 const { data: office, error } = await supabase
                     .from('offices')
                     .insert({
                         name: data.name,
                         location: data.location,
-                        is_shared: data.is_shared ?? false,
+                        is_shared: false,
                         created_by: user.id
                     })
                     .select()
                     .single();
 
-                result = { data: office, error };
+                if (error) throw error;
+                await replaceOfficeAccess(office.id, data.userIds || []);
+
+                result = { data: { ...office, access_count: (data.userIds || []).length }, error: null };
                 break;
             }
 
             case 'update': {
-                // Only admins can update offices
-                if (!isAdmin()) {
-                    return new Response(
-                        JSON.stringify({ error: 'Only admins can update offices' }),
-                        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-                    );
-                }
+                const adminResponse = assertAdmin();
+                if (adminResponse) return adminResponse;
 
+                const { name, location, userIds } = data.updates;
                 const { data: office, error } = await supabase
                     .from('offices')
-                    .update(data.updates)
+                    .update({ name, location })
                     .eq('id', data.officeId)
                     .select()
                     .single();
 
-                result = { data: office, error };
+                if (error) throw error;
+                await replaceOfficeAccess(data.officeId, userIds || []);
+
+                result = { data: { ...office, access_count: (userIds || []).length }, error: null };
                 break;
             }
 
             case 'delete': {
-                // Only admins can delete offices
-                if (!isAdmin()) {
-                    return new Response(
-                        JSON.stringify({ error: 'Only admins can delete offices' }),
-                        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-                    );
-                }
+                const adminResponse = assertAdmin();
+                if (adminResponse) return adminResponse;
 
                 const { error } = await supabase
                     .from('offices')
@@ -169,23 +209,26 @@ Deno.serve(async (req) => {
                 break;
             }
 
-            case 'toggle_share': {
-                // Only admins can toggle share status
-                if (!isAdmin()) {
-                    return new Response(
-                        JSON.stringify({ error: 'Only admins can toggle office sharing' }),
-                        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-                    );
-                }
+            case 'list_users': {
+                const adminResponse = assertAdmin();
+                if (adminResponse) return adminResponse;
 
-                const { data: office, error } = await supabase
-                    .from('offices')
-                    .update({ is_shared: data.is_shared })
-                    .eq('id', data.officeId)
-                    .select()
-                    .single();
+                const { data: users, error } = await supabase
+                    .from('users')
+                    .select('id, username, full_name, role, is_active')
+                    .eq('is_active', true)
+                    .order('full_name', { ascending: true });
 
-                result = { data: office, error };
+                result = { data: users, error };
+                break;
+            }
+
+            case 'list_access': {
+                const adminResponse = assertAdmin();
+                if (adminResponse) return adminResponse;
+
+                const accessIds = await getOfficeAccessIds(data.officeId);
+                result = { data: accessIds, error: null };
                 break;
             }
 

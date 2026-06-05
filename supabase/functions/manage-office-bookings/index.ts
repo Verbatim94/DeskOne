@@ -72,6 +72,19 @@ Deno.serve(async (req) => {
             return user.role === 'admin' || user.role === 'super_admin';
         };
 
+        const hasOfficeAccess = async (officeId: string): Promise<boolean> => {
+            if (isAdmin()) return true;
+
+            const { data: access } = await supabase
+                .from('office_access')
+                .select('id')
+                .eq('office_id', officeId)
+                .eq('user_id', user.id)
+                .maybeSingle();
+
+            return Boolean(access);
+        };
+
         // Helper to check for booking conflicts
         const hasConflict = async (officeId: string, startTime: string, endTime: string, excludeBookingId?: string): Promise<boolean> => {
             let query = supabase
@@ -101,14 +114,7 @@ Deno.serve(async (req) => {
                 // Get bookings for an office within a date range
                 const { officeId, startDate, endDate } = data;
 
-                // Check if user has access to this office
-                const { data: office } = await supabase
-                    .from('offices')
-                    .select('is_shared')
-                    .eq('id', officeId)
-                    .single();
-
-                if (!office || (!isAdmin() && !office.is_shared)) {
+                if (!(await hasOfficeAccess(officeId))) {
                     return new Response(
                         JSON.stringify({ error: 'You do not have access to this office' }),
                         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -120,7 +126,7 @@ Deno.serve(async (req) => {
                     .select('*, users(id, username, full_name)')
                     .eq('office_id', officeId)
                     .gte('start_time', startDate)
-                    .lte('end_time', endDate)
+                    .lt('start_time', endDate)
                     .order('start_time', { ascending: true });
 
                 result = { data: bookings, error };
@@ -160,10 +166,10 @@ Deno.serve(async (req) => {
                     );
                 }
 
-                // Check if office exists and is shared
+                // Check if office exists and the current user has explicit access
                 const { data: office } = await supabase
                     .from('offices')
-                    .select('is_shared')
+                    .select('id')
                     .eq('id', officeId)
                     .single();
 
@@ -174,7 +180,7 @@ Deno.serve(async (req) => {
                     );
                 }
 
-                if (!isAdmin() && !office.is_shared) {
+                if (!(await hasOfficeAccess(officeId))) {
                     return new Response(
                         JSON.stringify({ error: 'This office is not available for booking' }),
                         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
