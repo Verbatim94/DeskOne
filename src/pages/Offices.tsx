@@ -24,7 +24,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
@@ -43,6 +42,13 @@ import {
 import type { Office, OfficeBooking, OfficeUser } from "@/features/offices/types";
 
 const DURATIONS = [15, 30, 45, 60, 90, 120, 180, 240];
+const DAY_START_HOUR = 8;
+const DAY_END_HOUR = 20;
+const SLOT_MINUTES = 15;
+const SLOT_HEIGHT = 28;
+const TIME_LABEL_WIDTH = 68;
+const TOTAL_DAY_MINUTES = (DAY_END_HOUR - DAY_START_HOUR) * 60;
+const VISIBLE_SLOTS = TOTAL_DAY_MINUTES / SLOT_MINUTES;
 
 function toDateTimeLocalValue(date: Date): string {
   const offsetMs = date.getTimezoneOffset() * 60_000;
@@ -65,6 +71,22 @@ function roundUpToNextQuarter(date: Date): Date {
     rounded.setMinutes(rounded.getMinutes() + (15 - remainder));
   }
   return rounded;
+}
+
+function getMinutesFromDayStart(date: Date): number {
+  return (date.getHours() - DAY_START_HOUR) * 60 + date.getMinutes();
+}
+
+function getSlotDate(day: Date, slotIndex: number): Date {
+  const slotDate = new Date(day);
+  slotDate.setHours(DAY_START_HOUR, slotIndex * SLOT_MINUTES, 0, 0);
+  return slotDate;
+}
+
+function isBookingInVisibleRange(booking: OfficeBooking): boolean {
+  const start = new Date(booking.start_time);
+  const end = new Date(booking.end_time);
+  return getMinutesFromDayStart(end) > 0 && getMinutesFromDayStart(start) < TOTAL_DAY_MINUTES;
 }
 
 export default function Offices() {
@@ -92,6 +114,16 @@ export default function Offices() {
   const selectedOffice = useMemo(
     () => offices.find((office) => office.id === selectedOfficeId) || null,
     [offices, selectedOfficeId],
+  );
+
+  const visibleBookings = useMemo(
+    () => bookings.filter(isBookingInVisibleRange),
+    [bookings],
+  );
+
+  const selectedStartLabel = useMemo(
+    () => format(fromDateTimeLocalValue(bookingForm.start), "HH:mm"),
+    [bookingForm.start],
   );
 
   const loadOffices = useCallback(async () => {
@@ -224,6 +256,26 @@ export default function Offices() {
       userIds: checked
         ? [...current.userIds, userId]
         : current.userIds.filter((id) => id !== userId),
+    }));
+  };
+
+  const isSlotBooked = (slotDate: Date): boolean => {
+    const slotStart = slotDate.getTime();
+    const slotEnd = slotStart + SLOT_MINUTES * 60_000;
+
+    return bookings.some((booking) => {
+      const bookingStart = new Date(booking.start_time).getTime();
+      const bookingEnd = new Date(booking.end_time).getTime();
+      return bookingStart < slotEnd && bookingEnd > slotStart;
+    });
+  };
+
+  const selectSlot = (slotDate: Date) => {
+    if (!selectedOffice || isSlotBooked(slotDate)) return;
+
+    setBookingForm((current) => ({
+      ...current,
+      start: toDateTimeLocalValue(slotDate),
     }));
   };
 
@@ -402,7 +454,7 @@ export default function Offices() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="h-[calc(100%-96px)] overflow-y-auto">
+            <CardContent className="h-[calc(100%-96px)] overflow-hidden">
               {loadingBookings ? (
                 <div className="flex justify-center py-10">
                   <Loader2 className="h-7 w-7 animate-spin text-primary" />
@@ -411,48 +463,138 @@ export default function Offices() {
                 <div className="py-10 text-center text-sm text-muted-foreground">
                   Select an office from the list.
                 </div>
-              ) : bookings.length === 0 ? (
-                <div className="py-10 text-center text-sm text-muted-foreground">
-                  No bookings for this day.
-                </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Time</TableHead>
-                      <TableHead>Booked by</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {bookings.map((booking) => (
-                      <TableRow key={booking.id}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-4 w-4 text-muted-foreground" />
-                            {formatTimeRange(booking.start_time, booking.end_time)}
+                <div className="flex h-full min-h-0 flex-col overflow-hidden">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex items-center gap-1">
+                        <span className="h-2.5 w-2.5 rounded-sm bg-blue-500" />
+                        Booking
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <span className="h-2.5 w-2.5 rounded-sm bg-red-500" />
+                        Admin block
+                      </span>
+                    </div>
+                    <span>{DAY_START_HOUR}:00 - {DAY_END_HOUR}:00</span>
+                  </div>
+                  <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border bg-white">
+                    <div
+                      className="relative"
+                      style={{ height: VISIBLE_SLOTS * SLOT_HEIGHT }}
+                    >
+                      {Array.from({ length: VISIBLE_SLOTS + 1 }).map((_, index) => {
+                        const minutes = index * SLOT_MINUTES;
+                        const hour = DAY_START_HOUR + Math.floor(minutes / 60);
+                        const minute = minutes % 60;
+                        const isHour = minute === 0;
+
+                        return (
+                          <div
+                            key={`line-${index}`}
+                            className={cn(
+                              "absolute left-0 right-0 border-t",
+                              isHour ? "border-slate-300" : "border-slate-100",
+                            )}
+                            style={{ top: index * SLOT_HEIGHT }}
+                          >
+                            {isHour && index < VISIBLE_SLOTS && (
+                              <span className="absolute left-3 top-1 text-xs font-medium text-slate-500">
+                                {String(hour).padStart(2, "0")}:00
+                              </span>
+                            )}
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          {booking.is_admin_block ? "Admin" : booking.users?.full_name || "User"}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={booking.is_admin_block ? "destructive" : "secondary"}>
-                            {booking.is_admin_block ? "Blocked" : "Booking"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {(isAdmin || booking.user_id === user?.id) && (
-                            <Button variant="ghost" size="sm" onClick={() => handleDeleteBooking(booking.id)}>
-                              <X className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                        );
+                      })}
+
+                      <div
+                        className="absolute bottom-0 top-0 border-l border-slate-200"
+                        style={{ left: TIME_LABEL_WIDTH }}
+                      />
+
+                      {Array.from({ length: VISIBLE_SLOTS }).map((_, index) => {
+                        const slotDate = getSlotDate(date, index);
+                        const booked = isSlotBooked(slotDate);
+                        const selected = toDateTimeLocalValue(slotDate) === bookingForm.start;
+                        const minute = slotDate.getMinutes();
+
+                        return (
+                          <button
+                            key={`slot-${index}`}
+                            type="button"
+                            disabled={booked}
+                            onClick={() => selectSlot(slotDate)}
+                            className={cn(
+                              "absolute right-2 rounded-sm text-left transition-colors",
+                              booked ? "cursor-not-allowed" : "hover:bg-blue-50",
+                              selected && !booked && "bg-blue-100 ring-1 ring-blue-500",
+                            )}
+                            style={{
+                              top: index * SLOT_HEIGHT + 1,
+                              left: TIME_LABEL_WIDTH + 1,
+                              height: SLOT_HEIGHT - 2,
+                            }}
+                            title={`${format(slotDate, "HH:mm")} ${booked ? "unavailable" : "available"}`}
+                          >
+                            {!booked && minute !== 0 && (
+                              <span className="ml-3 text-[11px] text-slate-300">{format(slotDate, "HH:mm")}</span>
+                            )}
+                          </button>
+                        );
+                      })}
+
+                      {visibleBookings.map((booking) => {
+                        const start = new Date(booking.start_time);
+                        const end = new Date(booking.end_time);
+                        const startMinutes = Math.max(0, getMinutesFromDayStart(start));
+                        const endMinutes = Math.min(TOTAL_DAY_MINUTES, getMinutesFromDayStart(end));
+                        const top = (startMinutes / SLOT_MINUTES) * SLOT_HEIGHT + 2;
+                        const height = Math.max(((endMinutes - startMinutes) / SLOT_MINUTES) * SLOT_HEIGHT - 4, 24);
+                        const canDelete = isAdmin || booking.user_id === user?.id;
+
+                        return (
+                          <div
+                            key={booking.id}
+                            className={cn(
+                              "absolute right-3 overflow-hidden rounded-md border px-3 py-2 shadow-sm",
+                              booking.is_admin_block
+                                ? "border-red-300 bg-red-50 text-red-900"
+                                : "border-blue-300 bg-blue-50 text-blue-950",
+                            )}
+                            style={{
+                              top,
+                              left: TIME_LABEL_WIDTH + 8,
+                              height,
+                            }}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1 text-xs font-semibold">
+                                  <Clock className="h-3.5 w-3.5 shrink-0" />
+                                  <span>{formatTimeRange(booking.start_time, booking.end_time)}</span>
+                                </div>
+                                <div className="mt-1 truncate text-xs">
+                                  {booking.is_admin_block ? "Admin block" : booking.users?.full_name || "Booking"}
+                                </div>
+                              </div>
+                              {canDelete && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 shrink-0 p-0 hover:bg-white/70"
+                                  onClick={() => handleDeleteBooking(booking.id)}
+                                  title="Delete booking"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -460,7 +602,9 @@ export default function Offices() {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">New Booking</CardTitle>
-              <CardDescription>Start and duration follow 15-minute increments</CardDescription>
+              <CardDescription>
+                {selectedOffice ? `Selected start: ${selectedStartLabel}` : "Select an office and a time slot"}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <form className="space-y-4" onSubmit={handleBookingSubmit}>
