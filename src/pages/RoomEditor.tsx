@@ -126,6 +126,10 @@ export default function RoomEditor() {
   const { rooms } = useRoomsList({
     onError: (error) => console.error('Error loading rooms:', error),
   });
+  const sortedDeskCells = useMemo(
+    () => sortDeskCells(Array.isArray(cells) ? cells : []),
+    [cells],
+  );
 
   const getCellAt = (x: number, y: number): RoomCell | undefined => {
     return findRoomCell(cells, x, y);
@@ -403,7 +407,6 @@ export default function RoomEditor() {
   // Safety checks for arrays
   const safeWalls = Array.isArray(walls) ? walls : [];
   const safeCells = Array.isArray(cells) ? cells : [];
-  const sortedDeskCells = useMemo(() => sortDeskCells(cells), [cells]);
 
   return (
     <div className="h-full flex flex-col space-y-4">
